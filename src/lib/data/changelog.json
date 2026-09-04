@@ -1,5 +1,22 @@
 [
 	{
+		"version": "1.0.2",
+		"date": "",
+		"summary": {
+			"en": "A readability fix in the review view.",
+			"fr": "Un correctif de lisibilité dans la vue de revue."
+		},
+		"changes": [
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Code comments on a changed line in the review's Guide were nearly unreadable: their deliberately dim colour was composited under the green or red tint the inline diff paints on those lines. They now take a colour picked against that tint, in every theme. The Diff view is unaffected - its lines no longer carry a tint at all.",
+					"fr": "Les commentaires de code sur une ligne modifiée dans le Guide de la revue étaient quasi illisibles : leur couleur volontairement discrète se composait sous la teinte verte ou rouge que le diff inline applique à ces lignes. Ils prennent désormais une couleur choisie face à cette teinte, dans tous les thèmes. La vue Diff n'est pas concernée - ses lignes ne portent plus de teinte du tout."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.0.1",
 		"date": "2026-09-03",
 		"summary": {
