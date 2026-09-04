@@ -17,7 +17,6 @@
   import {
     buildEditorTheme,
     buildHighlight,
-    buildInlineDiffTheme,
     resolveLanguageExtension,
     type EditorLanguage,
   } from '$lib/utils/editor/editor-theme';
@@ -48,7 +47,7 @@
       bracketMatching(),
       EditorView.lineWrapping,
       EditorState.readOnly.of(true),
-      themeCompartment.of([buildEditorTheme(theme), buildInlineDiffTheme(theme)]),
+      themeCompartment.of(buildEditorTheme(theme)),
       highlightCompartment.of(syntaxHighlighting(buildHighlight(theme, $activeSyntaxTokens))),
       inlineDiffTheme,
     ];
@@ -57,10 +56,7 @@
   $: if (view) {
     const theme = $settings.theme;
     view.dispatch({ effects: [
-      themeCompartment.reconfigure([
-        buildEditorTheme(theme),
-        buildInlineDiffTheme(theme),
-      ]),
+      themeCompartment.reconfigure(buildEditorTheme(theme)),
       highlightCompartment.reconfigure(syntaxHighlighting(buildHighlight(theme, $activeSyntaxTokens))),
     ]});
   }

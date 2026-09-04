@@ -124,7 +124,6 @@ export async function resolveLanguageExtension(
  */
 const highlightCache = new Map<string, HighlightStyle>();
 const editorThemeCache = new Map<string, Extension>();
-const inlineDiffThemeCache = new Map<string, Extension>();
 
 export function buildHighlight(
 	theme: string,
@@ -143,10 +142,7 @@ function buildHighlightUncached(
 	tokens?: SyntaxTokens,
 ): HighlightStyle {
 	const p = tokens ?? defaultSyntaxTokens(theme);
-	const style = (
-		key: SyntaxTokenKey,
-		extra?: { textDecoration?: string; class?: string },
-	) => {
+	const style = (key: SyntaxTokenKey, extra?: { textDecoration: string }) => {
 		const s = p[key];
 		const decorations = [
 			s.underline ? "underline" : "",
@@ -159,7 +155,6 @@ function buildHighlightUncached(
 			...(s.italic ? { fontStyle: "italic" } : {}),
 			...(s.bold ? { fontWeight: "600" } : {}),
 			...(decorations ? { textDecoration: decorations } : {}),
-			...(extra?.class ? { class: extra.class } : {}),
 		};
 	};
 	return HighlightStyle.define([
@@ -184,9 +179,9 @@ function buildHighlightUncached(
 		{ tag: t.bool, ...style("kw") },
 		{ tag: t.null, ...style("kw") },
 		{ tag: t.atom, ...style("kw") },
-		{ tag: t.comment, ...style("cmt", { class: "cm-tok-comment" }) },
-		{ tag: t.lineComment, ...style("cmt", { class: "cm-tok-comment" }) },
-		{ tag: t.blockComment, ...style("cmt", { class: "cm-tok-comment" }) },
+		{ tag: t.comment, ...style("cmt") },
+		{ tag: t.lineComment, ...style("cmt") },
+		{ tag: t.blockComment, ...style("cmt") },
 		{ tag: t.operator, ...style("op") },
 		{ tag: t.punctuation, ...style("punc") },
 		{ tag: t.bracket, ...style("br") },
@@ -682,32 +677,6 @@ export function buildEditorTheme(theme: string): Extension {
 		PALETTES[theme as ThemeName] ?? PALETTE_DEFAULT,
 	);
 	editorThemeCache.set(theme, built);
-	return built;
-}
-
-/**
- * A comment keeps its dim colour under the inline diff's added/deleted tint,
- * where it falls below readable contrast; only the inline diff tints its lines,
- * so only it repaints them.
- */
-export function buildInlineDiffTheme(theme: string): Extension {
-	const cached = inlineDiffThemeCache.get(theme);
-	if (cached) return cached;
-	const p = PALETTES[theme as ThemeName] ?? PALETTE_DEFAULT;
-	const built = EditorView.theme(
-		{
-			[[
-				".cm-changedLine .cm-tok-comment",
-				".cm-changedText .cm-tok-comment",
-				".cm-insertedLine .cm-tok-comment",
-				".cm-deletedChunk .cm-tok-comment",
-			].join(", ")]: {
-				color: p.isDark ? "oklch(0.87 0.035 140)" : "oklch(0.24 0.05 145)",
-			},
-		},
-		{ dark: p.isDark },
-	);
-	inlineDiffThemeCache.set(theme, built);
 	return built;
 }
 

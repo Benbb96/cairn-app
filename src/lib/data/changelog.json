@@ -76,13 +76,6 @@
 					"en": "The New instance dialog asks what it is about to do first, and what the work is called last. The three modes then follow what is already known: creating a branch keeps the ticket before it, since the branch name is generated from it, while starting from a branch or a worktree that already exists fills the ticket in from that branch - the key it carries becomes the id, the rest of the name the title, both there to be overwritten. Opening the dialog from a ref in the graph skips straight to the branch, the mode being settled by the ref itself.",
 					"fr": "La boîte Nouvelle instance demande d'abord ce qu'elle va faire, et en dernier comment le travail s'appelle. Les trois modes suivent ensuite ce qui est déjà connu : créer une branche garde le ticket avant elle, puisque le nom de branche en est généré, tandis que partir d'une branche ou d'un worktree existant remplit le ticket depuis cette branche - la clé qu'elle porte devient l'identifiant, le reste du nom devient le titre, l'un et l'autre restant modifiables. Ouvrir la boîte depuis une ref du graph saute directement à la branche, le mode étant déjà tranché par la ref."
 				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Code comments on a changed line in the review's Guide were nearly unreadable: their deliberately dim colour was composited under the green or red tint the inline diff paints on those lines. They now take a colour picked against that tint, in every theme. The Diff view is unaffected - its lines no longer carry a tint at all.",
-					"fr": "Les commentaires de code sur une ligne modifiée dans le Guide de la revue étaient quasi illisibles : leur couleur volontairement discrète se composait sous la teinte verte ou rouge que le diff inline applique à ces lignes. Ils prennent désormais une couleur choisie face à cette teinte, dans tous les thèmes. La vue Diff n'est pas concernée - ses lignes ne portent plus de teinte du tout."
-				}
 			}
 		]
 	},
