@@ -41,6 +41,13 @@
 					"en": "The programs Cairn starts - the terminals, the coding CLIs running in them, the language servers, the formatters, git - no longer inherit the environment of the AppImage itself. In an AppImage build that environment points at the temporary mount the app runs from, which broke python3 in a Cairn terminal (\"Failed to import encodings module\"), took down anything else written in Python such as a Python language server, and could link a system binary against a bundled library instead of its own.",
 					"fr": "Les programmes lancés par Cairn - les terminaux, les CLI de code qui y tournent, les serveurs de langage, les formateurs, git - n'héritent plus de l'environnement de l'AppImage elle-même. Dans un build AppImage, cet environnement pointe vers le montage temporaire depuis lequel l'application tourne, ce qui cassait python3 dans un terminal de Cairn (\"Failed to import encodings module\"), emportait tout ce qui est écrit en Python comme un serveur de langage Python, et pouvait lier un binaire du système à une bibliothèque embarquée au lieu de la sienne."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The cairn command installed from an AppImage build keeps working once the app is closed. It was written as a link into the temporary mount the AppImage runs from - a directory that disappears when the app exits and is named differently at every launch - so the command died with the window that installed it, and reinstalling it only helped until the next close. It now leads to the image file itself, and tells you to reinstall it if you move the image.",
+					"fr": "La commande cairn installée depuis un build AppImage continue de fonctionner après la fermeture de l'application. Elle était écrite comme un lien vers le montage temporaire depuis lequel l'AppImage tourne - un répertoire qui disparaît à la fermeture et porte un nom différent à chaque lancement - si bien que la commande mourait avec la fenêtre qui l'avait installée, et la réinstaller ne servait que jusqu'à la fermeture suivante. Elle mène désormais au fichier image lui-même, et vous invite à la réinstaller si vous déplacez l'image."
+				}
 			}
 		]
 	},
