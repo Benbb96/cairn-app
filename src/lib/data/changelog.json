@@ -1,5 +1,22 @@
 [
 	{
+		"version": "1.0.2",
+		"date": "",
+		"summary": {
+			"en": "Fix for the window close button.",
+			"fr": "Correctif pour le bouton de fermeture de la fenêtre."
+		},
+		"changes": [
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The window close button works again. Saving the layout before closing, added in 1.0.1, made the app ask the window to destroy itself afterwards - a call the app's own permissions did not grant, so the request was silently refused and the window stayed open.",
+					"fr": "Le bouton de fermeture de la fenêtre fonctionne à nouveau. L'enregistrement de la disposition avant fermeture, ajouté en 1.0.1, faisait ensuite demander à la fenêtre de se détruire elle-même - un appel que les permissions de l'application n'accordaient pas, si bien que la demande était refusée en silence et la fenêtre restait ouverte."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.0.1",
 		"date": "2026-09-03",
 		"summary": {
