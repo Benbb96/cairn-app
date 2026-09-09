@@ -55,11 +55,14 @@
     setCommitMessage,
     setCommitBody,
     revertCommit,
+    resetToCommit,
+    createBranch,
+    createTag,
     clearGitError,
     recoverFromGitError,
     commitDraft,
   } from '$lib/stores/git';
-  import type { GitStash } from '$lib/services/git-service';
+  import type { CommitAction, GitGraphCommit, GitStash, ResetMode } from '$lib/services/git-service';
   import { activeInstance, instances } from '$lib/stores/instance';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { capabilities } from '$lib/stores/integrations';
@@ -431,6 +434,83 @@
     selectedCommitBody = '';
     isLoadingCommitDiff = false;
     revertError = null;
+  }
+
+  /* --- Graph context menu ------------------------------------------------ */
+
+  /** Set while a branch or a tag is being named for a commit picked in the graph. */
+  let refPrompt: { kind: 'branch' | 'tag'; commit: GitGraphCommit } | null = null;
+  let refName = '';
+  let refError = '';
+  let isCreatingRef = false;
+
+  /** Set while a reset onto a graph commit waits for confirmation; every mode goes through it. */
+  let pendingReset: { commit: GitGraphCommit; mode: ResetMode } | null = null;
+  let isResetting = false;
+
+  async function handleCommitAction(
+    e: CustomEvent<{ action: CommitAction; commit: GitGraphCommit }>,
+  ) {
+    const { action, commit } = e.detail;
+    switch (action) {
+      case 'copy-hash':
+        await navigator.clipboard.writeText(commit.hash);
+        return;
+      case 'copy-message':
+        await navigator.clipboard.writeText(commit.message);
+        return;
+      case 'branch-from':
+      case 'tag-from':
+        refPrompt = { kind: action === 'branch-from' ? 'branch' : 'tag', commit };
+        refName = '';
+        refError = '';
+        return;
+      case 'reset-soft':
+        pendingReset = { commit, mode: 'soft' };
+        return;
+      case 'reset-mixed':
+        pendingReset = { commit, mode: 'mixed' };
+        return;
+      case 'reset-hard':
+        pendingReset = { commit, mode: 'hard' };
+        return;
+      case 'revert':
+        await revertCommit(commit.hash);
+        dispatch('filesChanged');
+        return;
+      case 'cherry-pick':
+        return;
+    }
+  }
+
+  async function runReset(commit: GitGraphCommit, mode: ResetMode) {
+    isResetting = true;
+    try {
+      await resetToCommit(commit.hash, mode);
+      dispatch('filesChanged');
+    } finally {
+      isResetting = false;
+      pendingReset = null;
+    }
+  }
+
+  async function confirmRef() {
+    if (!refPrompt || !refName.trim() || isCreatingRef) return;
+    isCreatingRef = true;
+    refError = '';
+    try {
+      if (refPrompt.kind === 'branch') {
+        await createBranch(refName.trim(), refPrompt.commit.hash);
+      } else {
+        await createTag(refName.trim(), '', refPrompt.commit.hash);
+      }
+      refPrompt = null;
+      await refreshGraph();
+    } catch (error) {
+      refError = errorMessage(error);
+    } finally {
+      isCreatingRef = false;
+    }
   }
 
   let errorDetailsOpen = false;
@@ -1490,6 +1570,7 @@
         on:createInstanceFromRef={(e) => dispatch('createInstanceFromRef', e.detail)}
         on:selectCommit={(e) => selectCommit(e.detail)}
         on:refresh={() => refreshGraph()}
+        on:commitAction={handleCommitAction}
       />
     {:else if $gitLeftTab === 'stash'}
       <StashView
@@ -2172,7 +2253,134 @@
   </div>
 {/if}
 
+{#if refPrompt}
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    on:click={() => (refPrompt = null)}
+    on:keydown={(e) => e.key === 'Escape' && (refPrompt = null)}
+  >
+    <div class="modal ref-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-head">
+        <div>
+          <div class="step-count">GIT</div>
+          <h3>{t(`git.commitMenu.${refPrompt.kind === 'branch' ? 'branch-from' : 'tag-from'}`)}</h3>
+        </div>
+        <button class="icon-btn close" on:click={() => (refPrompt = null)} aria-label={t('common.close') as string}>
+          <Icon name="x" size={16}/>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="ref-target">
+          <span class="ref-target-hash selectable">{refPrompt.commit.shortHash}</span>
+          <span class="ref-target-msg">{refPrompt.commit.message}</span>
+        </p>
+        <!-- svelte-ignore a11y-autofocus -->
+        <input
+          class="ref-input"
+          autofocus
+          bind:value={refName}
+          placeholder={t(refPrompt.kind === 'branch' ? 'git.branchNamePlaceholder' : 'git.tagNamePlaceholder') as string}
+          on:keydown={(e) => e.key === 'Enter' && confirmRef()}
+        />
+        {#if refError}<div class="ref-error">{refError}</div>{/if}
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button class="btn ghost" on:click={() => (refPrompt = null)}>{t('common.cancel')}</button>
+        <button class="btn primary" disabled={isCreatingRef || !refName.trim()} on:click={confirmRef}>
+          {#if isCreatingRef}<Spinner size={11}/>{:else}{t('common.create')}{/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if pendingReset}
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    on:click={() => !isResetting && (pendingReset = null)}
+    on:keydown={(e) => e.key === 'Escape' && !isResetting && (pendingReset = null)}
+  >
+    <div class="modal ref-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-head">
+        <div>
+          <div class="step-count">GIT</div>
+          <h3>{t(`git.resetMode.${pendingReset.mode}`)}</h3>
+        </div>
+        <button class="icon-btn close" disabled={isResetting} on:click={() => (pendingReset = null)} aria-label={t('common.close') as string}>
+          <Icon name="x" size={16}/>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="ref-target">
+          <span class="ref-target-hash selectable">{pendingReset.commit.shortHash}</span>
+          <span class="ref-target-msg">{pendingReset.commit.message}</span>
+        </p>
+        <p class="ref-warning">{t(`git.resetConfirm.${pendingReset.mode}`)}</p>
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button class="btn ghost" disabled={isResetting} on:click={() => (pendingReset = null)}>{t('common.cancel')}</button>
+        <button
+          class="btn {pendingReset.mode === 'hard' ? 'danger' : 'primary'}"
+          disabled={isResetting}
+          on:click={() => pendingReset && runReset(pendingReset.commit, pendingReset.mode)}
+        >
+          {#if isResetting}<Spinner size={11}/>{:else}{t('git.reset')}{/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  .ref-modal { width: min(440px, 92vw); }
+  .ref-target {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin: 0 0 10px;
+    min-width: 0;
+  }
+  .ref-target-hash {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-2);
+    flex-shrink: 0;
+  }
+  .ref-target-msg {
+    font-size: 12px;
+    color: var(--fg-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ref-input {
+    width: 100%;
+    background: var(--bg-0);
+    border: 1px solid var(--stroke-0);
+    border-radius: 4px;
+    padding: 5px 8px;
+    color: var(--fg-0);
+    font-size: 12px;
+  }
+  .ref-input:focus { outline: none; border-color: var(--accent); }
+  .ref-error, .ref-warning {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .ref-error { color: var(--danger); }
+  .ref-warning { color: var(--fg-2); }
+
   .git-root {
     flex: 1;
     display: flex;

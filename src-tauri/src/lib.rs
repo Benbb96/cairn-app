@@ -255,6 +255,7 @@ pub fn run() {
             git_stash_clear,
             git_stash_rename,
             git_revert_commit,
+            git_reset,
             git_discard_file,
             search_in_files,
             set_provider_api_key,

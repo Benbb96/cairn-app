@@ -13,7 +13,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
   import { t, type TranslationKey } from '$lib/i18n';
-  import { langFromPath } from '$lib/services/file-service';
+  import { fileMtimes, langFromPath } from '$lib/services/file-service';
   import { getDiffFileBetween, type GitFileBetween } from '$lib/services/git-service';
   import {
     addComment,
@@ -65,7 +65,38 @@
 
   const dispatch = createEventDispatcher<{
     openInDiff: { path: string; line: number; side: 'old' | 'new' };
+    openFile: string;
   }>();
+
+  /**
+   * Whether the excerpt's file is still on disk, so the guide can offer opening
+   * it next to opening the diff. A deleted file, or one a branch reviewed from
+   * another worktree never carried, has nothing to open - the answer comes from
+   * the filesystem rather than from the diff alone, as it does in the diff view.
+   */
+  let excerptExists = false;
+  let excerptCheckedFor = '';
+  $: excerptPath = currentExcerpt?.path ?? '';
+  $: if (excerptPath && scope.worktreePath) {
+    const key = `${scope.worktreePath}|${excerptPath}`;
+    if (excerptCheckedFor !== key) {
+      excerptCheckedFor = key;
+      excerptExists = false;
+      void checkExcerptExists(key, `${scope.worktreePath}/${excerptPath}`);
+    }
+  } else {
+    excerptExists = false;
+  }
+
+  async function checkExcerptExists(key: string, absolute: string) {
+    try {
+      const found = await fileMtimes([absolute]);
+      if (excerptCheckedFor !== key) return;
+      excerptExists = Object.keys(found ?? {}).length > 0;
+    } catch {
+      if (excerptCheckedFor === key) excerptExists = false;
+    }
+  }
 
   $: scopeKey = `${scope.projectId}:${scope.instanceId}`;
   $: generatingRunId = $guideGenerating[scopeKey] ?? '';
@@ -680,6 +711,16 @@
             >
               <Icon name="external" size={11}/> {t('review.diff')}
             </button>
+            <button
+              class="btn ghost tiny"
+              disabled={!excerptExists}
+              title={excerptExists
+                ? (t('review.openFile') as string)
+                : (t('review.openFileGone') as string)}
+              on:click={() => dispatch('openFile', currentExcerpt.path)}
+            >
+              <Icon name="file" size={11}/> {t('review.openFile')}
+            </button>
           </div>
           <div class="editor-wrap">
             {#if isFileLoading && !fileContent}
@@ -716,7 +757,7 @@
             {@const n = kindCount(k as 'all' | (typeof REMARK_KINDS)[number])}
             {#if k === 'all' || n > 0}
               <button
-                class="kind-filter"
+                class="kind-filter kind-{k}"
                 class:active={remarkKind === k}
                 role="tab"
                 aria-selected={remarkKind === k}
@@ -736,6 +777,7 @@
               id={`guide-remark-${remark.id}`}
               class="remark kind-{remark.kind}"
               class:dismissed={remark.status === 'dismissed'}
+              class:handled={remark.status === 'commented'}
               class:focused={remark.id === focusedRemarkId}
               class:elsewhere={!excerptRemarks.includes(remark)}
               role="button"
@@ -746,6 +788,12 @@
               <div class="remark-head">
                 <span class="kind-pill kind-{remark.kind}">{t(`review.remark.${remark.kind}` as TranslationKey)}</span>
                 <span class="dim mono small">{basename(remark.path)}:{remark.line}</span>
+                {#if remark.status === 'commented'}
+                  <span class="spacer"></span>
+                  <span class="handled-pill" title={t('review.remarkHandledTitle') as string}>
+                    <Icon name="check" size={10}/> {t('review.remarkHandled')}
+                  </span>
+                {/if}
               </div>
               <b class="remark-title">{remark.title}</b>
               <div class="remark-body md">{@html md(remark.body)}</div>
@@ -1160,8 +1208,23 @@
     font-size: 10.5px;
     cursor: pointer;
   }
-  .kind-filter:hover { background: var(--bg-3); color: var(--fg-1); }
-  .kind-filter.active { background: var(--bg-4); color: var(--fg-0); }
+  /* Same severity tones as the cards below, so a filter and the remarks it
+     shows read as one colour. `all` stays neutral: it is not a severity. */
+  .kind-filter.kind-issue { --remark-tone: var(--danger); }
+  .kind-filter.kind-question { --remark-tone: oklch(0.82 0.14 60); }
+  .kind-filter.kind-refactor { --remark-tone: oklch(0.7 0.14 280); }
+  .kind-filter.kind-note { --remark-tone: var(--fg-3); }
+  .kind-filter.kind-issue,
+  .kind-filter.kind-question,
+  .kind-filter.kind-refactor,
+  .kind-filter.kind-note { color: var(--remark-tone); }
+  .kind-filter:hover { background: var(--bg-3); }
+  .kind-filter.kind-all:hover { color: var(--fg-1); }
+  .kind-filter.active {
+    background: color-mix(in oklch, var(--remark-tone, var(--fg-1)) 16%, var(--bg-4));
+    color: var(--remark-tone, var(--fg-0));
+  }
+  .kind-filter.kind-all.active { color: var(--fg-0); }
   .kind-filter-count { font-size: 9.5px; opacity: 0.7; font-variant-numeric: tabular-nums; }
 
   .remarks {
@@ -1180,6 +1243,27 @@
   .remark { cursor: pointer; }
   .remark:hover { border-color: var(--stroke-1); }
   .remark.dismissed { opacity: 0.5; }
+  /* A remark that has been answered reads as done at a glance: the card keeps
+     its severity rule but gains a success tint and an explicit badge, rather
+     than only losing its "comment" button. */
+  .remark.handled {
+    background: color-mix(in oklch, var(--success) 7%, transparent);
+    border-color: color-mix(in oklch, var(--success) 30%, transparent);
+  }
+  .handled-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--success) 16%, transparent);
+    color: var(--success);
+  }
   /* A remark about code that is not on screen: still readable, still clickable,
      but visibly not the one the diff is showing. */
   .remark.elsewhere { opacity: 0.72; }
@@ -1188,10 +1272,16 @@
     border-color: var(--accent);
     background: var(--bg-2);
   }
-  .remark.kind-issue { border-left-color: var(--danger); }
-  .remark.kind-question { border-left-color: oklch(0.82 0.14 60); }
-  .remark.kind-refactor { border-left-color: oklch(0.7 0.14 280); }
-  .remark.kind-note { border-left-color: var(--fg-3); }
+  /* One severity tone per kind, so the card's left rule and its pill can never
+     drift apart: both read from the same variable. */
+  .remark.kind-issue { --remark-tone: var(--danger); }
+  .remark.kind-question { --remark-tone: oklch(0.82 0.14 60); }
+  .remark.kind-refactor { --remark-tone: oklch(0.7 0.14 280); }
+  .remark.kind-note { --remark-tone: var(--fg-3); }
+  .remark.kind-issue,
+  .remark.kind-question,
+  .remark.kind-refactor,
+  .remark.kind-note { border-left-color: var(--remark-tone); }
   .remark-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
   .remark-title { display: block; font-size: 12.5px; color: var(--fg-0); }
   .remark-body {

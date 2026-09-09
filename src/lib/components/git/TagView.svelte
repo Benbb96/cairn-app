@@ -10,6 +10,7 @@
    */
   import { tick } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
+  import Select from '$lib/components/Select.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
   import { t } from '$lib/i18n';
   import { git, createTag, deleteTag, pushTag, deleteRemoteTag } from '$lib/stores/git';
@@ -23,6 +24,7 @@
   let newOpen = false;
   let newName = '';
   let newMessage = '';
+  let newTarget = '';
   let isSaving = false;
   let newNameInput: HTMLInputElement;
   let createError = '';
@@ -34,6 +36,14 @@
   let isDeleting = false;
 
   $: tags = $git.tags;
+  $: currentBranch = $git.currentBranch;
+  $: targetOptions = [
+    { value: '', label: t('git.tagTargetHead') as string },
+    ...$git.branches.map((b) => ({
+      value: b,
+      label: b === currentBranch ? `${b} (${t('git.tagTargetCurrent')})` : b,
+    })),
+  ];
   $: filtered = searchQuery.trim()
     ? tags.filter(tag =>
         tag.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -44,6 +54,7 @@
   async function openNew() {
     newName = '';
     newMessage = '';
+    newTarget = '';
     createError = '';
     newOpen = true;
     await tick();
@@ -60,7 +71,7 @@
     isSaving = true;
     createError = '';
     try {
-      await createTag(newName.trim(), newMessage.trim());
+      await createTag(newName.trim(), newMessage.trim(), newTarget);
       newOpen = false;
     } catch (error) {
       createError = error instanceof Error ? error.message : String(error);
@@ -207,6 +218,18 @@
             placeholder={t('git.tagNamePlaceholder') as string}
             on:keydown={(e) => e.key === 'Enter' && !isSaving && handleCreate()}
           />
+        </div>
+        <div class="tag-field">
+          <span class="tag-field-label">{t('git.tagTargetLabel')}</span>
+          <Select
+            value={newTarget}
+            options={targetOptions}
+            ariaLabel={t('git.tagTargetLabel') as string}
+            searchable={true}
+            searchPlaceholder={t('git.branchSearchPlaceholder') as string}
+            on:change={(e) => (newTarget = e.detail)}
+          />
+          <span class="tag-field-hint">{t('git.tagTargetHint')}</span>
         </div>
         <div class="tag-field">
           <label class="tag-field-label" for="tag-msg">{t('git.tagMessageLabel')}</label>

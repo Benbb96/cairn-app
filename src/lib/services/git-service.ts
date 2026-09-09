@@ -727,6 +727,34 @@ export async function revertCommit(
 	return invoke("git_revert_commit", { worktreePath, commitHash });
 }
 
+/**
+ * What the graph context menu offers on a commit. `cherry-pick` is listed but
+ * not wired yet: leaving it out entirely would hide that it is coming, so the
+ * menu shows it disabled instead.
+ */
+export type CommitAction =
+	| "copy-hash"
+	| "copy-message"
+	| "branch-from"
+	| "tag-from"
+	| "reset-soft"
+	| "reset-mixed"
+	| "reset-hard"
+	| "revert"
+	| "cherry-pick";
+
+/** Reset modes, from the one that keeps the most work to the one that keeps none. */
+export type ResetMode = "soft" | "mixed" | "hard";
+
+/** Moves HEAD to another commit; `hard` also throws away the worktree. */
+export async function resetToCommit(
+	worktreePath: string,
+	commitHash: string,
+	mode: ResetMode,
+): Promise<void> {
+	return invoke("git_reset", { worktreePath, commitHash, mode });
+}
+
 /** Restores a file to HEAD, losing its uncommitted changes for good. */
 export async function discardFile(
 	worktreePath: string,

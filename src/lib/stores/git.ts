@@ -1034,6 +1034,17 @@ export async function revertCommit(commitHash: string): Promise<void> {
 	await Promise.all([refreshStatus(), refreshLog()]);
 }
 
+/** Moves HEAD to another commit; `hard` also discards the worktree changes. */
+export async function resetToCommit(
+	commitHash: string,
+	mode: gitService.ResetMode,
+): Promise<void> {
+	const wt = worktree();
+	if (!wt) return;
+	await mutate(() => gitService.resetToCommit(wt, commitHash, mode));
+	await Promise.all([refreshStatus(), refreshLog(), refreshGraph()]);
+}
+
 /** Throws away the worktree changes of one file; not undoable. */
 export async function discardFile(filePath: string): Promise<void> {
 	const wt = worktree();

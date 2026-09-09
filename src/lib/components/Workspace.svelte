@@ -40,7 +40,7 @@
   import { instances, baseInstance, isBaseInstance, isArchivedInstance, BASE_INSTANCE_ID } from '$lib/stores/instance';
   import { activateInstance, activeProject } from '$lib/stores/project';
   import { settings } from '$lib/stores/settings';
-  import { gitFileCounts, gitHasConflicts, startGitPolling, getRemoteUrl } from '$lib/stores/git';
+  import { git, gitFileCounts, gitHasConflicts, startGitPolling, getRemoteUrl } from '$lib/stores/git';
   import { activeCiBusy, activeCiFailing, retryLatestPipeline } from '$lib/stores/pipelines';
   import { requestMergeRequestForm } from '$lib/stores/merge-request';
   import { requestReviewAction } from '$lib/stores/review';
@@ -63,6 +63,11 @@
   let showShortcuts = false;
   let showTools = false;
   let filesView: FilesView;
+  /* Instances are git worktrees, so a project that is not a repository cannot
+     have any: the switcher is disabled rather than opening a menu whose only
+     real entry would fail at creation time. */
+  $: isGitProject = $git.isGitRepo;
+
   let instanceSearch = '';
   let instanceSearchEl: HTMLInputElement | null = null;
 
@@ -497,7 +502,12 @@
   <div class="instance-header">
     {#if activeInstance}
       <div class="instance-switcher-wrap" use:clickOutside={() => { showInstanceMenu = false; instanceSearch = ''; }}>
-        <button class="instance-switcher {isBaseInstance(activeInstance.id) ? 'is-base' : ''}" on:click={openInstanceMenu}>
+        <button
+          class="instance-switcher {isBaseInstance(activeInstance.id) ? 'is-base' : ''}"
+          disabled={!isGitProject}
+          title={isGitProject ? undefined : t('workspace.instancesNeedGit') as string}
+          on:click={openInstanceMenu}
+        >
           {#if isBaseInstance(activeInstance.id)}
             <Icon name="folder" size={12}/>
             <span>{activeInstance.ticket.title}</span>
@@ -742,7 +752,11 @@
     shortcutDefs={SHORTCUT_DEFS}
     customCommands={paletteCommands}
     onClose={() => commandPaletteVisible.set(false)}
-    onAction={(id) => { commandPaletteVisible.set(false); void runAction(id); }}
+    onAction={async (id) => {
+      commandPaletteVisible.set(false);
+      await tick();
+      void runAction(id);
+    }}
     onRunCommand={runCommandFromPalette}
   />
 {/if}

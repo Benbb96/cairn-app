@@ -867,7 +867,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); curso
   font-size: 12px;
   color: var(--fg-1);
 }
-.instance-switcher:hover { background: var(--bg-2); }
+.instance-switcher:hover:not(:disabled) { background: var(--bg-2); }
+.instance-switcher:disabled { opacity: 0.5; cursor: default; }
 .instance-switcher .count {
   font-size: 10px; color: var(--fg-3);
   font-family: var(--font-mono);

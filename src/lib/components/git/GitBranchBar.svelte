@@ -24,7 +24,7 @@
   } from '$lib/stores/merge-request';
   import { activeStep } from '$lib/stores/ui';
   import { clickOutside } from '$lib/utils/click-outside';
-  import type { PullMode, PushMode } from '$lib/services/git-service';
+  import type { PullMode, PushMode, ResetMode } from '$lib/services/git-service';
   import BaseBranchSelect from '$lib/components/git/BaseBranchSelect.svelte';
   import {
     git,
@@ -32,6 +32,7 @@
     fetchRemote,
     pullBranch,
     pushBranch,
+    resetToCommit,
   } from '$lib/stores/git';
   import { activeProject } from '$lib/stores/project';
 
@@ -60,7 +61,7 @@
   $: ahead = remote?.ahead ?? 0;
   $: behind = remote?.behind ?? 0;
   $: canPush = !remote?.hasUpstream || ahead > 0;
-  $: busy = fetching || pulling || pushing;
+  $: busy = fetching || pulling || pushing || resetting;
 
   let lastBranchPath = '';
   $: if ($activeProject?.path && $activeProject.path !== lastBranchPath) {
@@ -177,6 +178,41 @@
       openTabIfConflicted();
     } finally {
       pushing = false;
+    }
+  }
+
+  /**
+   * Reset targets HEAD: it is the "undo my local commits / my local changes"
+   * gesture of the bar, not a way to travel to an arbitrary commit - that one
+   * lives in the graph context menu, which knows which commit is meant.
+   */
+  let isResetMenuOpen = false;
+  let resetting = false;
+  let pendingResetMode: ResetMode | null = null;
+
+  const RESET_MODES: { mode: ResetMode; icon: string }[] = [
+    { mode: 'soft', icon: 'undo' },
+    { mode: 'mixed', icon: 'layers' },
+    { mode: 'hard', icon: 'warning' },
+  ];
+
+  /** Every mode moves the branch, so none of them runs without confirmation. */
+  function requestReset(mode: ResetMode) {
+    isResetMenuOpen = false;
+    pendingResetMode = mode;
+  }
+
+  /* The modal stays up while the reset runs, so its button can show the pending
+     state instead of the dialog vanishing onto a frozen bar. */
+  async function doReset(mode: ResetMode) {
+    if (busy) return;
+    resetting = true;
+    try {
+      await resetToCommit('HEAD', mode);
+      dispatch('filesChanged');
+    } finally {
+      resetting = false;
+      pendingResetMode = null;
     }
   }
 
@@ -348,6 +384,44 @@
       {/if}
     </div>
 
+    <div class="op-split" use:clickOutside={() => (isResetMenuOpen = false)}>
+      <button
+        class="op-btn split-main"
+        title={t('git.resetTitle') as string}
+        disabled={busy || inOperation}
+        on:click={() => requestReset('mixed')}
+      >
+        {#if resetting}
+          <Spinner size={12} trackColor="var(--bg-3)" color="var(--fg-3)" />
+        {:else}
+          <Icon name="undo" size={13} />
+        {/if}
+        <span>{t('git.reset')}</span>
+      </button>
+      <button
+        class="op-btn split-more"
+        aria-label={t('git.resetMoreActions') as string}
+        aria-expanded={isResetMenuOpen}
+        disabled={busy || inOperation}
+        on:click={() => (isResetMenuOpen = !isResetMenuOpen)}
+      >
+        <Icon name="chev-d" size={11} />
+      </button>
+      {#if isResetMenuOpen}
+        <div class="op-menu" role="menu">
+          {#each RESET_MODES as { mode, icon } (mode)}
+            <button role="menuitem" class:danger={mode === 'hard'} on:click={() => requestReset(mode)}>
+              <Icon name={icon} size={12} />
+              <span class="op-menu-text">
+                <span class="op-menu-label">{t(`git.resetMode.${mode}`)}</span>
+                <span class="op-menu-hint">{t(`git.resetModeHint.${mode}`)}</span>
+              </span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
     <div class="op-split" use:clickOutside={() => (isPushMenuOpen = false)}>
       <button
         class="op-btn primary split-main"
@@ -429,9 +503,55 @@
   </div>
 {/if}
 
+{#if pendingResetMode}
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    on:click={() => !resetting && (pendingResetMode = null)}
+    on:keydown={(e) => e.key === 'Escape' && !resetting && (pendingResetMode = null)}
+  >
+    <div class="modal reset-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-head">
+        <div>
+          <div class="step-count">GIT</div>
+          <h3>{t(`git.resetMode.${pendingResetMode}`)}</h3>
+        </div>
+        <button class="icon-btn close" disabled={resetting} on:click={() => (pendingResetMode = null)} aria-label={t('common.close') as string}>
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="reset-confirm">{t(`git.resetConfirm.${pendingResetMode}`)}</p>
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button class="btn ghost" disabled={resetting} on:click={() => (pendingResetMode = null)}>{t('common.cancel')}</button>
+        <button
+          class="btn {pendingResetMode === 'hard' ? 'danger' : 'primary'}"
+          disabled={resetting}
+          on:click={() => pendingResetMode && doReset(pendingResetMode)}
+        >
+          {#if resetting}<Spinner size={11} />{:else}{t('git.reset')}{/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
 
   .mr-modal { width: min(560px, 92vw); }
+
+  .reset-modal { width: min(420px, 92vw); }
+  .reset-confirm {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--fg-1);
+  }
 
   .mr-chip-wrap {
     position: relative;

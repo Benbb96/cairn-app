@@ -368,6 +368,21 @@ const scrollToFirstConflict = ViewPlugin.fromClass(
 	},
 );
 
+/**
+ * Every line covered by a conflict region, markers included, so the minimap can
+ * paint them the way it paints the diff gutter. Long files are exactly where a
+ * conflict is easiest to lose track of.
+ */
+export function conflictLines(state: EditorState): number[] {
+	const lines: number[] = [];
+	for (const c of parseConflicts(state)) {
+		const from = state.doc.lineAt(c.startFrom).number;
+		const to = state.doc.lineAt(c.endTo).number;
+		for (let n = from; n <= to; n++) lines.push(n);
+	}
+	return lines;
+}
+
 /** The conflict UI; harmless on a document that has no markers. */
 export function buildConflictResolver(): Extension {
 	return [conflictField, conflictTheme, scrollToFirstConflict];

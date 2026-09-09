@@ -29,7 +29,7 @@
   import { lspChangesOf, type LspContentChange } from '$lib/utils/files/document-model';
   import { javascript, scopeCompletionSource } from '@codemirror/lang-javascript';
   import {
-    buildEditorTheme, buildHighlight, buildDiffGutterTheme, diffColors,
+    buildEditorTheme, buildHighlight, buildDiffGutterTheme, conflictColor, diffColors,
     resolveLanguageExtension, type EditorLanguage,
   } from '$lib/utils/editor/editor-theme';
   import { lineNumbers, rectangularSelection, crosshairCursor, drawSelection, highlightWhitespace } from '@codemirror/view';
@@ -62,7 +62,7 @@
     type GutterChunk,
   } from '$lib/utils/editor/editor-diff-gutter';
   import { buildFontSizeTheme, buildMinimap, buildShortcutKeymap, SHORTCUT_COMMANDS, unselectableGutters } from '$lib/utils/editor/editor-extensions';
-  import { buildConflictResolver } from '$lib/utils/editor/editor-conflict';
+  import { buildConflictResolver, conflictLines } from '$lib/utils/editor/editor-conflict';
   import { buildStickyScroll, stickyScrollTheme } from '$lib/utils/editor/editor-sticky-scroll';
   import { buildMarkdownWysiwyg, setMarkdownDocPath } from '$lib/utils/editor/editor-markdown-wysiwyg';
   import { buildMermaidDoc } from '$lib/utils/editor/editor-mermaid-doc';
@@ -587,6 +587,11 @@
     for (const [line, kind] of diffLineKinds(view.state)) {
       next[line] = colors[kind];
       key += `${line}${kind}`;
+    }
+    const conflictTone = conflictColor(themeName);
+    for (const line of conflictLines(view.state)) {
+      next[line] = conflictTone;
+      key += `${line}c`;
     }
     if (!force && key === minimapDiffKey) return;
     minimapDiffKey = key;

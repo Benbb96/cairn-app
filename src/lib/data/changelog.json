@@ -1,5 +1,78 @@
 [
 	{
+		"version": "1.1.0",
+		"date": "",
+		"summary": {
+			"en": "Git gains the actions the graph was missing: a context menu on every commit, reset with its three modes, and a tag that can be placed on the branch of your choice. The review guide shows at a glance which remarks are handled, and conflicts are now visible in the editor minimap.",
+			"fr": "Git gagne les actions qui manquaient au graphe : un menu contextuel sur chaque commit, le reset et ses trois modes, et un tag que l'on peut poser sur la branche de son choix. Le guide de review montre d'un coup d'oeil les remarques traitées, et les conflits apparaissent désormais dans la minimap de l'éditeur."
+		},
+		"changes": [
+			{
+				"kind": "added",
+				"text": {
+					"en": "Creating a tag now lets you choose the branch it is placed on, with a search field for repositories that have many, instead of always tagging the current commit.",
+					"fr": "La création d'un tag permet désormais de choisir la branche sur laquelle il est posé, avec un champ de recherche pour les dépôts qui en comptent beaucoup, au lieu de toujours taguer le commit courant."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Right-clicking a commit in the git graph opens a menu: copy its hash or its message, create a branch or a tag there, reset onto it, or revert it. Cherry-pick is listed but not available yet.",
+					"fr": "Un clic droit sur un commit du graphe git ouvre un menu : copier son hash ou son message, y créer une branche ou un tag, s'y reset, ou le revert. Le cherry-pick y figure mais n'est pas encore disponible."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A Reset button sits next to pull and push, with its soft, mixed and hard modes. Every mode asks for confirmation, spelling out what it keeps and what it discards.",
+					"fr": "Un bouton Reset accompagne le pull et le push, avec ses modes soft, mixed et hard. Chaque mode demande confirmation en précisant ce qu'il conserve et ce qu'il supprime."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Conflict regions now appear in the editor minimap, so a conflict stays findable in a long file.",
+					"fr": "Les zones de conflit apparaissent désormais dans la minimap de l'éditeur, ce qui permet de les retrouver dans un fichier long."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The review guide offers opening the file itself next to opening the diff, whenever the file is still on disk.",
+					"fr": "Le guide de review propose d'ouvrir le fichier lui-même à côté de l'ouverture du diff, lorsque le fichier existe encore sur le disque."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "On a project that is not a git repository, the instance selector is disabled rather than opening a menu whose creation would fail.",
+					"fr": "Sur un projet qui n'est pas un dépôt git, le sélecteur d'instance est grisé au lieu d'ouvrir un menu dont la création échouerait."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "In the review guide, the remark filters under Remarks now carry the severity colour of the kind they filter.",
+					"fr": "Dans le guide de review, les filtres de remarques sous Remarques portent désormais la couleur de sévérité du type qu'ils filtrent."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "A review remark that has been answered is now marked as handled, instead of only losing its comment button.",
+					"fr": "Une remarque de review à laquelle on a répondu est désormais marquée comme traitée, au lieu de seulement perdre son bouton de commentaire."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Running Go to line from the command palette no longer did nothing: the palette gave the focus back before the panel could take it.",
+					"fr": "Lancer Aller à la ligne depuis la palette de commandes ne faisait rien : la palette reprenait le focus avant que le panneau puisse le prendre."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.0.1",
 		"date": "2026-09-03",
 		"summary": {

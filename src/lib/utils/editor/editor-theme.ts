@@ -669,6 +669,16 @@ export function diffColors(theme: string): Record<DiffKind, string> {
 	};
 }
 
+/**
+ * The colour the minimap paints conflict regions with. It reuses the palette's
+ * "deleted" tone rather than adding a field to all eight palettes: that hue is
+ * already the theme's alert colour, and a conflict is the same kind of signal.
+ */
+export function conflictColor(theme: string): string {
+	const p = PALETTES[theme as ThemeName] ?? PALETTE_DEFAULT;
+	return p.diffDeleted;
+}
+
 /** The theme extension, falling back to the default palette for an unknown id. */
 export function buildEditorTheme(theme: string): Extension {
 	const cached = editorThemeCache.get(theme);

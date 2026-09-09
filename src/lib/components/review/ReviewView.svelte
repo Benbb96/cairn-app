@@ -393,6 +393,7 @@
       ticket={instance?.ticket.key ? { key: instance.ticket.key, title: instance.ticket.title } : null}
       hasMergeRequest={!!mr}
       on:openInDiff={onOpenInDiff}
+      on:openFile
     />
     {/key}
   {:else}

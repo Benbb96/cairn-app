@@ -9,7 +9,7 @@
    * Instances are matched to commits by branch name to offer switching or branching off a ref.
    */
   import { createEventDispatcher } from 'svelte';
-  import type { GitGraphCommit } from '$lib/services/git-service';
+  import type { CommitAction, GitGraphCommit } from '$lib/services/git-service';
   import type { Instance } from '$lib/types/instance';
   import Icon from '$lib/components/Icon.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
@@ -17,6 +17,7 @@
   import { SEARCH_DEBOUNCE_MS } from '$lib/utils/timing';
   import { reusablePrefix } from '$lib/utils/git/graph-cache';
   import { virtualWindow } from '$lib/utils/virtual-window';
+  import { clickOutside } from '$lib/utils/click-outside';
 
   export let commits: GitGraphCommit[];
   export let currentBranch: string;
@@ -24,7 +25,36 @@
   export let selectedHash = '';
   export let hasMore = false;
 
-  const dispatch = createEventDispatcher<{ switchInstance: Instance; createInstanceFromRef: string; selectCommit: GitGraphCommit; loadMore: void; searchToggle: boolean; refresh: void }>();
+  const dispatch = createEventDispatcher<{ switchInstance: Instance; createInstanceFromRef: string; selectCommit: GitGraphCommit; loadMore: void; searchToggle: boolean; refresh: void; commitAction: { action: CommitAction; commit: GitGraphCommit } }>();
+
+  const COMMIT_MENU: { action: CommitAction; icon: string; danger?: boolean; disabled?: boolean }[] = [
+    { action: 'copy-hash', icon: 'copy' },
+    { action: 'copy-message', icon: 'copy' },
+    { action: 'branch-from', icon: 'branch' },
+    { action: 'tag-from', icon: 'bookmark' },
+    { action: 'reset-soft', icon: 'undo' },
+    { action: 'reset-mixed', icon: 'layers' },
+    { action: 'reset-hard', icon: 'warning', danger: true },
+    { action: 'revert', icon: 'undo' },
+    { action: 'cherry-pick', icon: 'git', disabled: true },
+  ];
+
+  let menuCommit: GitGraphCommit | null = null;
+  let menuX = 0;
+  let menuY = 0;
+
+  function openCommitMenu(e: MouseEvent, commit: GitGraphCommit) {
+    e.preventDefault();
+    menuCommit = commit;
+    menuX = Math.min(e.clientX, window.innerWidth - 220);
+    menuY = Math.min(e.clientY, window.innerHeight - COMMIT_MENU.length * 28 - 16);
+  }
+
+  function runCommitAction(action: CommitAction) {
+    if (!menuCommit) return;
+    dispatch('commitAction', { action, commit: menuCommit });
+    menuCommit = null;
+  }
 
   let isLoadingMore = false;
   let lastCount = 0;
@@ -415,6 +445,7 @@
         tabindex="0"
         on:click={() => dispatch('selectCommit', row.commit)}
         on:keydown={(e) => e.key === 'Enter' && dispatch('selectCommit', row.commit)}
+        on:contextmenu={(e) => openCommitMenu(e, row.commit)}
       >
         <div class="graph-row">
           <div
@@ -529,6 +560,30 @@
   </div>
 </div>
 
+{#if menuCommit}
+  <div
+    class="commit-menu"
+    role="menu"
+    style="left:{menuX}px; top:{menuY}px"
+    use:clickOutside={() => (menuCommit = null)}
+  >
+    {#each COMMIT_MENU as { action, icon, danger, disabled } (action)}
+      <button
+        role="menuitem"
+        class:danger={danger}
+        disabled={disabled}
+        on:click={() => runCommitAction(action)}
+      >
+        <Icon name={icon} size={12}/>
+        <span class="commit-menu-label">{t(`git.commitMenu.${action}`)}</span>
+        {#if disabled}
+          <span class="commit-menu-tag">{t('git.commitMenuUnavailable')}</span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/if}
+
 {#if branchTip}
   <div class="branch-tooltip" style="left:{branchTip.x}px; top:{branchTip.y}px">
     {branchTip.label}
@@ -536,6 +591,42 @@
 {/if}
 
 <style>
+  .commit-menu {
+    position: fixed;
+    z-index: 1200;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    gap: 1px;
+    background: var(--bg-1);
+    border: 1px solid var(--stroke-0);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.28);
+  }
+  .commit-menu button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-1);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .commit-menu button:hover:not(:disabled) { background: var(--bg-2); color: var(--fg-0); }
+  .commit-menu button.danger { color: var(--danger); }
+  .commit-menu button:disabled { opacity: 0.45; cursor: default; }
+  .commit-menu-label { flex: 1; min-width: 0; }
+  .commit-menu-tag {
+    font-size: 10px;
+    color: var(--fg-3);
+    text-transform: lowercase;
+  }
+
   .graph-wrap {
     display: flex;
     flex-direction: column;

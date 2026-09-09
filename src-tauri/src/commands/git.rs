@@ -1946,6 +1946,34 @@ pub async fn git_revert_commit(worktree_path: String, commit_hash: String) -> Re
 }
 
 // ---------------------------------------------------------------------------
+// Reset
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+/// Moves HEAD to `commit_hash` with the given mode: `soft` keeps the index and
+/// the worktree, `mixed` keeps the worktree only, `hard` discards both.
+pub async fn git_reset(
+    worktree_path: String,
+    commit_hash: String,
+    mode: String,
+) -> Result<(), GitError> {
+    reject_option_like(&commit_hash)?;
+    let flag = match mode.as_str() {
+        "soft" => "--soft",
+        "hard" => "--hard",
+        _ => "--mixed",
+    };
+    let expanded = expand(&worktree_path);
+    let out = git_cmd(&expanded)
+        .args(["reset", flag, &commit_hash])
+        .output()?;
+    if !out.status.success() {
+        return Err(GitError::from_process(&out));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 
