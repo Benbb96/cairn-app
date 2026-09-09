@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
-use crate::commands::cli_providers::resolve_binary;
+use crate::commands::cli_providers::{kill_process_group, resolve_binary};
 use crate::storage::{instance_terminal_state_file, project_terminal_state_file, write_json_atomic};
 
 /// One live PTY: the handle to write to it, resize it, and kill its child.
@@ -287,17 +287,19 @@ pub async fn terminal_create(
             .and_then(|mut sessions| sessions.remove(&reader_id));
         // The PTY closing does not mean the group is empty: a shell that exits
         // while a dev server it started still holds the terminal leaves that
-        // server reparented to init, its port and its memory held for good. The
-        // group is signalled before the status is claimed, because reaping the
-        // leader frees its pid for reuse and the signal would then land on a
-        // stranger.
+        // server reparented to init, its port and its memory held for good. But
+        // the PTY child may already have exited by the time this runs, which
+        // frees its pid - and pgid - for the kernel to reuse; a blind group
+        // signal would then land on a stranger, up to the user's own graphical
+        // session. `kill_process_group` withholds the signal unless the pid still
+        // leads its own group, so a recycled pid is a no-op here.
         // Gone from the map already means `terminal_close` took it: the app asked
         // for this death and has torn the terminal down on its side, so the
         // event would arrive after the replacement had started and mark a CLI
         // that is running. Only a process that ended on its own is announced.
         let Some(mut sess) = ended else { return };
         if let Some(pid) = sess.child.process_id() {
-            kill_group(pid);
+            kill_process_group(pid);
         }
         let _ = sess.child.kill();
         let exit_code = wait_bounded(&mut sess.child);
@@ -412,46 +414,17 @@ fn wait_bounded(child: &mut Box<dyn portable_pty::Child + Send + Sync>) -> Optio
 /// Killing the PTY leader alone leaves its descendants behind - a dev server, a
 /// watcher, a build - reparented to init and holding their ports and their
 /// memory for the rest of the machine's uptime. The shell is the leader of the
-/// PTY's process group, so signalling the negative pid reaches the whole group;
-/// the leader is then killed and reaped, without which it stays a zombie.
+/// PTY's process group, so signalling the negative pid reaches the whole group.
+/// The pid can already have been reused when this runs, so the group signal goes
+/// through `kill_process_group`, which withholds it unless the pid still leads
+/// its own group; the leader is then killed and reaped by its exact pid, without
+/// which it stays a zombie.
 fn kill_session(sess: &mut TerminalSession) {
     if let Some(pid) = sess.child.process_id() {
-        kill_group(pid);
+        kill_process_group(pid);
     }
     let _ = sess.child.kill();
     let _ = wait_bounded(&mut sess.child);
-}
-
-/// Signals the session's whole process group, leaving the leader itself to the
-/// caller.
-///
-/// Called while the leader is still alive and unreaped, which is what makes the
-/// negative-pid signal safe: the kernel cannot hand its pid - and therefore its
-/// pgid - to anything else until it has been waited on, and the caller only
-/// kills and reaps it afterwards. Asking `pgrep -g` first, as this used to,
-/// bought nothing and opened a window: the leader could exit and be reaped
-/// between the answer and the signal, which is exactly the case the check was
-/// meant to rule out. It also made the whole cleanup depend on a `pgrep` binary
-/// that a minimal container image does not ship, and every descendant leaked
-/// when it was missing.
-#[cfg(not(windows))]
-fn kill_group(pid: u32) {
-    if pid <= 1 {
-        return;
-    }
-    let _ = std::process::Command::new("kill")
-        .args(["-TERM", &format!("-{pid}")])
-        .output();
-}
-
-#[cfg(windows)]
-fn kill_group(pid: u32) {
-    if pid <= 1 {
-        return;
-    }
-    let _ = std::process::Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output();
 }
 
 /// Kills one session's shell; the reader thread ends on its own once the PTY

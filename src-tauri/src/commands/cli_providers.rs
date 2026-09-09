@@ -560,31 +560,78 @@ fn antigravity_conversation(cwd: &str, started_after: i64) -> Option<String> {
         })
 }
 
+/// The process group id of `pid`, read from field 5 of `/proc/<pid>/stat`.
+///
+/// The stat line is `pid (comm) state ppid pgrp ...`. `comm` is a parenthesised
+/// name that may itself contain spaces and parentheses, so the fields after it
+/// are counted from the last `)` rather than by splitting the whole line - a
+/// process named `sh )( ` would otherwise shift every field that follows.
+#[cfg(not(target_os = "windows"))]
+fn process_group_of(pid: u32) -> Option<u32> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let after_comm = stat.rsplit_once(')')?.1;
+    // Fields after `comm`: state (index 0), ppid (1), pgrp (2).
+    after_comm.split_whitespace().nth(2)?.parse().ok()
+}
+
+/// Send SIGTERM to the process group led by `pid`, but only when `pid` is still
+/// the leader of its own group.
+///
+/// A negative-pid `kill` signals a whole process group, which is how a CLI and
+/// everything it spawned are taken down at once. It is only safe when `pid` is
+/// the group leader we launched: a process spawned with `process_group(0)` has
+/// `pgrp == pid`, and that equality is what this checks. If `/proc/<pid>` is
+/// gone the process already exited and its pid - and pgid - are free for the
+/// kernel to hand to a stranger; if `pgrp != pid` the pid has been recycled onto
+/// a process that leads no group of ours, or leads someone else's. Either way
+/// the group signal is withheld, so a recycled pid can never carry `kill -TERM
+/// -<pid>` into an unrelated group - the session-wide kill this used to cause.
+///
+/// Returns whether the signal was sent, so a caller can tell a withheld signal
+/// from a delivered one. The caller still kills and reaps the leader itself
+/// through the exact-pid `Child::kill`, which stays correct in every case.
+#[cfg(not(target_os = "windows"))]
+pub fn kill_process_group(pid: u32) -> bool {
+    if pid <= 1 {
+        return false;
+    }
+    if process_group_of(pid) != Some(pid) {
+        return false;
+    }
+    let _ = Command::new("kill")
+        .args(["-TERM", &format!("-{pid}")])
+        .output();
+    true
+}
+
+/// Windows has no process-group signal shaped like this, so the whole tree is
+/// taken down by pid with `taskkill /T`. There is no recycling window to guard:
+/// the pid is resolved and signalled in one syscall by the OS.
+#[cfg(target_os = "windows")]
+pub fn kill_process_group(pid: u32) -> bool {
+    if pid <= 1 {
+        return false;
+    }
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .output();
+    true
+}
+
 /// Terminate a spawned CLI and every child it spawned.
 ///
 /// The exit status is claimed first: on a process that already exited, the pid
-/// is free for the kernel to reuse, and the negative-pid signal below would hit
-/// whatever process group inherited it - up to the app's own.
+/// is free for the kernel to reuse, and the group signal below would hit
+/// whatever process group inherited it - up to the app's own. `kill_process_group`
+/// then withholds the signal unless `pid` still leads its own group, so a pid
+/// recycled between the `try_wait` and here cannot carry the signal into a
+/// stranger's group.
 pub fn kill_tree(child: &mut std::process::Child) {
     if !matches!(child.try_wait(), Ok(None)) {
         return;
     }
     let pid = child.id();
-    if pid <= 1 {
-        return;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = Command::new("kill")
-            .args(["-TERM", &format!("-{pid}")])
-            .output();
-    }
+    kill_process_group(pid);
     let _ = child.kill();
     let _ = child.wait();
 }

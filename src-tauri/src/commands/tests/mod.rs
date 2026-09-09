@@ -415,6 +415,29 @@ mod kill_tests {
         let out = child.wait_with_output().expect("output");
         assert!(out.status.success());
     }
+
+    /// The guard behind the session-wide-kill fix: the group signal is only
+    /// fired for a pid that still leads its own group, so a recycled or
+    /// non-leader pid can never carry `kill -TERM -<pid>` into a stranger's
+    /// group.
+    #[test]
+    fn a_group_signal_is_withheld_unless_the_pid_leads_its_own_group() {
+        use crate::commands::cli_providers::kill_process_group;
+
+        // A pid that does not exist: /proc/<pid> is gone, so no signal.
+        assert!(!kill_process_group(u32::MAX - 1));
+
+        // The test runner itself: launched by cargo, it is not the leader of
+        // its own process group, so pgrp != pid and the signal is withheld.
+        assert!(!kill_process_group(std::process::id()));
+
+        // A child spawned with process_group(0) IS its own group leader, so the
+        // guard lets the signal through. `sleep` gives /proc time to be read.
+        let mut child = spawn_shell_full("sleep 5", None, true).expect("spawn");
+        assert!(kill_process_group(child.id()));
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 #[cfg(all(test, unix))]
