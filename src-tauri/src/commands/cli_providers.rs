@@ -1120,6 +1120,49 @@ pub fn mcp_reach(scope: &str, project_path: &str, targets: &[String]) -> Vec<Str
     )
 }
 
+/// Whether the CLI has already written a session under this exact id.
+///
+/// `discover_session_id` answers "which session did this conversation get",
+/// keyed on the working directory and a start time. That cannot say whether one
+/// particular id is taken, which is what a relaunch needs to know: asking a CLI
+/// to *create* a session under an id it has already written fails outright, and
+/// an id Cairn minted is written the moment the CLI starts - well before the
+/// discovery poll is due. A conversation stopped in that window would otherwise
+/// be relaunched under a taken id forever.
+#[tauri::command]
+pub async fn cli_session_exists(cli: String, session_id: String) -> bool {
+    session_id_exists(&cli, &session_id)
+}
+
+fn session_id_exists(id: &str, session_id: &str) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    match id {
+        CLAUDE_CODE => home()
+            .map(|h| claude_session_file_exists(&h.join(".claude").join("projects"), session_id))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn claude_session_file_exists(root: &Path, session_id: &str) -> bool {
+    let name = format!("{session_id}.jsonl");
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.file_name().is_some_and(|f| f == name.as_str()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Asked after a conversation has been given time to start, for the CLIs that
 /// mint their own id. Async: it may run the CLI to ask it.
 #[tauri::command]

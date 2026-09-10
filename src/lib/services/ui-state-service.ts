@@ -35,6 +35,8 @@ export interface UiState {
 	homeSection: string;
 	homeSettingsTab: string;
 	projectStates: Record<string, ProjectUiState>;
+	/** Projects folded shut on the tickets page, by project id. */
+	collapsedTicketProjects: string[];
 }
 
 /** Fallback for a first launch and for fields a saved file predates. */
@@ -45,6 +47,7 @@ const DEFAULTS: UiState = {
 	homeSection: "projects",
 	homeSettingsTab: "general",
 	projectStates: {},
+	collapsedTicketProjects: [],
 };
 
 /** Merged with DEFAULTS, so a missing field is not an error; falls back whole on a read failure. */

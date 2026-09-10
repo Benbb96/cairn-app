@@ -86,6 +86,20 @@ export async function discoverCliSession(
 }
 
 /**
+ * Whether the CLI has already written a session under this id.
+ *
+ * Asked before relaunching a conversation whose session was never confirmed: an
+ * id Cairn minted is taken as soon as the CLI starts, so a conversation stopped
+ * before discovery caught up must still be resumed rather than created again.
+ */
+export async function cliSessionExists(
+	cli: CliProviderId,
+	sessionId: string,
+): Promise<boolean> {
+	return await invoke("cli_session_exists", { cli, sessionId });
+}
+
+/**
  * The agents that would end up reading an entry written for `targets` - not the
  * same list, because a write location is often read by agents that were never
  * asked for. Answered by the registry rather than mirrored here, so the two

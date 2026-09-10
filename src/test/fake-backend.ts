@@ -259,7 +259,6 @@ export function createFakeBackend(seed: Partial<FakeWorld> = {}): FakeBackend {
 				author: "tester",
 				date: "2026-01-01",
 				message: c.message,
-				onCurrentBranch: true,
 			})),
 		git_stage_file: (a) => {
 			const worktree = a.worktreePath as string;

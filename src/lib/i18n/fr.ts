@@ -1855,6 +1855,12 @@ export const fr = {
 		stashNoResults: "Aucun stash ne correspond à votre recherche.",
 		stashOn: "sur",
 		stashDiffEmpty: "Ce stash n'apporte aucune modification de fichier.",
+		cherryPickInProgress: "Picorage en cours",
+		cherryPickConflictHint:
+			"Résolvez chaque conflit, indexez-le, puis continuez pour appliquer la suite.",
+		cherryPick: "Picorer",
+		cherryPickTitle:
+			"Appliquer les modifications de ce commit sur la branche courante",
 		revertCommit: "Inverser",
 		revertCommitTitle:
 			"Créer un nouveau commit qui annule les modifications de ce commit",

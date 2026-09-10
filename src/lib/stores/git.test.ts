@@ -122,6 +122,32 @@ describe("refreshStatus", () => {
 		await refreshStatus();
 		expect(getStatusFull).not.toHaveBeenCalled();
 	});
+
+	it("reads the diffs again after the git view was left and reopened", async () => {
+		const { getDiffs } = await import("$lib/services/git-service");
+		const diffs = getDiffs as unknown as ReturnType<typeof vi.fn>;
+		diffs.mockResolvedValue({
+			version: "v1",
+			unstaged: [{ filePath: "a.txt", hunks: [] }],
+			staged: [],
+		});
+
+		setDiffsWanted(true);
+		await refreshStatus();
+		expect(get(git).unstagedDiffs).toHaveLength(1);
+
+		setDiffsWanted(false);
+		expect(get(git).unstagedDiffs).toHaveLength(0);
+
+		diffs.mockResolvedValue(null);
+		setDiffsWanted(true);
+		await refreshStatus();
+
+		expect(diffs).toHaveBeenLastCalledWith("/repos/a", "");
+
+		setDiffsWanted(false);
+		diffs.mockResolvedValue(null);
+	});
 });
 
 describe("indexVersion", () => {
@@ -204,8 +230,6 @@ describe("startGitPolling", () => {
 		await vi.advanceTimersByTimeAsync(0);
 		expect(getStatusFull).toHaveBeenCalledTimes(1);
 
-		// The git view is closed here, so the slower idle cadence applies: the
-		// fast interval alone is not enough to earn a second read.
 		await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS);
 		expect(getStatusFull).toHaveBeenCalledTimes(1);
 
@@ -278,7 +302,6 @@ describe("the worktree cache", () => {
 		await refreshStatus();
 		expect(get(git).statusWorktree).toBe("/repos/b");
 
-		// Back to a: the data is there before anything is read again.
 		activeProjectId.set("a");
 		expect(get(git).statusWorktree).toBe("/repos/a");
 		expect(get(git).status).toEqual({ "a.txt": "modified" });
@@ -287,7 +310,6 @@ describe("the worktree cache", () => {
 	it("never shows one worktree's status under another", async () => {
 		await refreshStatus();
 		expect(get(git).status).toEqual({ "a.txt": "modified" });
-		// c has never been read, so it starts empty rather than on a's status.
 		projects.update((list) => [
 			...list,
 			project("c", { activeInstanceId: BASE_INSTANCE_ID }),

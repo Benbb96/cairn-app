@@ -17,6 +17,7 @@
   import CopyButton from '$lib/components/CopyButton.svelte';
   import GitDiff from '$lib/components/git/GitDiff.svelte';
   import GraphView from '$lib/components/git/GraphView.svelte';
+  import CommitMenu, { commitMenuPosition } from '$lib/components/git/CommitMenu.svelte';
   import StashView from '$lib/components/git/StashView.svelte';
   import TagView from '$lib/components/git/TagView.svelte';
   import GitBranchBar from '$lib/components/git/GitBranchBar.svelte';
@@ -55,6 +56,7 @@
     setCommitMessage,
     setCommitBody,
     revertCommit,
+    cherryPickCommits,
     resetToCommit,
     createBranch,
     createTag,
@@ -439,19 +441,24 @@
   /* --- Graph context menu ------------------------------------------------ */
 
   /** Set while a branch or a tag is being named for a commit picked in the graph. */
-  let refPrompt: { kind: 'branch' | 'tag'; commit: GitGraphCommit } | null = null;
+  /** Either list feeds this: the actions only ever read the hash and message. */
+  type MenuCommit = Pick<GitGraphCommit, 'hash' | 'shortHash' | 'message'>;
+  let refPrompt: { kind: 'branch' | 'tag'; commit: MenuCommit } | null = null;
   let refName = '';
   let refError = '';
   let isCreatingRef = false;
 
   /** Set while a reset onto a graph commit waits for confirmation; every mode goes through it. */
-  let pendingReset: { commit: GitGraphCommit; mode: ResetMode } | null = null;
+  let pendingReset: { commit: MenuCommit; mode: ResetMode } | null = null;
   let isResetting = false;
 
   async function handleCommitAction(
     e: CustomEvent<{ action: CommitAction; commit: GitGraphCommit }>,
   ) {
-    const { action, commit } = e.detail;
+    await runCommitAction(e.detail.action, e.detail.commit);
+  }
+
+  async function runCommitAction(action: CommitAction, commit: MenuCommit) {
     switch (action) {
       case 'copy-hash':
         await navigator.clipboard.writeText(commit.hash);
@@ -479,11 +486,13 @@
         dispatch('filesChanged');
         return;
       case 'cherry-pick':
+        await doCherryPick(commit.hash);
+        dispatch('filesChanged');
         return;
     }
   }
 
-  async function runReset(commit: GitGraphCommit, mode: ResetMode) {
+  async function runReset(commit: MenuCommit, mode: ResetMode) {
     isResetting = true;
     try {
       await resetToCommit(commit.hash, mode);
@@ -529,6 +538,29 @@
 
   let isReverting = false;
   let revertError: GitError | null = null;
+  let isCherryPicking = false;
+
+  /**
+   * Applies a commit from elsewhere onto the current branch. A conflict is not
+   * an error: git stops with the pick half-applied and the shared merge/rebase
+   * resolver takes over, so the view only has to send the user there.
+   */
+  async function doCherryPick(hash: string) {
+    isCherryPicking = true;
+    revertError = null;
+    try {
+      const result = await cherryPickCommits([hash]);
+      if (result?.hasConflicts) {
+        gitLeftTab.set('mergerebase');
+      } else {
+        clearSelectedCommit();
+      }
+    } catch (e) {
+      revertError = toGitError(e);
+    } finally {
+      isCherryPicking = false;
+    }
+  }
 
   /** Reverts a commit and keeps its own error separate from the global git banner. */
   async function doRevert(hash: string) {
@@ -822,7 +854,7 @@
 
   $: aheadCount = state.remoteStatus?.ahead ?? 0;
   $: aheadHashes = new Set(
-    state.log.filter(c => c.onCurrentBranch).slice(0, aheadCount).map(c => c.hash),
+    state.log.slice(0, aheadCount).map(c => c.hash),
   );
 
   $: reconcileSelectedStash($git.stashes);
@@ -842,7 +874,7 @@
   }
 
   $: filteredLog = (() => {
-    const list = state.log.filter(c => c.onCurrentBranch);
+    const list = state.log;
     const q = $currentProjectViewState.gitLogSearch.trim().toLowerCase();
     if (!q) return list;
     return list.filter(c =>
@@ -869,6 +901,8 @@
   // The view stays mounted once opened, so the diffs must follow what is on
   // screen rather than the mount: asking for them while the git step is hidden
   // makes every status read carry the largest payload of the app for nobody.
+  // Its own statement: folded into the refresh block below, it would release
+  // the diffs on every unrelated dependency that block reads.
   $: setDiffsWanted($activeStep === 'git');
 
   // Swapping the drafts only: the reads belong to the block below, which knows
@@ -894,6 +928,11 @@
   }
 
   $: if ($activeStep === 'git' && instance?.worktreePath) {
+    // The diffs are declared wanted again here too: the statement above and
+    // this one are ordered by Svelte on their dependencies, not on their
+    // position, so the refresh could otherwise read while they were still
+    // unwanted and come back without them.
+    setDiffsWanted(true);
     refreshStatus();
     if (!logSearchLoaded) refreshLog();
     if ($gitLeftTab === 'graph' && !graphSearchActive) refreshGraph();
@@ -951,17 +990,59 @@
     commitBodyEl.style.height = `${commitBodyEl.scrollHeight}px`;
   }
 
-  let generating = false;
-  let generateError = '';
-  let generateAbort: AbortController | null = null;
+  /**
+   * What is in flight for one worktree. The view is mounted once and reused by
+   * every instance of every project, so a plain `let` here is a singleton: a
+   * commit started in one instance would show as running in all of them, and
+   * cancelling would abort somebody else's generation. Keying on the worktree
+   * lets a run stay attached to the instance that started it - and still be
+   * found running on the way back.
+   */
+  type CommitFlight = {
+    isCommitting: boolean;
+    isPushing: boolean;
+    generating: boolean;
+    generateError: string;
+    generateAbort: AbortController | null;
+    aiStatusMessage: string;
+    amendMode: boolean;
+  };
+  const flightByWorktree: Record<string, CommitFlight> = {};
+  const newFlight = (): CommitFlight => ({
+    isCommitting: false,
+    isPushing: false,
+    generating: false,
+    generateError: '',
+    generateAbort: null,
+    aiStatusMessage: '',
+    amendMode: false,
+  });
+  function flightOf(worktree: string, _version = 0): CommitFlight {
+    const found = flightByWorktree[worktree] ?? newFlight();
+    flightByWorktree[worktree] = found;
+    return found;
+  }
+  /** Applies a change to one worktree's flight and republishes the read copy. */
+  function setFlight(worktree: string, patch: Partial<CommitFlight>) {
+    Object.assign(flightOf(worktree), patch);
+    flightVersion += 1;
+  }
+  let flightVersion = 0;
+
+  // `flightVersion` is passed only to make this recompute when a run changes.
+  $: flight = flightOf(instance?.worktreePath ?? '', flightVersion);
+  $: generating = flight.generating;
+  $: generateError = flight.generateError;
+  $: aiStatusMessage = flight.aiStatusMessage;
+  $: isCommitting = flight.isCommitting;
+  $: isPushing = flight.isPushing;
+  $: amendMode = flight.amendMode;
   /**
    * What a screen reader is told about the generation. The animation is
    * decorative and hidden from the tree, so this is the only thing announcing
    * that the run started - and, just as important, that it finished and the
    * fields now hold something.
    */
-  let aiStatusMessage = '';
-
   $: resolvedCommitFeature = resolveAiFeature('commitMessage', $settings.aiFeatures, $isAssistCliInstalled);
   $: canGenerate = (stagedCount > 0 || amendMode) && !resolvedCommitFeature.unavailable;
 
@@ -975,10 +1056,14 @@
     const feature = resolvedCommitFeature;
     if (feature.unavailable) return;
 
-    generating = true;
-    generateError = '';
-    generateAbort = new AbortController();
-    aiStatusMessage = t('git.aiGenerating') as string;
+    const worktree = instance.worktreePath;
+    const abort = new AbortController();
+    setFlight(worktree, {
+      generating: true,
+      generateError: '',
+      generateAbort: abort,
+      aiStatusMessage: t('git.aiGenerating') as string,
+    });
 
     try {
       const answer = await runOneShotShaped<{ subject: string; body: string }>(
@@ -986,29 +1071,37 @@
         instance.worktreePath,
         feature.providerId,
         FEATURE_SCHEMAS.commitMessage,
-        { model: feature.model || undefined, signal: generateAbort.signal },
+        { model: feature.model || undefined, signal: abort.signal },
       );
       const subject = (answer.subject ?? '').trim();
       // A failed generation never clobbers what the user already typed.
       if (subject) {
-        setCommitMessage(subject);
-        setCommitBody((answer.body ?? '').trim());
-        aiStatusMessage = t('git.aiGenerated') as string;
+        // The run belongs to the worktree that started it: writing the answer
+        // into whatever is on screen now would drop it in the wrong instance.
+        if (worktree === instance?.worktreePath) {
+          setCommitMessage(subject);
+          setCommitBody((answer.body ?? '').trim());
+        } else {
+          draftByWorktree[worktree] = { title: subject, body: (answer.body ?? '').trim() };
+        }
+        setFlight(worktree, { aiStatusMessage: t('git.aiGenerated') as string });
       } else {
-        generateError = t('git.aiEmpty') as string;
+        setFlight(worktree, { generateError: t('git.aiEmpty') as string });
       }
     } catch (e) {
       if (e instanceof AiAssistError) {
-        if (e.kind !== 'cancelled') generateError = aiErrorMessage(e);
+        if (e.kind !== 'cancelled') setFlight(worktree, { generateError: aiErrorMessage(e) });
       } else {
-        generateError = errorMessage(e);
+        setFlight(worktree, { generateError: errorMessage(e) });
       }
     } finally {
       // An error is announced by its own alert, a cancel by the button coming
       // back: leaving the busy message up would outlive what it describes.
-      if (aiStatusMessage !== (t('git.aiGenerated') as string)) aiStatusMessage = '';
-      generating = false;
-      generateAbort = null;
+      const done = t('git.aiGenerated') as string;
+      if (flightOf(worktree).aiStatusMessage !== done) {
+        setFlight(worktree, { aiStatusMessage: '' });
+      }
+      setFlight(worktree, { generating: false, generateAbort: null });
     }
   }
 
@@ -1023,7 +1116,7 @@
   }
 
   function cancelGenerate() {
-    generateAbort?.abort();
+    flight.generateAbort?.abort();
   }
 
   let showOptions = false;
@@ -1053,7 +1146,6 @@
   let noVerify = false;
   let signOff = false;
   let allowEmpty = false;
-  let amendMode = false;
   let appendTicketId = false;
   let selectedProfileId = '';
 
@@ -1070,6 +1162,15 @@
     void getRemoteUrl().then((url) => { if (instance?.worktreePath === forgeRemoteWorktree) forgeRemoteUrl = url; });
   }
   $: openOnForgeLabel = forgeLabel($capabilities.forge, forgeRemoteUrl);
+
+  /** The history offers the same actions as the graph, opened the same way. */
+  let logMenu: { x: number; y: number; commit: MenuCommit } | null = null;
+
+  function openLogMenu(e: MouseEvent, commit: MenuCommit) {
+    e.preventDefault();
+    const { x, y } = commitMenuPosition(e);
+    logMenu = { x, y, commit };
+  }
 
   let forgeMenu: { x: number; y: number; target: WebLinkTarget } | null = null;
 
@@ -1169,8 +1270,9 @@
 
   /** Entering amend mode splits the HEAD message back into the title and body inputs. */
   async function toggleAmend() {
-    amendMode = !amendMode;
-    if (amendMode) {
+    const next = !amendMode;
+    setFlight(instance?.worktreePath ?? '', { amendMode: next });
+    if (next) {
       const full = await getHeadCommitMessage();
       if (full) {
         const nl = full.indexOf('\n');
@@ -1209,38 +1311,39 @@
     return body ? `${title}\n\n${body}` : title;
   }
 
-  let isCommitting = false;
 
   /** Commits or amends with the assembled message and options. */
   async function doCommit() {
+    const worktree = instance?.worktreePath ?? '';
     const opts = buildOptions();
     const message = buildCommitMessage();
-    isCommitting = true;
+    const amending = amendMode;
+    setFlight(worktree, { isCommitting: true });
     await tick();
     await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     try {
-      if (amendMode) {
+      if (amending) {
         await amendLastCommit(message, opts);
-        amendMode = false;
+        setFlight(worktree, { amendMode: false });
       } else {
         await commitChanges(message, opts);
       }
     } finally {
-      isCommitting = false;
+      setFlight(worktree, { isCommitting: false });
     }
   }
 
-  let isPushing = false;
 
   /** Waits two frames so the spinner is painted before the push blocks. */
   async function doPush() {
-    isPushing = true;
+    const worktree = instance?.worktreePath ?? '';
+    setFlight(worktree, { isPushing: true });
     await tick();
     await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     try {
       await pushBranch();
     } finally {
-      isPushing = false;
+      setFlight(worktree, { isPushing: false });
     }
   }
 
@@ -1249,6 +1352,25 @@
     await doPush();
   }
 </script>
+
+{#if logMenu}
+  <CommitMenu
+    x={logMenu.x}
+    y={logMenu.y}
+    forgeLabel={openOnForgeLabel ?? ''}
+    on:pick={(e) => {
+      const commit = logMenu?.commit;
+      logMenu = null;
+      if (commit) void runCommitAction(e.detail, commit);
+    }}
+    on:openOnForge={() => {
+      const commit = logMenu?.commit;
+      logMenu = null;
+      if (commit) void openTargetOnForge({ type: 'commit', sha: commit.hash });
+    }}
+    on:close={() => (logMenu = null)}
+  />
+{/if}
 
 {#if forgeMenu && openOnForgeLabel}
   <div class="ctx-menu forge-menu" style="left:{forgeMenu.x}px;top:{forgeMenu.y}px" role="menu">
@@ -1537,7 +1659,7 @@
               tabindex="0"
               on:click={() => selectCommit(commit)}
               on:keydown={(e) => e.key === 'Enter' && selectCommit(commit)}
-              on:contextmenu={(e) => openForgeMenu(e, { type: 'commit', sha: commit.hash })}
+              on:contextmenu={(e) => openLogMenu(e, commit)}
             >
               <div class="log-entry-main">
                 <span class="log-hash selectable">{commit.shortHash}</span>
@@ -1696,7 +1818,20 @@
           {/if}
           <button
             class="revert-btn"
-            disabled={isReverting || isLoadingCommitDiff}
+            disabled={isCherryPicking || isReverting || isLoadingCommitDiff}
+            title={t('git.cherryPickTitle') as string}
+            on:click={() => doCherryPick(selectedCommit!.hash)}
+          >
+            {#if isCherryPicking}
+              <Spinner size={10} trackColor="var(--bg-3)" color="var(--fg-2)"/>
+            {:else}
+              <Icon name="git" size={11}/>
+            {/if}
+            {t('git.cherryPick')}
+          </button>
+          <button
+            class="revert-btn"
+            disabled={isCherryPicking || isReverting || isLoadingCommitDiff}
             title={t('git.revertCommitTitle') as string}
             on:click={() => doRevert(selectedCommit!.hash)}
           >
@@ -2017,7 +2152,7 @@
         <div class="ai-error" role="alert">
           <Icon name="alert" size={12}/>
           <span class="selectable">{generateError}</span>
-          <button class="ai-error-close" on:click={() => (generateError = '')} aria-label={t('git.aiDismiss') as string}>
+          <button class="ai-error-close" on:click={() => setFlight(instance?.worktreePath ?? '', { generateError: '' })} aria-label={t('git.aiDismiss') as string}>
             <Icon name="x" size={11}/>
           </button>
         </div>

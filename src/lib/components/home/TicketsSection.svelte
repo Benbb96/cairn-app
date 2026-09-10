@@ -23,10 +23,12 @@
   import { settings } from '$lib/stores/settings';
   import { isAssistCliInstalled, loadCliProviders } from '$lib/stores/cli-providers';
   import {
+    collapsedTicketProjects,
     loadTicketsOverview,
     ticketsByProject,
     ticketsLoading,
     ticketsScope,
+    toggleTicketProjectCollapse,
     type TicketScope,
   } from '$lib/stores/tickets-overview';
   import { AiAssistError, runOneShot } from '$lib/services/ai-assist-service';
@@ -177,13 +179,32 @@
   </section>
 
   {#each filteredGroups as group (group.project.id)}
+    {@const collapsed = $collapsedTicketProjects.includes(group.project.id)}
     <section class="group">
-      <header>
+      <header
+        class="group-toggle"
+        class:collapsed
+        role="button"
+        tabindex="0"
+        aria-expanded={!collapsed}
+        on:click={() => toggleTicketProjectCollapse(group.project.id)}
+        on:keydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTicketProjectCollapse(group.project.id);
+          }
+        }}
+      >
+        <span class="chevron" class:collapsed>
+          <Icon name="chev-d" size={13} />
+        </span>
         <span class="dot" style="background: {group.project.color}"></span>
         <span class="proj">{group.project.name}</span>
         <span class="count">{group.tickets.length}{group.hasMore ? '+' : ''}</span>
       </header>
-      {#if group.error}
+      {#if collapsed}
+        <!-- Folded: the header keeps the count, which is what the fold is for. -->
+      {:else if group.error}
         <div class="hint error">{t('tickets.loadFailed')}</div>
       {:else}
         {#each group.tickets as ticket (ticket.id)}
@@ -231,6 +252,14 @@
     display: flex; align-items: center; gap: 8px;
     padding: 8px 10px; border-bottom: 1px solid var(--stroke-1);
   }
+  .group-toggle { cursor: pointer; }
+  .group-toggle:hover { background: var(--bg-3); }
+  .group-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* Folded, the header is the whole card: the rule below it would draw a line
+     under nothing. */
+  .group-toggle.collapsed { border-bottom: none; }
+  .chevron { display: inline-flex; color: var(--fg-2); transition: transform 0.15s; }
+  .chevron.collapsed { transform: rotate(-90deg); }
   .plan-title, .proj { font-size: 13px; color: var(--fg-0); }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
   .count { color: var(--fg-2); font-size: 12px; font-family: var(--font-mono); }

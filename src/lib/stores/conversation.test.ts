@@ -40,9 +40,11 @@ vi.mock("$lib/services/terminal-service", () => ({
 }));
 
 const discoverCliSession = vi.fn().mockResolvedValue(null);
+const cliSessionExists = vi.fn().mockResolvedValue(false);
 vi.mock("$lib/services/cli-provider-service", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	discoverCliSession: (...a: unknown[]) => discoverCliSession(...a),
+	cliSessionExists: (...a: unknown[]) => cliSessionExists(...a),
 }));
 
 const exitHandlers = vi.hoisted(
@@ -97,8 +99,6 @@ describe("starting a conversation", () => {
 
 		expect(meta.sessionId).toMatch(/^[0-9a-f-]{36}$/);
 		expect(lastArgv()).toEqual(["claude", "--session-id", meta.sessionId]);
-		// The CLI runs in the instance's worktree, which is what makes a
-		// "last session here" resume unambiguous for the CLIs without ids.
 		expect(createTerminal.mock.lastCall?.[1]).toBe("/repo/wt");
 	});
 
@@ -121,8 +121,6 @@ describe("starting a conversation", () => {
 describe("reopening a conversation", () => {
 	it("resumes by id once the session has been seen on disk", async () => {
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
-		// Typing makes a session likely; only discovery makes it a fact, and
-		// `--resume` exits non-zero on a session the CLI never wrote.
 		noteTerminalInput(`conversation:${meta.id}`, "hello\r");
 		discoverCliSession.mockResolvedValueOnce(meta.sessionId);
 		await vi.advanceTimersByTimeAsync(2_000);
@@ -134,9 +132,7 @@ describe("reopening a conversation", () => {
 		expect(lastArgv()).toEqual(["claude", "--resume", meta.sessionId]);
 	});
 
-	it("relaunches under the minted id while the session is unconfirmed", async () => {
-		// The user typed, so a session is likely - but the CLI has not written
-		// one. `--session-id` creates it; `--resume` would refuse and exit.
+	it("relaunches under the minted id while the session is unwritten", async () => {
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		noteTerminalInput(`conversation:${meta.id}`, "hello\r");
 		closeConversation(meta.id);
@@ -147,9 +143,18 @@ describe("reopening a conversation", () => {
 		expect(lastArgv()).toEqual(["claude", "--session-id", meta.sessionId]);
 	});
 
+	it("resumes a written session the discovery poll never confirmed", async () => {
+		const meta = await startConversation(ref, "claude-code", "/repo/wt");
+		closeConversation(meta.id);
+		createTerminal.mockClear();
+		cliSessionExists.mockResolvedValueOnce(true);
+
+		await openConversation(ref, meta.id);
+
+		expect(lastArgv()).toEqual(["claude", "--resume", meta.sessionId]);
+	});
+
 	it("does not reorder the list when a running conversation is shown", async () => {
-		// Entering the Agent view reopens the active conversation on every mount;
-		// that must not push it above the one the user last worked in.
 		const older = await startConversation(ref, "claude-code", "/repo/wt");
 		await vi.advanceTimersByTimeAsync(1_000);
 		const newer = await startConversation(ref, "claude-code", "/repo/wt");
@@ -165,9 +170,6 @@ describe("reopening a conversation", () => {
 	});
 
 	it("starts fresh when the minted session was never written to", async () => {
-		// Opened, never typed into, left and reopened: the id was minted at
-		// creation but names a session the CLI never created, and resuming it
-		// fails instead of starting the conversation.
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		closeConversation(meta.id);
 		createTerminal.mockClear();
@@ -179,8 +181,6 @@ describe("reopening a conversation", () => {
 
 	it("reopens the exact conversation for a CLI that minted its own id", async () => {
 		const meta = await startConversation(ref, "codex", "/repo/wt");
-		// The id is learned from the CLI once the conversation exists, which is
-		// also what confirms it as resumable.
 		discoverCliSession.mockResolvedValueOnce("01HXYZ");
 		await vi.advanceTimersByTimeAsync(2_000);
 		closeConversation(meta.id);
@@ -192,9 +192,6 @@ describe("reopening a conversation", () => {
 	});
 
 	it("falls back to a fresh session when a resume is refused", async () => {
-		// The session was confirmed, then vanished: the CLI pruned its store, or
-		// the home directory was cleared. `--resume` exits at once, and the
-		// conversation must open rather than sit on a dead terminal.
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		discoverCliSession.mockResolvedValueOnce(meta.sessionId);
 		await vi.advanceTimersByTimeAsync(2_000);
@@ -215,8 +212,6 @@ describe("reopening a conversation", () => {
 	});
 
 	it("leaves a session the user quit alone", async () => {
-		// An ordinary exit, seconds later and with no error: relaunching that
-		// behind the user's back is exactly what stopping is meant to prevent.
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		discoverCliSession.mockResolvedValueOnce(meta.sessionId);
 		await vi.advanceTimersByTimeAsync(2_000);
@@ -233,8 +228,6 @@ describe("reopening a conversation", () => {
 	});
 
 	it("starts fresh rather than opening someone else's session when no id was learned", async () => {
-		// A conversation closed before the user said anything has no id: there is
-		// nothing to resume, and "the last session here" would be another one.
 		const meta = await startConversation(ref, "codex", "/repo/wt");
 		closeConversation(meta.id);
 		createTerminal.mockClear();
@@ -279,7 +272,6 @@ describe("learning the id of a CLI that mints its own", () => {
 	});
 
 	it("keeps asking while the CLI has no session yet", async () => {
-		// Nothing is recorded until the user actually speaks to the CLI.
 		discoverCliSession.mockResolvedValue(null);
 		terminalHasChildren.mockResolvedValue(false);
 
@@ -291,8 +283,6 @@ describe("learning the id of a CLI that mints its own", () => {
 	});
 
 	it("asks for a CLI handed an id at launch, until the session is seen", async () => {
-		// The id Cairn minted is a request the CLI is free to ignore, so it is
-		// polled like any other until the session turns up on disk.
 		await startConversation(ref, "claude-code", "/repo/wt");
 		await vi.advanceTimersByTimeAsync(10_000);
 
@@ -332,8 +322,6 @@ describe("a CLI is only ever stopped on request", () => {
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		selectConversation("p", "i", null);
 
-		// Well past what used to be the idle timeout, and past any sweep that
-		// could have fired in it.
 		await vi.advanceTimersByTimeAsync(30 * 60_000);
 
 		expect(closeTerminal).not.toHaveBeenCalled();

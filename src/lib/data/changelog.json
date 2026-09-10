@@ -69,6 +69,83 @@
 					"en": "Running Go to line from the command palette no longer did nothing: the palette gave the focus back before the panel could take it.",
 					"fr": "Lancer Aller à la ligne depuis la palette de commandes ne faisait rien : la palette reprenait le focus avant que le panneau puisse le prendre."
 				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Commits can now be cherry-picked: the action is available from the graph's context menu, from the same menu now offered by the history, and from the commit detail. A pick that conflicts is resolved in the merge and rebase view, like a merge or a rebase.",
+					"fr": "Les commits peuvent désormais être picorés : l'action est disponible dans le menu contextuel du graphe, dans ce même menu désormais proposé par l'historique, et dans le détail d'un commit. Un picorage en conflit se résout dans la vue merge et rebase, comme un merge ou un rebase."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The history's context menu now offers the same commit actions as the graph, instead of only the link to the forge.",
+					"fr": "Le menu contextuel de l'historique propose désormais les mêmes actions sur un commit que le graphe, au lieu du seul lien vers la forge."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A project can be folded shut on the tickets page, and stays folded after a restart.",
+					"fr": "Un projet peut être replié sur la page des tickets, et le reste après un redémarrage."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "A commit being made, or a commit message being generated, no longer shows as running in the Git view of every other instance: each one now keeps its own.",
+					"fr": "Un commit en cours, ou une génération de message de commit, ne s'affiche plus comme en cours dans la vue Git de toutes les autres instances : chacune garde désormais la sienne."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Returning to the Git step no longer empties the staged files and part of the unstaged ones, which used to require restarting the app.",
+					"fr": "Revenir sur l'étape Git ne vide plus les fichiers indexés ni une partie des non indexés, ce qui obligeait à relancer l'application."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Tickets cancelled in Jira are no longer counted as open.",
+					"fr": "Les tickets annulés dans Jira ne sont plus comptés comme ouverts."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Installing or updating a language server now runs under the Node version a version manager provides, instead of the older one the system ships, which made modern packages refuse to install.",
+					"fr": "L'installation et la mise à jour d'un serveur de langage utilisent désormais la version de Node fournie par un gestionnaire de versions, au lieu de celle, plus ancienne, du système, qui faisait échouer l'installation des paquets récents."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "What a language server adds below it - its install progress, its fallback command - is now attached to its card instead of floating underneath as a separate one.",
+					"fr": "Ce qu'un serveur de langage ajoute en dessous de lui - sa progression d'installation, sa commande de repli - est désormais rattaché à sa carte au lieu de flotter en dessous comme une carte à part."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Resuming a CLI stopped early no longer fails with \"Session ID is already in use\": the session is resumed rather than created again.",
+					"fr": "La reprise d'un CLI arrêté tôt n'échoue plus avec « Session ID is already in use » : la session est reprise au lieu d'être recréée."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The commit context menu now groups its actions by what they do - copy, create, apply elsewhere, move the branch - instead of listing all of them in one run.",
+					"fr": "Le menu contextuel d'un commit regroupe désormais ses actions par ce qu'elles font - copier, créer, appliquer ailleurs, déplacer la branche - au lieu de toutes les lister à la suite."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The history no longer comes up empty on a repository with many branches. It listed every ref, then kept only what was on the current branch - and on a busy repository that branch's own commits fell past the first page. It now reads the current branch directly.",
+					"fr": "L'historique ne s'affiche plus vide sur un dépôt comptant beaucoup de branches. Il listait toutes les références puis ne gardait que la branche courante - et sur un dépôt actif, les commits de cette branche passaient au-delà de la première page. Il lit désormais la branche courante directement."
+				}
 			}
 		]
 	},

@@ -152,6 +152,15 @@ fn jql_string(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+const CANCELLED_STATUSES: [&str; 6] = [
+    "Cancelled",
+    "Canceled",
+    "Annulé",
+    "Annule",
+    "Abandoned",
+    "Won't Do",
+];
+
 pub fn build_jql(project_key: &str, q: &TicketQuery) -> String {
     let mut clauses = vec![format!("project = {}", jql_string(project_key))];
     match q.scope {
@@ -160,7 +169,13 @@ pub fn build_jql(project_key: &str, q: &TicketQuery) -> String {
         TicketScope::All => {}
     }
     match q.state {
-        TicketState::Open => clauses.push("resolution = Unresolved".to_string()),
+        TicketState::Open => {
+            clauses.push("resolution = Unresolved".to_string());
+            clauses.push("statusCategory != Done".to_string());
+            let cancelled: Vec<String> =
+                CANCELLED_STATUSES.iter().map(|s| jql_string(s)).collect();
+            clauses.push(format!("status NOT IN ({})", cancelled.join(", ")));
+        }
         TicketState::Closed => clauses.push("resolution != Unresolved".to_string()),
         TicketState::All => {}
     }
@@ -654,7 +669,12 @@ mod tests {
     #[test]
     fn jql_follows_scope_state_and_text() {
         let q = TicketQuery { scope: TicketScope::Assigned, text: String::new(), state: TicketState::Open, page: 1 };
-        assert_eq!(build_jql("CAIRN", &q), "project = \"CAIRN\" AND assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC");
+        let open = build_jql("CAIRN", &q);
+        assert!(open.starts_with("project = \"CAIRN\" AND assignee = currentUser() AND resolution = Unresolved AND statusCategory != Done AND status NOT IN ("));
+        assert!(open.contains("\"Cancelled\""));
+        assert!(open.contains("\"Annulé\""));
+        assert!(open.contains("\"Won't Do\""));
+        assert!(open.ends_with(") ORDER BY updated DESC"));
         let q = TicketQuery { scope: TicketScope::Created, text: "badge \"red\"".into(), state: TicketState::Closed, page: 1 };
         assert_eq!(
             build_jql("CAIRN", &q),

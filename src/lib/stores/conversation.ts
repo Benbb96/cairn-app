@@ -13,6 +13,7 @@
 import { get, type Writable, writable } from "svelte/store";
 import {
 	type CliProviderId,
+	cliSessionExists,
 	discoverCliSession,
 } from "$lib/services/cli-provider-service";
 import {
@@ -367,16 +368,23 @@ export async function openConversation(
 	// step - must leave the order alone.
 	patch(ref, id, { lastOpenedAt: Date.now() });
 
-	// A session id minted at creation names nothing until the CLI has written
-	// it, so only a confirmed session is resumed. Anything else relaunches under
-	// the id Cairn asked for - `--session-id` creates, where `--resume` demands
-	// a session that already exists and exits when it does not.
-	const resuming = !fresh && meta.sessionConfirmed === true;
-	const argv =
-		fresh || !meta.sessionConfirmed
-			? (newConversationArgv(meta.cli, meta.sessionId ?? "") ??
-				freshArgv(meta.cli))
-			: resumeArgv(meta.cli, meta.sessionId);
+	// `--session-id` creates a session, where `--resume` demands one that already
+	// exists and exits when it does not. `sessionConfirmed` only says the discovery poll saw the session, not that
+	// there is none: a minted id is taken the moment the CLI starts, so a
+	// conversation stopped before that poll landed would be created again under
+	// an id the CLI already owns - which it refuses outright. Ask about the id
+	// itself before treating it as free.
+	const taken =
+		!fresh && !meta.sessionConfirmed && meta.sessionId
+			? await cliSessionExists(meta.cli, meta.sessionId).catch(() => false)
+			: false;
+	if (taken) patch(ref, id, { sessionStarted: true, sessionConfirmed: true });
+
+	const resuming = !fresh && (meta.sessionConfirmed === true || taken);
+	const argv = resuming
+		? resumeArgv(meta.cli, meta.sessionId)
+		: (newConversationArgv(meta.cli, meta.sessionId ?? "") ??
+			freshArgv(meta.cli));
 
 	const startedAt = Date.now();
 	const terminalId = conversationTerminalId(id);

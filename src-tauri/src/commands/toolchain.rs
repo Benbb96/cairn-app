@@ -157,6 +157,29 @@ pub fn spawn_shell_in(
     spawn_shell_full(command, cwd, false)
 }
 
+/// The directory of the tool a command starts with, when resolution finds it
+/// somewhere the login shell's own PATH does not reach.
+///
+/// A login shell does not read `~/.zshrc`, which is where nvm, fnm and asdf
+/// install their hook, so `npm` inside one resolves to whatever the OS ships -
+/// typically a node old enough that a modern package refuses to install on it
+/// ("unsupported engine"). `resolve_binary` already looks through the version
+/// managers' own directories; putting what it finds at the front of PATH is
+/// what makes the command actually run under it, and it carries the sibling
+/// `node` along, which is the one the engine check reads.
+fn resolved_tool_dir(command: &str) -> Option<PathBuf> {
+    let tool = command.split_whitespace().next()?;
+    if tool.is_empty() || Path::new(tool).is_absolute() {
+        return None;
+    }
+    let resolved = resolve_binary(tool, None)?;
+    let dir = resolved.parent()?.to_path_buf();
+    if login_shell_dirs().first() == Some(&dir) {
+        return None;
+    }
+    Some(dir)
+}
+
 /// `spawn_shell_in`, with `group` putting the child in its own process group so
 /// the caller can signal the whole tree at once.
 pub fn spawn_shell_full(
@@ -180,6 +203,14 @@ pub fn spawn_shell_full(
         && dir.is_dir()
     {
         process.current_dir(dir);
+    }
+
+    if let Some(dir) = resolved_tool_dir(command) {
+        let existing = std::env::var_os("PATH").unwrap_or_default();
+        let dirs = std::iter::once(dir).chain(std::env::split_paths(&existing));
+        if let Ok(path) = std::env::join_paths(dirs) {
+            process.env("PATH", path);
+        }
     }
 
     // Its own process group, so killing the run takes the whole tree with it.
@@ -223,9 +254,14 @@ fn version_manager_bins(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     for root in roots {
         let Ok(entries) = std::fs::read_dir(root) else { continue };
-        for entry in entries.flatten() {
+        let mut versions: Vec<(Vec<u32>, PathBuf)> = entries
+            .flatten()
+            .map(|entry| (version_key(&entry.file_name().to_string_lossy()), entry.path()))
+            .collect();
+        versions.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, path) in versions {
             // fnm buries the runtime one level deeper than nvm and asdf do.
-            for bin in [entry.path().join("bin"), entry.path().join("installation").join("bin")] {
+            for bin in [path.join("bin"), path.join("installation").join("bin")] {
                 if bin.is_dir() {
                     dirs.push(bin);
                 }
@@ -233,6 +269,16 @@ fn version_manager_bins(roots: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
     dirs
+}
+
+/// The numbers in a version directory name, for ordering. `v22.11.0` and
+/// `22.11.0` are the same version under different managers; anything that does
+/// not parse sorts last rather than winning by accident.
+fn version_key(name: &str) -> Vec<u32> {
+    name.trim_start_matches('v')
+        .split(['.', '-', '+'])
+        .map(|part| part.parse::<u32>().unwrap_or(0))
+        .collect()
 }
 
 fn extra_lookup_dirs(root: Option<&Path>) -> Vec<PathBuf> {
@@ -714,5 +760,30 @@ mod tests {
         for (manager, _) in manager_commands(&commands) {
             assert!(!manager.is_empty());
         }
+    }
+}
+
+#[cfg(test)]
+mod version_order_tests {
+    use super::*;
+
+    #[test]
+    fn newest_node_wins_over_the_system_one() {
+        let dir = std::env::temp_dir().join(format!("cairn-nvm-{}", std::process::id()));
+        let root = dir.join("versions").join("node");
+        for v in ["v18.19.1", "v22.22.2", "v20.9.0"] {
+            std::fs::create_dir_all(root.join(v).join("bin")).unwrap();
+        }
+        let dirs = version_manager_bins(&[root.clone()]);
+        let first = dirs.first().unwrap().to_string_lossy().to_string();
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(first.contains("v22.22.2"), "resolved {first} instead of v22.22.2");
+    }
+
+    #[test]
+    fn version_key_orders_numerically_not_lexically() {
+        assert!(version_key("v22.11.0") > version_key("v9.11.0"));
+        assert!(version_key("22.11.0") > version_key("v18.19.1"));
+        assert_eq!(version_key("not-a-version"), vec![0, 0, 0]);
     }
 }

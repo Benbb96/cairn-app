@@ -1818,6 +1818,11 @@ export const en = {
 		stashNoResults: "No stashes match your search.",
 		stashOn: "on",
 		stashDiffEmpty: "This stash has no file changes.",
+		cherryPickInProgress: "Cherry-pick in progress",
+		cherryPickConflictHint:
+			"Resolve each conflict, stage it, then continue to apply the rest.",
+		cherryPick: "Cherry-pick",
+		cherryPickTitle: "Apply this commit's changes onto the current branch",
 		revertCommit: "Revert",
 		revertCommitTitle: "Create a new commit that undoes this commit's changes",
 		discard: "Discard",

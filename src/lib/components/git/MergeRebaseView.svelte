@@ -25,12 +25,29 @@
     abortRebase,
     continueMerge,
     abortMerge,
+    continueCherryPick,
+    skipCherryPick,
+    abortCherryPick,
   } from '$lib/stores/git';
-  import type { GitOpResult } from '$lib/services/git-service';
+  import type { GitOperationKind, GitOpResult } from '$lib/services/git-service';
   import { readFile } from '$lib/services/file-service';
   import { activeProject } from '$lib/stores/project';
   import { activeInstance, setInstanceBaseBranch } from '$lib/stores/instance';
   import { hasConflictMarkers } from '$lib/utils/git/conflict-markers';
+
+  /** Each kind resumes and unwinds through its own git command. */
+  const continueOf = (kind: GitOperationKind) =>
+    kind === 'merge'
+      ? continueMerge
+      : kind === 'cherry-pick'
+        ? continueCherryPick
+        : continueRebase;
+  const abortOf = (kind: GitOperationKind) =>
+    kind === 'merge'
+      ? abortMerge
+      : kind === 'cherry-pick'
+        ? abortCherryPick
+        : abortRebase;
 
   const dispatch = createEventDispatcher<{ openFile: string; filesChanged: void }>();
 
@@ -145,7 +162,9 @@
         <span class="mr-op-title">
           {op.kind === 'merge'
             ? t('git.mergeInProgress')
-            : t('git.rebaseInProgress')}
+            : op.kind === 'cherry-pick'
+              ? t('git.cherryPickInProgress')
+              : t('git.rebaseInProgress')}
         </span>
         {#if op.head}
           <span class="mr-op-branch selectable">{op.head}</span>
@@ -163,7 +182,9 @@
       <p class="mr-hint">
         {op.kind === 'merge'
           ? t('git.mergeConflictHint')
-          : t('git.rebaseConflictHint')}
+          : op.kind === 'cherry-pick'
+            ? t('git.cherryPickConflictHint')
+            : t('git.rebaseConflictHint')}
       </p>
 
       {#if op.conflictedFiles.length === 0}
@@ -235,24 +256,27 @@
         <button
           class="btn primary"
           disabled={running || op.conflictedFiles.length > 0}
-          on:click={() =>
-            guarded(op.kind === 'merge' ? continueMerge : continueRebase)}
+          on:click={() => guarded(continueOf(op.kind))}
         >
           {#if running}
             <Spinner size={12} trackColor="oklch(1 0 0 / 0.3)" color="var(--accent-fg)" />
           {/if}
           {t('git.continueRebase')}
         </button>
-        {#if op.kind === 'rebase'}
-          <button class="btn" disabled={running} on:click={() => guarded(skipRebase)}>
+        {#if op.kind === 'rebase' || op.kind === 'cherry-pick'}
+          <button
+            class="btn"
+            disabled={running}
+            on:click={() =>
+              guarded(op.kind === 'cherry-pick' ? skipCherryPick : skipRebase)}
+          >
             {t('git.skipCommit')}
           </button>
         {/if}
         <button
           class="btn danger"
           disabled={running}
-          on:click={() =>
-            guarded(op.kind === 'merge' ? abortMerge : abortRebase)}
+          on:click={() => guarded(abortOf(op.kind))}
         >
           {t('git.abort')}
         </button>

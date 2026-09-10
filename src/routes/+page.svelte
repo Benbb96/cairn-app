@@ -14,6 +14,7 @@
   import { activeProject, activeProjectId, lastOpenedProjectId, loadProjects, loadListing, projects, openProjects, openProject, closeProjectTab, openTabOrder, reorderTabs } from '$lib/stores/project';
   import { takePendingCliPaths } from '$lib/services/cli-service';
   import { loadInstances, hasInstances, activeInstance } from '$lib/stores/instance';
+  import { collapsedTicketProjects } from '$lib/stores/tickets-overview';
   import { syncEnvFile } from '$lib/stores/env';
   import { git } from '$lib/stores/git';
   import { initTerminals } from '$lib/stores/terminal';
@@ -169,6 +170,7 @@
       homeSection,
       homeSettingsTab,
       projectStates: getAllProjectStates(),
+      collapsedTicketProjects: get(collapsedTicketProjects),
     };
     const serialized = JSON.stringify(state);
     if (serialized === lastPersisted) return null;
@@ -260,6 +262,7 @@
     // reopens on the default section rather than on nothing.
     homeSection = saved.homeSection === 'usage' ? 'projects' : saved.homeSection;
     homeSettingsTab = saved.homeSettingsTab;
+    collapsedTicketProjects.set(saved.collapsedTicketProjects ?? []);
     initViewStates(saved.projectStates ?? {});
 
     await loadListing();
@@ -313,6 +316,7 @@
     referencesQuery,
     openTabOrder,
     viewStates,
+    collapsedTicketProjects,
   ].map((store) => store.subscribe(() => persistUiState()));
 
   persistSubscriptions.push(

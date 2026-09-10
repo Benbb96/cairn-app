@@ -35,6 +35,20 @@ export const ticketsLoading = writable(false);
 export const ticketsScope = writable<TicketScope>("assigned");
 
 /**
+ * The projects folded shut on the tickets page. Persisted with the rest of the
+ * navigation state, so a page left folded reopens folded.
+ */
+export const collapsedTicketProjects = writable<string[]>([]);
+
+export function toggleTicketProjectCollapse(projectId: string): void {
+	collapsedTicketProjects.update((ids) =>
+		ids.includes(projectId)
+			? ids.filter((id) => id !== projectId)
+			: [...ids, projectId],
+	);
+}
+
+/**
  * Keyed by project *and* scope: the two scopes are two different answers, so
  * "assigned" being fresh says nothing about "all".
  */
@@ -114,6 +128,9 @@ export async function loadTicketsOverview(
 }
 
 export function forgetProject(projectId: string): void {
+	collapsedTicketProjects.update((ids) =>
+		ids.includes(projectId) ? ids.filter((id) => id !== projectId) : ids,
+	);
 	purgeProjectEntries(fetchedAt, projectId);
 	purgeProjectEntries(inFlight, projectId);
 	ticketsByProject.update((m) => {

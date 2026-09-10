@@ -72,6 +72,7 @@ pub use git::{
     git_push, git_pull, git_fetch, git_remote_status, git_remote_url,
     git_branch_divergence, git_remove_index_lock,
     git_operation_state, git_rm, git_merge, git_merge_continue, git_merge_abort,
+    git_cherry_pick, git_cherry_pick_continue, git_cherry_pick_skip, git_cherry_pick_abort,
     git_rebase, git_rebase_continue, git_rebase_skip, git_rebase_abort,
     git_log,
     git_graph,
@@ -105,7 +106,9 @@ pub use lsp::{
     lsp_references, lsp_rename, lsp_format,
 };
 pub use cli::{PendingCliPaths, get_cli_status, install_cli, uninstall_cli, take_pending_cli_paths};
-pub use cli_providers::{discover_cli_session, list_cli_providers, reached_providers};
+pub use cli_providers::{
+    cli_session_exists, discover_cli_session, list_cli_providers, reached_providers,
+};
 pub use oneshot::{OneshotState, list_oneshot_providers, run_oneshot, stop_oneshot};
 pub use secrets::{delete_provider_api_key, get_api_key_statuses, set_provider_api_key};
 pub use mcp::{

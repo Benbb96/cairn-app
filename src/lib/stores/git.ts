@@ -201,9 +201,14 @@ let diffsWanted = false;
 
 /** Called by the git view as it opens and closes. */
 export function setDiffsWanted(wanted: boolean): void {
+	const was = diffsWanted;
 	diffsWanted = wanted;
 	if (!wanted) {
 		_git.update((s) => ({ ...s, unstagedDiffs: [], stagedDiffs: [] }));
+		return;
+	}
+	if (!was) {
+		_git.update((s) => ({ ...s, diffVersion: "" }));
 	}
 }
 
@@ -291,8 +296,9 @@ export async function refreshLog(): Promise<void> {
 	try {
 		const log = await gitService.getLog(wt, LOG_PAGE, 0);
 		_git.update((s) => ({ ...s, log, logHasMore: log.length === LOG_PAGE }));
-	} catch {
-		// Non-fatal - repo may have no commits yet
+	} catch (e) {
+		const error = gitService.toGitError(e);
+		_git.update((s) => (s.log.length > 0 ? s : { ...s, error }));
 	}
 }
 
@@ -569,6 +575,47 @@ export async function abortMerge(): Promise<void> {
 	if (!wt) return;
 	await mutate(() => gitService.mergeAbort(wt));
 	await refreshStatus();
+}
+
+/** Applies commits from elsewhere onto the current branch, oldest first. */
+export async function cherryPickCommits(
+	commits: string[],
+): Promise<GitOpResult | null> {
+	const wt = worktree();
+	if (!wt || commits.length === 0) return null;
+	const result = await mutate(() => gitService.cherryPick(wt, commits));
+	await refreshStatus();
+	await refreshLog();
+	return result;
+}
+
+/** Resumes a cherry-pick once its conflicts are resolved and staged. */
+export async function continueCherryPick(): Promise<GitOpResult | null> {
+	const wt = worktree();
+	if (!wt) return null;
+	const result = await mutate(() => gitService.cherryPickContinue(wt));
+	await refreshStatus();
+	await refreshLog();
+	return result;
+}
+
+/** Drops the commit a cherry-pick is stuck on and moves to the next. */
+export async function skipCherryPick(): Promise<GitOpResult | null> {
+	const wt = worktree();
+	if (!wt) return null;
+	const result = await mutate(() => gitService.cherryPickSkip(wt));
+	await refreshStatus();
+	await refreshLog();
+	return result;
+}
+
+/** Puts the branch back where the cherry-pick started. */
+export async function abortCherryPick(): Promise<void> {
+	const wt = worktree();
+	if (!wt) return;
+	await mutate(() => gitService.cherryPickAbort(wt));
+	await refreshStatus();
+	await refreshLog();
 }
 
 /** URL of the origin remote, empty when there is none. */

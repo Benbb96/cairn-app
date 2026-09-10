@@ -76,6 +76,9 @@ pub struct UiState {
     pub home_settings_tab: String,
     #[serde(rename = "projectStates", default)]
     pub project_states: HashMap<String, ProjectUiState>,
+    /// Projects folded shut on the tickets page, by project id.
+    #[serde(rename = "collapsedTicketProjects", default)]
+    pub collapsed_ticket_projects: Vec<String>,
 }
 
 // Serde defaults, also used by the Default impls so both agree on one value.
@@ -94,6 +97,7 @@ impl Default for UiState {
             home_section: default_home_section(),
             home_settings_tab: default_settings_tab(),
             project_states: HashMap::new(),
+            collapsed_ticket_projects: Vec::new(),
         }
     }
 }

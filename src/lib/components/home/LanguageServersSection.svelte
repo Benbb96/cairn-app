@@ -274,6 +274,10 @@
       {@const updateOption = updater(server)}
       {@const check = $updateChecks[server.id]}
       {@const error = commandErrors[server.id]}
+      {@const hasFallback =
+        busyServerId === server.id ||
+        (!server.custom && (!!error || (server.binaryPath === null && option === null)))}
+      <div class="ls-card" class:has-fallback={hasFallback}>
       <div class="settings-row">
         <div class="settings-row-info">
           <!-- The running dot belongs to the name, not to the controls: it says
@@ -444,6 +448,7 @@
           </a>
         </div>
       {/if}
+      </div>
     {/each}
   {/if}
 </div>
@@ -684,15 +689,31 @@
   }
   .ls-badge :global(svg) { flex-shrink: 0; }
 
+  /* What follows a server belongs to it: the progress of its install, the
+     command to run when clicking cannot do it. Left as siblings they read as
+     unrelated cards stacked underneath, so the row and its blocks share one
+     border and only the outer corners are rounded. */
+  .ls-card { margin-bottom: 6px; }
+  .ls-card :global(.settings-row) { margin-bottom: 0; }
+  .ls-card.has-fallback :global(.settings-row) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+  }
   .ls-fallback {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin: -2px 0 6px;
     padding: 10px 14px;
     background: var(--bg-1);
     border: 1px solid var(--stroke-0);
-    border-radius: var(--r-md);
+    border-radius: 0;
+  }
+  /* Two can stack - progress and error - so only the last one closes the card. */
+  .ls-fallback + .ls-fallback { border-top: none; }
+  .ls-fallback:last-child {
+    border-bottom-left-radius: var(--r-md);
+    border-bottom-right-radius: var(--r-md);
   }
   .ls-fallback-text { font-size: 11.5px; color: var(--fg-2); }
   .ls-fallback-text.danger {

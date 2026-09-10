@@ -53,8 +53,6 @@ pub struct GitCommit {
     pub author: String,
     pub date: String,
     pub message: String,
-    #[serde(rename = "onCurrentBranch")]
-    pub on_current_branch: bool,
 }
 
 #[derive(Serialize)]
@@ -1295,6 +1293,9 @@ fn operation_kind(worktree: &str) -> String {
     if exists("MERGE_HEAD") {
         return "merge".to_string();
     }
+    if exists("CHERRY_PICK_HEAD") {
+        return "cherry-pick".to_string();
+    }
     "none".to_string()
 }
 
@@ -1453,6 +1454,59 @@ pub async fn git_merge_continue(worktree_path: String) -> Result<GitOpResult, Gi
 pub async fn git_merge_abort(worktree_path: String) -> Result<(), GitError> {
     let expanded = expand(&worktree_path);
     let out = git_cmd(&expanded).args(["merge", "--abort"]).output()?;
+    if !out.status.success() {
+        return Err(GitError::from_process(&out));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+/// Applies commits onto the current branch, oldest first.
+///
+/// Git stops at the first conflict and keeps the rest of the list in its own
+/// sequencer, so `git_cherry_pick_continue` walks through the remainder - the
+/// same shape as a rebase, which is why the conflict UI is shared.
+pub async fn git_cherry_pick(
+    worktree_path: String,
+    commits: Vec<String>,
+) -> Result<GitOpResult, GitError> {
+    if commits.is_empty() {
+        return Err(GitError::from_output("no commit to cherry-pick".to_string()));
+    }
+    for commit in &commits {
+        reject_option_like(commit)?;
+    }
+    let expanded = expand(&worktree_path);
+    let mut cmd = git_cmd(&expanded);
+    cmd.env("GIT_EDITOR", "true").args(["cherry-pick", "--"]);
+    cmd.args(&commits);
+    finish_op(&expanded, cmd.output()?)
+}
+
+#[tauri::command]
+/// Resumes the cherry-pick once conflicts are resolved and staged.
+pub async fn git_cherry_pick_continue(worktree_path: String) -> Result<GitOpResult, GitError> {
+    let expanded = expand(&worktree_path);
+    let out = git_cmd(&expanded)
+        .env("GIT_EDITOR", "true")
+        .args(["cherry-pick", "--continue"])
+        .output()?;
+    finish_op(&expanded, out)
+}
+
+#[tauri::command]
+/// Drops the commit being applied and moves on to the next one.
+pub async fn git_cherry_pick_skip(worktree_path: String) -> Result<GitOpResult, GitError> {
+    let expanded = expand(&worktree_path);
+    let out = git_cmd(&expanded).args(["cherry-pick", "--skip"]).output()?;
+    finish_op(&expanded, out)
+}
+
+#[tauri::command]
+/// Aborts the cherry-pick and restores the pre-pick state.
+pub async fn git_cherry_pick_abort(worktree_path: String) -> Result<(), GitError> {
+    let expanded = expand(&worktree_path);
+    let out = git_cmd(&expanded).args(["cherry-pick", "--abort"]).output()?;
     if !out.status.success() {
         return Err(GitError::from_process(&out));
     }
@@ -1978,53 +2032,36 @@ pub async fn git_reset(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-/// One page of history across all refs, each commit flagged for whether it is reachable from HEAD.
+/// One page of the current branch's history, oldest last.
+///
+/// This walks HEAD rather than `--all`: the history view shows the branch the
+/// user is on. Paging every ref instead put the whole repository's topological
+/// order in the page, so on a repository with many branches the current
+/// branch's own commits could fall past the first page entirely - and the view,
+/// which keeps only what is reachable from HEAD, then had nothing to show.
+/// `--all` belongs to the graph, which has `git_graph` for it.
 pub async fn git_log(worktree_path: String, limit: usize, offset: usize) -> Result<Vec<GitCommit>, GitError> {
     let expanded = expand(&worktree_path);
 
-    let raw = run(
-        git_cmd(&expanded).args(["log", "--all", "--topo-order", &format!("--skip={}", offset), &format!("-{}", limit), "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s"])
-    )?;
-
-    // HEAD is walked back only as far as the oldest commit of this page, rather
-    // than over the whole history: the full walk cost O(history) on every
-    // scroll page. A commit older than the page cannot be one of its rows, so
-    // stopping there loses nothing. `--since` is inclusive, and a repository
-    // with skewed author dates can only over-read, never miss a commit.
-    let oldest = raw
-        .lines()
-        .filter(|l| !l.is_empty())
-        .filter_map(|l| l.split('\x1f').nth(3))
-        .min();
-    let on_branch: std::collections::HashSet<String> = match oldest {
-        None => std::collections::HashSet::new(),
-        Some(since) => run(git_cmd(&expanded).args([
-            "log",
-            "HEAD",
-            "--format=%H",
-            &format!("--since={}", since),
-        ]))
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(String::from)
-        .collect(),
-    };
+    let raw = run(git_cmd(&expanded).args([
+        "log",
+        "HEAD",
+        &format!("--skip={}", offset),
+        &format!("-{}", limit),
+        "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s",
+    ]))?;
 
     let commits = raw
         .lines()
         .filter(|l| !l.is_empty())
         .map(|line| {
             let parts: Vec<&str> = line.splitn(5, '\x1f').collect();
-            let hash = parts.first().unwrap_or(&"").to_string();
-            let on_current_branch = on_branch.contains(&hash);
             GitCommit {
-                hash,
+                hash: parts.first().unwrap_or(&"").to_string(),
                 short_hash: parts.get(1).unwrap_or(&"").to_string(),
                 author: parts.get(2).unwrap_or(&"").to_string(),
                 date: parts.get(3).unwrap_or(&"").to_string(),
                 message: parts.get(4).map(|s| s.trim_end()).unwrap_or("").to_string(),
-                on_current_branch,
             }
         })
         .collect();

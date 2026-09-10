@@ -47,14 +47,13 @@ export type GitFileStatusValue =
 /** Worktree status keyed by path relative to its root. */
 export type GitFileStatus = Record<string, GitFileStatusValue>;
 
-/** A commit in the history list; `onCurrentBranch` separates it from those only reachable elsewhere. */
+/** A commit in the history list. The list walks HEAD, so every row is on the current branch. */
 export type GitCommit = {
 	hash: string;
 	shortHash: string;
 	author: string;
 	date: string;
 	message: string;
-	onCurrentBranch: boolean;
 };
 
 /** Standing against the upstream; the counts are 0 when `hasUpstream` is false. */
@@ -66,7 +65,7 @@ export type RemoteStatus = {
 };
 
 /** Which multi-step operation is halfway through, if any. */
-export type GitOperationKind = "rebase" | "merge" | "none";
+export type GitOperationKind = "rebase" | "merge" | "cherry-pick" | "none";
 
 /**
  * State of an interrupted merge or rebase. `structuralFiles` are the conflicts
@@ -556,6 +555,33 @@ export async function rebaseSkip(worktreePath: string): Promise<GitOpResult> {
 /** Unwinds the whole rebase back to where it started. */
 export async function rebaseAbort(worktreePath: string): Promise<void> {
 	return invoke("git_rebase_abort", { worktreePath });
+}
+
+/** Applies commits onto the current branch, oldest first; stops on conflicts. */
+export async function cherryPick(
+	worktreePath: string,
+	commits: string[],
+): Promise<GitOpResult> {
+	return invoke("git_cherry_pick", { worktreePath, commits });
+}
+
+/** Resumes the cherry-pick once the conflicts are staged. */
+export async function cherryPickContinue(
+	worktreePath: string,
+): Promise<GitOpResult> {
+	return invoke("git_cherry_pick_continue", { worktreePath });
+}
+
+/** Drops the commit being applied and moves on to the next one. */
+export async function cherryPickSkip(
+	worktreePath: string,
+): Promise<GitOpResult> {
+	return invoke("git_cherry_pick_skip", { worktreePath });
+}
+
+/** Unwinds the whole cherry-pick back to where it started. */
+export async function cherryPickAbort(worktreePath: string): Promise<void> {
+	return invoke("git_cherry_pick_abort", { worktreePath });
 }
 
 /** Ahead and behind counts against the upstream, from the last fetch. */
