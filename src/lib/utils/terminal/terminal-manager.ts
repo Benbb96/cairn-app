@@ -199,6 +199,7 @@ if (typeof window !== "undefined") {
 			window.devicePixelRatio || 1,
 		);
 		for (const [id, m] of managed) {
+			if (!m.el.checkVisibility({ visibilityProperty: true })) continue;
 			const r = m.el.getBoundingClientRect();
 			if (r.width === 0 || r.height === 0) continue;
 			if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {

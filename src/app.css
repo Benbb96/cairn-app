@@ -99,12 +99,14 @@ body {
   user-select: none;
   -webkit-user-select: none;
 }
+/* `.xterm` is deliberately absent: xterm keeps its own selection (`term.getSelection`)
+   and never needs the native one, while a text-selectable region makes WebKitGTK accept
+   the OS drop itself, so wry never emits `tauri://drag-drop` over a terminal on Linux. */
 input,
 textarea,
 [contenteditable="true"],
 .selectable,
 .cm-editor,
-.xterm,
 .diff-line .code {
   user-select: text;
   -webkit-user-select: text;

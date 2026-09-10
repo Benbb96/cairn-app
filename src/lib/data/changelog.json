@@ -153,6 +153,20 @@
 					"en": "The language servers page could stay on its loading placeholder forever: reading the login shell's PATH called back into binary resolution, which was waiting on that same reading. The two no longer wait on each other.",
 					"fr": "La page des serveurs de langage pouvait rester indéfiniment sur son placeholder de chargement : la lecture du PATH du shell de login rappelait la résolution des binaires, qui attendait justement cette lecture. Les deux ne s'attendent plus."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The window can be closed again: the close button left the application running instead of quitting it.",
+					"fr": "La fenêtre peut de nouveau être fermée : le bouton de fermeture laissait l'application tourner au lieu de la quitter."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "On Linux, dropping a file from outside the application into a terminal now inserts its path, instead of doing nothing.",
+					"fr": "Sous Linux, glisser un fichier depuis l'extérieur de l'application dans un terminal insère désormais son chemin, au lieu de ne rien faire."
+				}
 			}
 		]
 	},
