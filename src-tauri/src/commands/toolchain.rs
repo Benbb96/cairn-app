@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use serde::Serialize;
 
 /// One command per package manager. The same shape serves installing and
@@ -29,7 +29,6 @@ pub struct ManagerCommands {
 pub struct ManagerOption {
     pub manager:   &'static str,
     pub command:   &'static str,
-    /// Whether the package manager the command needs is on this machine.
     pub available: bool,
 }
 
@@ -92,20 +91,12 @@ pub fn resolve_command(commands: &ManagerCommands, manager: &str) -> Option<&'st
 /// The manager a binary looks like it came from, so removing it reaches for the
 /// same one that put it there rather than the first that happens to be around.
 pub fn owning_manager(binary_path: &Path) -> Option<&'static str> {
-    // The link is followed first. What npm installs globally is a link in a
-    // `bin` directory pointing into `lib/node_modules`, and so is what Homebrew
-    // installs into `Cellar`: the link itself sits in the same directory for
-    // both and says nothing about who put it there.
     let resolved = std::fs::canonicalize(binary_path).unwrap_or_else(|_| binary_path.to_path_buf());
     let path = format!("{} {}", binary_path.to_string_lossy(), resolved.to_string_lossy());
 
-    // Checked first: a gem's bin directory can sit inside a Homebrew prefix, and
-    // the manager that put a binary there is the one that must take it away.
     if path.contains("/gems/") || path.contains("/.gem/") {
         return Some("gem");
     }
-    // Before node_modules: a Homebrew formula whose payload happens to be a node
-    // package lands in both, and inside its own cellar Homebrew is the owner.
     if path.contains("/Cellar/") {
         return Some("brew");
     }
@@ -121,8 +112,6 @@ pub fn owning_manager(binary_path: &Path) -> Option<&'static str> {
     if path.contains("/homebrew/") {
         return Some("brew");
     }
-    // dpkg's own database is the only reliable signal: `/usr/bin` also holds
-    // whatever the OS image shipped with, not just what apt put there.
     if Command::new("dpkg")
         .args(["-S", &resolved.to_string_lossy()])
         .stdin(Stdio::null())
@@ -172,6 +161,9 @@ fn resolved_tool_dir(command: &str) -> Option<PathBuf> {
     if tool.is_empty() || Path::new(tool).is_absolute() {
         return None;
     }
+    if BUILDING_LOGIN_DIRS.with(std::cell::Cell::get) {
+        return None;
+    }
     let resolved = resolve_binary(tool, None)?;
     let dir = resolved.parent()?.to_path_buf();
     if login_shell_dirs().first() == Some(&dir) {
@@ -213,9 +205,6 @@ pub fn spawn_shell_full(
         }
     }
 
-    // Its own process group, so killing the run takes the whole tree with it.
-    // A shell running `npm test` spawns vitest below it; signalling only the
-    // shell would leave the real work running.
     #[cfg(unix)]
     if group {
         use std::os::unix::process::CommandExt;
@@ -294,23 +283,14 @@ fn extra_lookup_dirs(root: Option<&Path>) -> Vec<PathBuf> {
             dirs.push(home.join(".local").join("bin"));
             dirs.push(home.join(".bun").join("bin"));
             dirs.push(home.join(".volta").join("bin"));
-            // A Node installed by a version manager lives under a per-version
-            // directory that only the shell's own hook puts on the PATH, and
-            // that hook never runs for a GUI process. Without this, everything
-            // `npm install -g` ever put there reads as not installed - and the
-            // install button that just succeeded looks like it did nothing.
             dirs.extend(version_manager_bins(&[
                 home.join(".nvm").join("versions").join("node"),
                 home.join("Library").join("Application Support").join("fnm").join("node-versions"),
                 home.join(".local").join("share").join("fnm").join("node-versions"),
                 home.join(".asdf").join("installs").join("nodejs"),
-                // pip's `--user` bin, one directory per Python version.
                 home.join("Library").join("Python"),
             ]));
         }
-        // Where npm, winget and scoop put a per-user install on Windows. None of
-        // them is on the PATH of a process started from the Start menu until the
-        // session is signed out and back in.
         #[cfg(windows)]
         {
             dirs.push(home.join("AppData").join("Roaming").join("npm"));
@@ -374,6 +354,10 @@ impl BinaryCache {
     }
 }
 
+thread_local! {
+    static BUILDING_LOGIN_DIRS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The PATH the user's own login shell builds, read once per run. A GUI process
 /// inherits almost nothing from Finder, and even one started from a terminal
 /// misses whatever a shell function - nvm, mise, pyenv - resolves lazily. This
@@ -383,8 +367,10 @@ impl BinaryCache {
 fn login_shell_dirs() -> &'static [PathBuf] {
     static DIRS: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
     DIRS.get_or_init(|| {
-        let Ok(output) = spawn_shell("printf %s \"$PATH\"").and_then(|c| c.wait_with_output())
-        else {
+        BUILDING_LOGIN_DIRS.with(|f| f.set(true));
+        let read = spawn_shell("printf %s \"$PATH\"").and_then(|c| c.wait_with_output());
+        BUILDING_LOGIN_DIRS.with(|f| f.set(false));
+        let Ok(output) = read else {
             return Vec::new();
         };
         let path = String::from_utf8_lossy(&output.stdout);
@@ -413,12 +399,6 @@ pub fn resolve_binary(binary: &str, root: Option<&Path>) -> Option<PathBuf> {
         .map(|path| std::env::split_paths(&path).collect::<Vec<PathBuf>>())
         .unwrap_or_default();
 
-    // The login shell's PATH is checked first: it is what nvm, asdf or a
-    // Homebrew prefix actually build, while the process's own inherited PATH
-    // is often just the OS default. On Linux that default already contains
-    // `/usr/bin`, and a distro-packaged `npm` there is old enough to reject
-    // the `engines` field of most modern packages - so a version manager the
-    // user set up would otherwise lose to it on every resolution.
     login_shell_dirs()
         .iter()
         .cloned()
@@ -531,8 +511,6 @@ pub(crate) fn package_version(resolved: &Path) -> Option<String> {
 /// the first line of `<binary> --version`.
 pub fn detect_version(path: &Path) -> Option<String> {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    // Stamped on the target rather than the link: updating a package rewrites
-    // the files, and may well leave the link it was reached through untouched.
     let stamp = version_stamp(&resolved);
     if let Some((binary, modified)) = stamp.as_ref() {
         let cached = VERSIONS
@@ -552,14 +530,35 @@ pub fn detect_version(path: &Path) -> Option<String> {
     Some(version)
 }
 
+/// A few servers answer `--version` by starting up instead of printing, and
+/// never exit: waiting on `output()` would hang the whole scan, so the child is
+/// killed once it has had its chance.
 fn read_version(path: &Path) -> Option<String> {
-    let output = Command::new(path)
+    let mut child = Command::new(path)
         .arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .output()
+        .spawn()
         .ok()?;
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Err(_) => return None,
+        }
+    }
+
+    let output = child.wait_with_output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     let line = text.lines().find(|l| !l.trim().is_empty())?;
     Some(line.trim().to_string())
@@ -568,7 +567,7 @@ fn read_version(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+
 
     #[test]
     fn a_version_is_read_out_of_whatever_the_tool_prints() {
