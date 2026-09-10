@@ -1,7 +1,7 @@
 [
 	{
-		"version": "1.1.0",
-		"date": "",
+		"version": "1.0.2",
+		"date": "2026-09-10",
 		"summary": {
 			"en": "Git gains the actions the graph was missing: a context menu on every commit, reset with its three modes, and a tag that can be placed on the branch of your choice. The review guide shows at a glance which remarks are handled, and conflicts are now visible in the editor minimap.",
 			"fr": "Git gagne les actions qui manquaient au graphe : un menu contextuel sur chaque commit, le reset et ses trois modes, et un tag que l'on peut poser sur la branche de son choix. Le guide de review montre d'un coup d'oeil les remarques traitées, et les conflits apparaissent désormais dans la minimap de l'éditeur."
@@ -10,106 +10,120 @@
 			{
 				"kind": "added",
 				"text": {
-					"en": "Creating a tag now lets you choose the branch it is placed on, with a search field for repositories that have many, instead of always tagging the current commit.",
-					"fr": "La création d'un tag permet désormais de choisir la branche sur laquelle il est posé, avec un champ de recherche pour les dépôts qui en comptent beaucoup, au lieu de toujours taguer le commit courant."
+					"en": "Commits can now be cherry-picked onto the current branch, from the graph's context menu, from the history, and from the commit detail. Several commits are applied oldest first, and a pick that stops on a conflict is resolved in the merge and rebase view - with continue, skip and abort - like a merge or a rebase.",
+					"fr": "Les commits peuvent désormais être picorés sur la branche courante, depuis le menu contextuel du graphe, depuis l'historique et depuis le détail d'un commit. Plusieurs commits sont appliqués du plus ancien au plus récent, et un picorage arrêté sur un conflit se résout dans la vue merge et rebase - avec continuer, passer et abandonner - comme un merge ou un rebase."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "Right-clicking a commit in the git graph opens a menu: copy its hash or its message, create a branch or a tag there, reset onto it, or revert it. Cherry-pick is listed but not available yet.",
-					"fr": "Un clic droit sur un commit du graphe git ouvre un menu : copier son hash ou son message, y créer une branche ou un tag, s'y reset, ou le revert. Le cherry-pick y figure mais n'est pas encore disponible."
+					"en": "Right-clicking a commit in the git graph opens a menu gathering what one does with a commit: copy its hash or its message, create a branch or a tag there, cherry-pick or revert it, or reset onto it. The same menu is now shared by the history and the commit detail, so an action is in the same place wherever the commit is shown.",
+					"fr": "Un clic droit sur un commit du graphe git ouvre un menu rassemblant ce que l'on fait d'un commit : copier son hash ou son message, y créer une branche ou un tag, le picorer ou le revert, ou s'y reset. Ce même menu est désormais partagé par l'historique et le détail d'un commit, de sorte qu'une action se trouve au même endroit quel que soit l'endroit où le commit est affiché."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "A Reset button sits next to pull and push, with its soft, mixed and hard modes. Every mode asks for confirmation, spelling out what it keeps and what it discards.",
-					"fr": "Un bouton Reset accompagne le pull et le push, avec ses modes soft, mixed et hard. Chaque mode demande confirmation en précisant ce qu'il conserve et ce qu'il supprime."
+					"en": "A Reset button sits next to pull and push, with its soft, mixed and hard modes. Each mode asks for confirmation and spells out what it keeps and what it discards, because the three differ precisely on the work in progress they leave behind.",
+					"fr": "Un bouton Reset accompagne le pull et le push, avec ses modes soft, mixed et hard. Chaque mode demande confirmation et précise ce qu'il conserve et ce qu'il supprime, car les trois diffèrent justement par le travail en cours qu'ils laissent derrière eux."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "Conflict regions now appear in the editor minimap, so a conflict stays findable in a long file.",
-					"fr": "Les zones de conflit apparaissent désormais dans la minimap de l'éditeur, ce qui permet de les retrouver dans un fichier long."
+					"en": "Creating a tag now lets you choose the branch it is placed on, instead of always tagging the current commit. Repositories with many branches get a search field in the selector, so the right branch is reached by typing rather than by scrolling.",
+					"fr": "La création d'un tag permet désormais de choisir la branche sur laquelle il est posé, au lieu de toujours taguer le commit courant. Les dépôts comptant beaucoup de branches disposent d'un champ de recherche dans le sélecteur, ce qui permet d'atteindre la bonne branche en tapant plutôt qu'en faisant défiler."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "The review guide offers opening the file itself next to opening the diff, whenever the file is still on disk.",
-					"fr": "Le guide de review propose d'ouvrir le fichier lui-même à côté de l'ouverture du diff, lorsque le fichier existe encore sur le disque."
+					"en": "Conflict regions now appear in the editor minimap, painted into the same map the diff gutter uses. A long file is exactly where a conflict is easiest to lose track of, and the whole region is marked, its markers included.",
+					"fr": "Les zones de conflit apparaissent désormais dans la minimap de l'éditeur, peintes dans la carte même qu'utilise la gouttière de diff. Un fichier long est justement l'endroit où l'on perd le plus facilement un conflit de vue, et toute la zone est signalée, marqueurs compris."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The review guide offers opening the file itself next to opening the diff, whenever the file is still on disk. A remark often calls for the current state of the code rather than the change that triggered it.",
+					"fr": "Le guide de review propose d'ouvrir le fichier lui-même à côté de l'ouverture du diff, lorsque le fichier existe encore sur le disque. Une remarque appelle souvent l'état actuel du code plutôt que la modification qui l'a déclenchée."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A project can be folded shut on the tickets page, and stays folded after a restart: the state is persisted with the rest of the project's view state, so a tracker you are not working on does not have to be folded away again at every launch.",
+					"fr": "Un projet peut être replié sur la page des tickets, et le reste après un redémarrage : l'état est persisté avec le reste de l'état de vue du projet, de sorte qu'un suivi sur lequel on ne travaille pas n'a pas à être replié de nouveau à chaque lancement."
 				}
 			},
 			{
 				"kind": "changed",
 				"text": {
-					"en": "On a project that is not a git repository, the instance selector is disabled rather than opening a menu whose creation would fail.",
-					"fr": "Sur un projet qui n'est pas un dépôt git, le sélecteur d'instance est grisé au lieu d'ouvrir un menu dont la création échouerait."
+					"en": "The commit context menu groups its actions by what they do - copy, create, apply elsewhere, move the branch - instead of listing all of them in one run. Reset and revert no longer sit a pixel away from copying a hash.",
+					"fr": "Le menu contextuel d'un commit regroupe ses actions par ce qu'elles font - copier, créer, appliquer ailleurs, déplacer la branche - au lieu de toutes les lister à la suite. Le reset et le revert ne se trouvent plus à un pixel de la copie d'un hash."
 				}
 			},
 			{
 				"kind": "changed",
 				"text": {
-					"en": "In the review guide, the remark filters under Remarks now carry the severity colour of the kind they filter.",
-					"fr": "Dans le guide de review, les filtres de remarques sous Remarques portent désormais la couleur de sévérité du type qu'ils filtrent."
+					"en": "The history's context menu now offers the same commit actions as the graph, instead of only the link to the forge. The two views list the same commits, so they no longer disagree on what can be done with one.",
+					"fr": "Le menu contextuel de l'historique propose désormais les mêmes actions sur un commit que le graphe, au lieu du seul lien vers la forge. Les deux vues listent les mêmes commits, elles ne divergent donc plus sur ce que l'on peut en faire."
 				}
 			},
 			{
 				"kind": "changed",
 				"text": {
-					"en": "A review remark that has been answered is now marked as handled, instead of only losing its comment button.",
-					"fr": "Une remarque de review à laquelle on a répondu est désormais marquée comme traitée, au lieu de seulement perdre son bouton de commentaire."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Running Go to line from the command palette no longer did nothing: the palette gave the focus back before the panel could take it.",
-					"fr": "Lancer Aller à la ligne depuis la palette de commandes ne faisait rien : la palette reprenait le focus avant que le panneau puisse le prendre."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "Commits can now be cherry-picked: the action is available from the graph's context menu, from the same menu now offered by the history, and from the commit detail. A pick that conflicts is resolved in the merge and rebase view, like a merge or a rebase.",
-					"fr": "Les commits peuvent désormais être picorés : l'action est disponible dans le menu contextuel du graphe, dans ce même menu désormais proposé par l'historique, et dans le détail d'un commit. Un picorage en conflit se résout dans la vue merge et rebase, comme un merge ou un rebase."
+					"en": "On a project that is not a git repository, the instance selector is disabled rather than opening a menu whose creation would fail. An instance is a worktree, which a repository-less project cannot provide, so the menu only ever led to an error.",
+					"fr": "Sur un projet qui n'est pas un dépôt git, le sélecteur d'instance est grisé au lieu d'ouvrir un menu dont la création échouerait. Une instance est un worktree, qu'un projet sans dépôt ne peut pas fournir : le menu ne menait donc qu'à une erreur."
 				}
 			},
 			{
 				"kind": "changed",
 				"text": {
-					"en": "The history's context menu now offers the same commit actions as the graph, instead of only the link to the forge.",
-					"fr": "Le menu contextuel de l'historique propose désormais les mêmes actions sur un commit que le graphe, au lieu du seul lien vers la forge."
+					"en": "A review remark that has been answered is now marked as handled, instead of only losing its comment button. The state of a chapter is readable at a glance rather than deduced from a missing control.",
+					"fr": "Une remarque de review à laquelle on a répondu est désormais marquée comme traitée, au lieu de seulement perdre son bouton de commentaire. L'état d'un chapitre se lit d'un coup d'oeil au lieu de se déduire d'un bouton absent."
 				}
 			},
 			{
-				"kind": "added",
+				"kind": "changed",
 				"text": {
-					"en": "A project can be folded shut on the tickets page, and stays folded after a restart.",
-					"fr": "Un projet peut être replié sur la page des tickets, et le reste après un redémarrage."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "A commit being made, or a commit message being generated, no longer shows as running in the Git view of every other instance: each one now keeps its own.",
-					"fr": "Un commit en cours, ou une génération de message de commit, ne s'affiche plus comme en cours dans la vue Git de toutes les autres instances : chacune garde désormais la sienne."
+					"en": "In the review guide, the remark filters under Remarks carry the severity colour of the kind they filter, so the filter row uses the same vocabulary as the remarks it acts on.",
+					"fr": "Dans le guide de review, les filtres de remarques sous Remarques portent la couleur de sévérité du type qu'ils filtrent, de sorte que la ligne de filtres emploie le même vocabulaire que les remarques sur lesquelles elle agit."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Returning to the Git step no longer empties the staged files and part of the unstaged ones, which used to require restarting the app.",
-					"fr": "Revenir sur l'étape Git ne vide plus les fichiers indexés ni une partie des non indexés, ce qui obligeait à relancer l'application."
+					"en": "The history no longer comes up empty on a repository with many branches. It listed every ref, then kept only what was on the current branch - and on a busy repository that branch's own commits fell past the first page. It now walks the current branch directly.",
+					"fr": "L'historique ne s'affiche plus vide sur un dépôt comptant beaucoup de branches. Il listait toutes les références puis ne gardait que la branche courante - et sur un dépôt actif, les commits de cette branche passaient au-delà de la première page. Il parcourt désormais la branche courante directement."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Tickets cancelled in Jira are no longer counted as open.",
-					"fr": "Les tickets annulés dans Jira ne sont plus comptés comme ouverts."
+					"en": "Returning to the Git step no longer empties the staged files and part of the unstaged ones, which used to require restarting the app. Svelte orders reactive blocks by their dependencies, not by their position, so the refresh could run while diffs were still marked unwanted and store a status without any; the cached diff version then matched and nothing re-fetched. The refresh now asks for the diffs itself, and that version is reset when they are wanted again.",
+					"fr": "Revenir sur l'étape Git ne vide plus les fichiers indexés ni une partie des non indexés, ce qui obligeait à relancer l'application. Svelte ordonne les blocs réactifs par leurs dépendances et non par leur position : le rafraîchissement pouvait donc s'exécuter alors que les diffs étaient encore marqués comme non voulus et enregistrer un statut sans aucun, après quoi la version de diff en cache correspondait et plus rien n'était relu. Le rafraîchissement demande désormais les diffs lui-même, et cette version est réinitialisée lorsqu'ils redeviennent voulus."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "A commit being made, or a commit message being generated, no longer shows as running in the Git view of every other instance. That in-flight state was global; it is now held per worktree, so instances committing in parallel stop shadowing each other.",
+					"fr": "Un commit en cours, ou une génération de message de commit, ne s'affiche plus comme en cours dans la vue Git de toutes les autres instances. Cet état en vol était global ; il est désormais tenu par worktree, de sorte que des instances qui commitent en parallèle cessent de se masquer l'une l'autre."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Resuming a CLI stopped early no longer fails with \"Session ID is already in use\". Cairn now asks whether the session id already exists before relaunching: creating a session demands a free id where resuming demands an existing one, and an id is written the moment the CLI starts - well before the discovery poll is due, which left a conversation stopped in that window relaunching under a taken id forever.",
+					"fr": "La reprise d'un CLI arrêté tôt n'échoue plus avec « Session ID is already in use ». Cairn demande désormais si l'identifiant de session existe déjà avant de relancer : créer une session exige un identifiant libre là où la reprise en exige un existant, et un identifiant est écrit dès le démarrage du CLI - bien avant l'échéance du sondage de découverte, ce qui condamnait une conversation arrêtée dans cet intervalle à être relancée indéfiniment sous un identifiant déjà pris."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The language servers page could stay on its loading placeholder forever: reading the login shell's PATH called back into binary resolution, which was waiting on that same reading. The recursion is now detected and short-circuited, and version detection times a hung process out instead of blocking on it.",
+					"fr": "La page des serveurs de langage pouvait rester indéfiniment sur son placeholder de chargement : la lecture du PATH du shell de login rappelait la résolution des binaires, qui attendait justement cette lecture. La récursion est désormais détectée et court-circuitée, et la détection de version expire sur un processus bloqué au lieu de l'attendre."
 				}
 			},
 			{
@@ -122,50 +136,36 @@
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "What a language server adds below it - its install progress, its fallback command - is now attached to its card instead of floating underneath as a separate one.",
-					"fr": "Ce qu'un serveur de langage ajoute en dessous de lui - sa progression d'installation, sa commande de repli - est désormais rattaché à sa carte au lieu de flotter en dessous comme une carte à part."
+					"en": "What a language server adds below it - its install progress, its fallback command - is now attached to its card instead of floating underneath as a separate one, which read as an entry belonging to no server.",
+					"fr": "Ce qu'un serveur de langage ajoute en dessous de lui - sa progression d'installation, sa commande de repli - est désormais rattaché à sa carte au lieu de flotter en dessous comme une carte à part, ce qui se lisait comme une entrée n'appartenant à aucun serveur."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Resuming a CLI stopped early no longer fails with \"Session ID is already in use\": the session is resumed rather than created again.",
-					"fr": "La reprise d'un CLI arrêté tôt n'échoue plus avec « Session ID is already in use » : la session est reprise au lieu d'être recréée."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "The commit context menu now groups its actions by what they do - copy, create, apply elsewhere, move the branch - instead of listing all of them in one run.",
-					"fr": "Le menu contextuel d'un commit regroupe désormais ses actions par ce qu'elles font - copier, créer, appliquer ailleurs, déplacer la branche - au lieu de toutes les lister à la suite."
+					"en": "Tickets cancelled in Jira are no longer counted as open. Only the resolution was tested, which a cancelled ticket can leave unresolved; the query now also excludes the Done status category and the statuses that spell out an abandonment, in French as in English.",
+					"fr": "Les tickets annulés dans Jira ne sont plus comptés comme ouverts. Seule la résolution était testée, qu'un ticket annulé peut laisser non résolue ; la requête exclut désormais aussi la catégorie de statut Done et les statuts qui disent l'abandon, en français comme en anglais."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The history no longer comes up empty on a repository with many branches. It listed every ref, then kept only what was on the current branch - and on a busy repository that branch's own commits fell past the first page. It now reads the current branch directly.",
-					"fr": "L'historique ne s'affiche plus vide sur un dépôt comptant beaucoup de branches. Il listait toutes les références puis ne gardait que la branche courante - et sur un dépôt actif, les commits de cette branche passaient au-delà de la première page. Il lit désormais la branche courante directement."
+					"en": "The window can be closed again: the close button left the application running because the permission to destroy the window was missing, so the request was simply refused.",
+					"fr": "La fenêtre peut de nouveau être fermée : le bouton de fermeture laissait l'application tourner car la permission de détruire la fenêtre manquait, la demande était donc simplement refusée."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The language servers page could stay on its loading placeholder forever: reading the login shell's PATH called back into binary resolution, which was waiting on that same reading. The two no longer wait on each other.",
-					"fr": "La page des serveurs de langage pouvait rester indéfiniment sur son placeholder de chargement : la lecture du PATH du shell de login rappelait la résolution des binaires, qui attendait justement cette lecture. Les deux ne s'attendent plus."
+					"en": "On Linux, dropping a file from outside the application into a terminal now inserts its path instead of doing nothing. The terminal had no selectable text, and WebKitGTK forwards the OS drop to the webview rather than accepting it in that case; terminal text is now selectable, which also restores native selection in it. A drop can no longer land on a terminal that is hidden.",
+					"fr": "Sous Linux, glisser un fichier depuis l'extérieur de l'application dans un terminal insère désormais son chemin au lieu de ne rien faire. Le terminal ne contenait aucun texte sélectionnable, et dans ce cas WebKitGTK transmet l'événement de dépôt du système au webview au lieu de l'accepter ; le texte des terminaux est désormais sélectionnable, ce qui y rétablit aussi la sélection native. Un fichier ne peut plus être déposé sur un terminal masqué."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The window can be closed again: the close button left the application running instead of quitting it.",
-					"fr": "La fenêtre peut de nouveau être fermée : le bouton de fermeture laissait l'application tourner au lieu de la quitter."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "On Linux, dropping a file from outside the application into a terminal now inserts its path, instead of doing nothing.",
-					"fr": "Sous Linux, glisser un fichier depuis l'extérieur de l'application dans un terminal insère désormais son chemin, au lieu de ne rien faire."
+					"en": "Running Go to line from the command palette no longer does nothing. The action ran while the palette was still mounted, so the palette's own input stole the focus back as it tore down and the line prompt never received it; the palette is now unmounted before the action runs.",
+					"fr": "Lancer Aller à la ligne depuis la palette de commandes ne reste plus sans effet. L'action s'exécutait alors que la palette était encore montée : son propre champ reprenait le focus en se démontant et l'invite de ligne ne le recevait jamais. La palette est désormais démontée avant que l'action ne s'exécute."
 				}
 			}
 		]
