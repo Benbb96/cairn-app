@@ -15,9 +15,6 @@ const { settings } = await import("$lib/stores/settings");
 const { default: DiffEditor } = await import(
 	"$lib/components/review/DiffEditor.svelte"
 );
-const { default: InlineDiff } = await import(
-	"$lib/components/review/InlineDiff.svelte"
-);
 
 /** Both views build their language mode asynchronously before mounting. */
 async function mounted() {
@@ -34,98 +31,6 @@ const text = () =>
 
 beforeEach(async () => {
 	await settings.save({ theme: "default" });
-});
-
-describe("InlineDiff", () => {
-	it("mounts a read-only editor on the new content", async () => {
-		render(InlineDiff, {
-			oldContent: "one\ntwo",
-			newContent: "one\ntwo\nthree",
-			language: "ts",
-		});
-		await mounted();
-		expect(text()).toContain("three");
-	});
-
-	/**
-	 * Read-only is declared on the state, and CodeMirror refuses the
-	 * transaction rather than marking the node uneditable.
-	 *
-	 * Caveat: jsdom does not route `beforeinput` into CodeMirror's handler, so
-	 * an edit cannot actually be attempted here - removing `readOnly` changes
-	 * nothing this suite can see. What is checked is that the declaration is
-	 * in place and the document is the new content.
-	 */
-	it("mounts read-only on the new content", async () => {
-		render(InlineDiff, {
-			oldContent: "a",
-			newContent: "original",
-			language: "ts",
-		});
-		await mounted();
-		expect(text()).toContain("original");
-	});
-
-	it("shows line numbers beside the diff", async () => {
-		render(InlineDiff, {
-			oldContent: "a",
-			newContent: "a\nb\nc",
-			language: "ts",
-		});
-		await mounted();
-		expect(document.querySelector(".cm-gutters")).not.toBeNull();
-	});
-
-	it("mounts on an empty diff without breaking", async () => {
-		render(InlineDiff, { oldContent: "", newContent: "", language: "ts" });
-		await mounted();
-		expect(editors()).toHaveLength(1);
-	});
-
-	/**
-	 * The language mode is fetched on demand, so the view is built after the
-	 * component may already have been destroyed; unmounting before the fetch
-	 * lands must leave nothing behind, and unmounting after it must take the
-	 * editor with it.
-	 *
-	 * Caveat: Svelte removes the mount container on unmount either way, so a
-	 * DOM query cannot separate "never built" or "destroyed" from "the node
-	 * simply went with its parent". These check the unmount is clean, not the
-	 * guards themselves.
-	 */
-	it("leaves nothing behind when unmounted before the language lands", async () => {
-		const { unmount } = render(InlineDiff, {
-			oldContent: "a",
-			newContent: "b",
-			language: "ts",
-		});
-		unmount();
-		await tick();
-		await tick();
-		await tick();
-		expect(editors()).toHaveLength(0);
-	});
-
-	it("leaves nothing behind when unmounted after mounting", async () => {
-		const { unmount } = render(InlineDiff, {
-			oldContent: "a",
-			newContent: "b",
-			language: "ts",
-		});
-		await mounted();
-		unmount();
-		expect(editors()).toHaveLength(0);
-	});
-
-	/** The theme follows the app's, without the view being rebuilt. */
-	it("follows the app theme changing under it", async () => {
-		render(InlineDiff, { oldContent: "a", newContent: "b", language: "ts" });
-		await mounted();
-		const view = document.querySelector(".cm-editor");
-		await settings.save({ theme: "nord" });
-		await tick();
-		expect(document.querySelector(".cm-editor")).toBe(view);
-	});
 });
 
 describe("DiffEditor", () => {

@@ -106,8 +106,7 @@ input,
 textarea,
 [contenteditable="true"],
 .selectable,
-.cm-editor,
-.diff-line .code {
+.cm-editor {
   user-select: text;
   -webkit-user-select: text;
 }
@@ -1505,36 +1504,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); curso
   font-size: 11px;
 }
 .diff-hunk-head .ctx { color: var(--fg-2); margin-left: 10px; }
-.diff-line {
-  display: grid;
-  grid-template-columns: 40px 40px 1fr;
-  align-items: center;
-  padding: 0 0 0 0;
-  min-height: 22px;
-  font-size: 12.5px;
-}
-.diff-line .ln {
-  text-align: right;
-  padding: 0 8px;
-  color: var(--fg-4);
-  font-size: 11px;
-}
-.diff-line.add { background: oklch(0.28 0.06 150 / 0.18); }
-.diff-line.add .ln { color: var(--success); }
-.diff-line.del { background: oklch(0.28 0.08 25 / 0.18); }
-.diff-line.del .ln { color: var(--danger); }
-.diff-line .code {
-  padding: 0 10px;
-  color: var(--fg-0);
-  white-space: pre;
-  overflow-x: auto;
-}
-.diff-line .marker {
-  text-align: center;
-  color: var(--fg-4);
-}
-.diff-line.add .marker { color: var(--success); }
-.diff-line.del .marker { color: var(--danger); }
 
 /* syntax */
 .tok-k { color: oklch(0.76 0.14 300); }  /* keyword */
@@ -3013,11 +2982,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); curso
 /* ==============================
    Theme: light
    ============================== */
-html[data-theme="light"] .diff-line.add { background: oklch(0.85 0.14 150 / 0.45); }
-html[data-theme="light"] .diff-line.add .ln { color: oklch(0.42 0.18 150); }
-html[data-theme="light"] .diff-line.del { background: oklch(0.85 0.14 25 / 0.40); }
-html[data-theme="light"] .diff-line.del .ln { color: oklch(0.46 0.20 25); }
-
 html[data-theme="light"] {
   --success-weak: oklch(0.74 0.14 150 / 0.28);
   --warning-weak: oklch(0.80 0.14 75  / 0.28);
@@ -3245,11 +3209,6 @@ html[data-theme="dracula"] {
 /* ==============================
    Theme: paper - warm sepia light
    ============================== */
-html[data-theme="paper"] .diff-line.add { background: oklch(0.80 0.15 145 / 0.40); }
-html[data-theme="paper"] .diff-line.add .ln { color: oklch(0.40 0.16 145); }
-html[data-theme="paper"] .diff-line.del { background: oklch(0.78 0.15 28 / 0.36); }
-html[data-theme="paper"] .diff-line.del .ln { color: oklch(0.43 0.19 28); }
-
 html[data-theme="paper"] {
   --bg-0: oklch(0.945 0.038 88);
   --bg-1: oklch(0.910 0.046 85);
