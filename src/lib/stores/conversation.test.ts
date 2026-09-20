@@ -19,6 +19,7 @@ import {
 	restoreConversations,
 	selectConversation,
 	startConversation,
+	startFreshSession,
 } from "./conversation";
 
 const saveConversationIndex = vi.fn().mockResolvedValue(undefined);
@@ -132,7 +133,7 @@ describe("reopening a conversation", () => {
 		expect(lastArgv()).toEqual(["claude", "--resume", meta.sessionId]);
 	});
 
-	it("relaunches under the minted id while the session is unwritten", async () => {
+	it("relaunches under the minted id while the session is unconfirmed", async () => {
 		const meta = await startConversation(ref, "claude-code", "/repo/wt");
 		noteTerminalInput(`conversation:${meta.id}`, "hello\r");
 		closeConversation(meta.id);
@@ -253,6 +254,46 @@ describe("reopening a conversation", () => {
 
 		expect(closeTerminal).toHaveBeenCalledWith(`conversation:${meta.id}`);
 		expect(conversationsOf(ref).map((c) => c.id)).toEqual([meta.id]);
+	});
+});
+
+describe("recovering a conversation whose session is gone", () => {
+	it("opens a new session instead of resuming the one the CLI lost", async () => {
+		const meta = await startConversation(ref, "claude-code", "/repo/wt");
+
+		discoverCliSession.mockResolvedValueOnce(meta.sessionId);
+		await vi.advanceTimersByTimeAsync(2_000);
+		closeConversation(meta.id);
+		createTerminal.mockClear();
+		await openConversation(ref, meta.id);
+		expect(lastArgv()).toContain("--resume");
+		createTerminal.mockClear();
+
+		await startFreshSession(ref, meta.id);
+
+		expect(lastArgv()).not.toContain("--resume");
+		expect(lastArgv()).toContain("--session-id");
+		const after = conversationsOf(ref).find((c) => c.id === meta.id);
+		expect(after?.sessionId).not.toBe(meta.sessionId);
+		expect(after?.sessionStarted).toBe(false);
+		expect(after?.sessionConfirmed).toBe(false);
+	});
+
+	it("keeps the conversation, its title and its worktree", async () => {
+		const meta = await startConversation(
+			ref,
+			"claude-code",
+			"/repo/wt",
+			"Ticket 42",
+		);
+		noteTerminalInput(`conversation:${meta.id}`, "hello\r");
+
+		await startFreshSession(ref, meta.id);
+
+		const after = conversationsOf(ref).find((c) => c.id === meta.id);
+		expect(after?.title).toBe("Ticket 42");
+		expect(after?.cwd).toBe("/repo/wt");
+		expect(conversationsOf(ref)).toHaveLength(1);
 	});
 });
 
