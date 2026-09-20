@@ -31,6 +31,20 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Renaming an Agent conversation renames it in place and the rename field takes the keyboard: a click or a key press in the entry's action menu or rename field no longer bubbles to the row and opens the conversation - which used to relaunch the CLI, close the rename field before anything could be typed into it, and open the session as soon as the rename was confirmed. The field also used to render without focus when the conversation being renamed was the one on screen, leaving the keystrokes going to the terminal.",
+					"fr": "Renommer une conversation d'agent la renomme sur place et le champ de renommage prend le clavier : un clic ou une touche dans le menu d'actions ou le champ de renommage de l'entree ne remonte plus jusqu'a la ligne pour ouvrir la conversation - ce qui relancait le CLI, fermait le champ avant de pouvoir y saisir quoi que ce soit, et ouvrait la session des que le renommage etait confirme. Le champ s'affichait aussi sans focus quand la conversation renommee etait celle affichee, laissant les frappes partir vers le terminal."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The archive button of an archived Agent conversation now reads Unarchive and puts the conversation back in the active list, keeping it open. It used to always read Archive and toggling it closed the conversation, dropped it from the view and relaunched nothing - which read as the session being deleted.",
+					"fr": "Le bouton d'archivage d'une conversation d'agent archivee se lit desormais Desarchiver et remet la conversation dans la liste active, en la laissant ouverte. Il se lisait toujours Archiver, et le basculer fermait la conversation, la quittait et ne relancait rien - ce qui donnait l'impression que la session etait supprimee."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Agent conversation titles no longer contain garbled fragments like <35;18;14M: mouse clicks in the terminal were read as keystrokes while the CLI tracked the mouse, and each click left a piece of escape sequence in the title built from the first prompt.",
 					"fr": "Les titres des conversations d'agent ne contiennent plus de fragments illisibles comme <35;18;14M : les clics de souris dans le terminal étaient lus comme des frappes pendant que le CLI suivait la souris, et chaque clic laissait un morceau de séquence d'échappement dans le titre construit à partir de la première invite."
 				}

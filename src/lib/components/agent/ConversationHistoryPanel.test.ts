@@ -338,6 +338,39 @@ describe("ConversationHistoryPanel", () => {
 			expect(onSelect).not.toHaveBeenCalled();
 		});
 
+		/**
+		 * A menu entry's click used to bubble to the row, which opened the
+		 * conversation and blurred the rename field into committing before it
+		 * could be typed in - renaming a non-open session then meant opening it
+		 * with a one-second flash of the input.
+		 */
+		it("keeps a menu entry's click out of the row", async () => {
+			const { onSelect } = mount({
+				projectConversations: [conversation("a")],
+			});
+			const menu = await openMenu("a");
+			for (const entry of within(menu).getAllByRole("button")) {
+				await userEvent.click(entry);
+			}
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		/** Enter commits the rename; it must not then open the conversation. */
+		it("keeps finishing a rename out of opening the conversation", async () => {
+			const { onSelect, onRename } = mount({
+				projectConversations: [conversation("before")],
+			});
+			const menu = await openMenu("before");
+			await userEvent.click(
+				within(menu).getByRole("button", { name: /rename/i }),
+			);
+			const input = document.querySelector(".rename-input") as HTMLInputElement;
+			await userEvent.clear(input);
+			await userEvent.type(input, "after{Enter}");
+			expect(onRename).toHaveBeenCalledWith("before", "project", "after");
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
 		it("closes the open menu when another row's menu opens", async () => {
 			mount({
 				projectConversations: [conversation("a"), conversation("b")],
@@ -349,6 +382,18 @@ describe("ConversationHistoryPanel", () => {
 	});
 
 	describe("renaming", () => {
+		/** The webview ignores autofocus on an input added after page load. */
+		it("focuses the rename input when it appears", async () => {
+			mount({ projectConversations: [conversation("before")] });
+			const menu = await openMenu("before");
+			await userEvent.click(
+				within(menu).getByRole("button", { name: /rename/i }),
+			);
+			expect(document.activeElement?.classList.contains("rename-input")).toBe(
+				true,
+			);
+		});
+
 		it("submits the new title on Enter", async () => {
 			const { onRename } = mount({
 				projectConversations: [conversation("before")],

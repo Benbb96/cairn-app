@@ -21,6 +21,7 @@
   import type { ConversationMeta, ConversationScope } from '$lib/services/conversation-service';
   import { conversationMatches, sortConversations } from '$lib/utils/agent/conversation-list';
   import DeleteConversationModal from './DeleteConversationModal.svelte';
+  import { focusOnMount } from '$lib/utils/agent/focus-on-mount';
 
   interface Props {
     instanceConversations: ConversationMeta[];
@@ -190,11 +191,12 @@
           <!-- svelte-ignore a11y_autofocus -->
           <input
             class="rename-input selectable"
-            autofocus
+            use:focusOnMount
             bind:value={renameValue}
             onclick={(e) => e.stopPropagation()}
             onblur={() => commitRename(row.scope)}
             onkeydown={(e) => {
+              e.stopPropagation();
               if (e.key === 'Enter') commitRename(row.scope);
               if (e.key === 'Escape') renamingId = null;
             }}
@@ -214,7 +216,8 @@
     </button>
 
     {#if menuFor === row.meta.id}
-      <div class="row-dropdown">
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div class="row-dropdown" role="presentation" onclick={(e) => e.stopPropagation()}>
         <button onclick={() => startRename(row.meta)}>
           <Icon name="edit" size={12}/>{t('agent.history.rename')}
         </button>

@@ -299,6 +299,18 @@ describe("detecting the CLIs", () => {
 });
 
 describe("renaming from the header", () => {
+	it("focuses the header input when it appears", async () => {
+		await mount();
+		await userEvent.click(cardNamed("Claude Code"));
+		await tick();
+
+		await userEvent.click(document.querySelector(".conv-title") as HTMLElement);
+		await tick();
+		expect(document.activeElement?.classList.contains("conv-rename")).toBe(
+			true,
+		);
+	});
+
 	it("updates the header itself, not only the list", async () => {
 		await mount();
 		await userEvent.click(cardNamed("Claude Code"));
@@ -369,11 +381,49 @@ describe("archiving a conversation", () => {
 		await userEvent.click(cardNamed("Claude Code"));
 		await tick();
 
-		await userEvent.click(screen.getByRole("button", { name: /archive/i }));
+		await userEvent.click(screen.getByRole("button", { name: /^archive/i }));
 		await tick();
 
 		expect(document.querySelector(".conv-bar")).toBeNull();
 		expect(document.querySelector(".picker")).not.toBeNull();
+	});
+});
+
+describe("unarchiving a conversation", () => {
+	const ref = {
+		projectId: "p1",
+		instanceId: "i1",
+		scope: "instance" as const,
+	};
+
+	/** Mounts with one archived conversation open in the view. */
+	async function mountOnArchived() {
+		await mount();
+		await userEvent.click(cardNamed("Claude Code"));
+		await tick();
+		const { toggleArchived } = await import("$lib/stores/conversation");
+		toggleArchived(ref, conversationsOf(ref)[0].id);
+		await tick();
+	}
+
+	it("labels the header button Unarchive, not Archive", async () => {
+		await mountOnArchived();
+		expect(screen.queryByRole("button", { name: /^archive/i })).toBeNull();
+		expect(screen.getByRole("button", { name: /unarchive/i })).not.toBeNull();
+	});
+
+	it("puts it back in the active list and keeps it open on the spot", async () => {
+		await mountOnArchived();
+		await userEvent.click(screen.getByRole("button", { name: /unarchive/i }));
+		await tick();
+
+		expect(conversationsOf(ref)[0].archived).toBe(false);
+		expect(document.querySelector(".conv-bar")).not.toBeNull();
+		expect(
+			get((await import("$lib/stores/conversation")).activeConversationId)[
+				`${ref.projectId}:${ref.instanceId}`
+			],
+		).toBe(conversationsOf(ref)[0].id);
 	});
 });
 

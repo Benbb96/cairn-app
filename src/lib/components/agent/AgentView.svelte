@@ -45,6 +45,7 @@
     togglePinned,
   } from '$lib/stores/conversation';
   import { agentDraftRequest, clearAgentDraft } from '$lib/stores/agent-draft';
+  import { focusOnMount } from '$lib/utils/agent/focus-on-mount';
   import { activeInstance } from '$lib/stores/instance';
   import { lastCli } from '$lib/stores/ui';
   import * as manager from '$lib/utils/terminal/terminal-manager';
@@ -291,14 +292,23 @@
   }
 
   /**
-   * Archives the conversation and leaves it. Its CLI is stopped with it: an
-   * archived conversation is one the user has put away, and a process still
-   * running in the background would be a surprise rather than a convenience -
-   * reopening it resumes exactly where it stopped.
+   * Files the open conversation away, or puts it back when it already is.
+   *
+   * Archiving stops the CLI with it and leaves the view: an archived
+   * conversation is one the user has put away, and a process still running in
+   * the background would be a surprise rather than a convenience - reopening
+   * it resumes exactly where it stopped.
+   *
+   * Unarchiving does neither: the conversation is open right here, so it stays
+   * open and selected, merely rejoining the active list.
    */
   function archiveConversation() {
     if (!active) return;
     const { ref, meta } = active;
+    if (meta.archived) {
+      toggleArchived(ref, meta.id);
+      return;
+    }
     closeConversation(meta.id);
     toggleArchived(ref, meta.id);
     selectConversation(ref.projectId, ref.instanceId, null);
@@ -349,7 +359,7 @@
           <!-- svelte-ignore a11y_autofocus -->
           <input
             class="conv-rename selectable"
-            autofocus
+            use:focusOnMount
             bind:value={renameValue}
             onblur={commitRename}
             onkeydown={(e) => {
@@ -379,8 +389,8 @@
         <button
           class="icon-btn"
           onclick={() => archiveConversation()}
-          title={t('agent.history.archive') as string}
-          aria-label={t('agent.history.archive') as string}
+          title={t(active.meta.archived ? 'agent.history.unarchive' : 'agent.history.archive') as string}
+          aria-label={t(active.meta.archived ? 'agent.history.unarchive' : 'agent.history.archive') as string}
         >
           <Icon name="archive" size={14}/>
         </button>
