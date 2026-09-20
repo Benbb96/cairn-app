@@ -27,6 +27,13 @@
 					"en": "The Create a token button of an integration now opens the token page of the instance whose URL you entered, instead of always going to the vendor's cloud. Jira is unchanged, as its tokens are always issued on id.atlassian.com.",
 					"fr": "Le bouton Créer un jeton d'une intégration ouvre désormais la page des jetons de l'instance dont vous avez saisi l'URL, au lieu de toujours renvoyer vers le cloud de l'éditeur. Jira est inchangé, ses jetons étant toujours émis sur id.atlassian.com."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Agent conversation titles no longer contain garbled fragments like <35;18;14M: mouse clicks in the terminal were read as keystrokes while the CLI tracked the mouse, and each click left a piece of escape sequence in the title built from the first prompt.",
+					"fr": "Les titres des conversations d'agent ne contiennent plus de fragments illisibles comme <35;18;14M : les clics de souris dans le terminal étaient lus comme des frappes pendant que le CLI suivait la souris, et chaque clic laissait un morceau de séquence d'échappement dans le titre construit à partir de la première invite."
+				}
 			}
 		]
 	},
