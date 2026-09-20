@@ -1,7 +1,7 @@
 [
-  	{
-        "version": "1.0.3",
-        "date": "",
+	{
+		"version": "1.0.3",
+		"date": "",
 		"summary": {
 			"en": "An AppImage build behaves like an installed one: what Cairn starts runs in your environment, and the cairn command outlives the window that installed it.",
 			"fr": "Un build AppImage se comporte comme une installation classique : ce que Cairn lance tourne dans votre environnement, et la commande cairn survit à la fenêtre qui l'a installée."
@@ -15,7 +15,7 @@
 				}
 			}
 		]
-    },
+	},
 	{
 		"version": "1.0.2",
 		"date": "2026-09-10",
