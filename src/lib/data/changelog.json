@@ -48,6 +48,13 @@
 					"en": "The commit graph and the history now follow the repository on their own: a push, a pull, a fetch, a commit, a checkout, a merge, a rebase or a tag moves their refs right away, and the graph also picks up a commit made from a terminal. It used to take leaving the Graph tab and coming back - the refresh button itself redrew the branch labels where they were, because a layout was reused whenever the commits had not changed.",
 					"fr": "Le graph des commits et l'historique suivent désormais le dépôt tout seuls : un push, un pull, un fetch, un commit, un checkout, un merge, un rebase ou un tag y déplace les refs immédiatement, et le graph reprend aussi un commit fait depuis un terminal. Il fallait auparavant quitter l'onglet Graph et y revenir : le bouton rafraîchir lui-même redessinait les étiquettes à leur ancienne place, car la mise en page était réutilisée dès que les commits n'avaient pas changé."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "A Claude Code conversation is recognized as resumable again. A recent CLI change opens a session's transcript with a few header lines before the one naming its working directory, which made every conversation look unconfirmed and relaunch instead of resume.",
+					"fr": "Une conversation Claude Code est de nouveau reconnue comme reprenable. Un changement récent du CLI ouvre le transcript d'une session par quelques lignes d'en-tête avant celle qui nomme son répertoire de travail, ce qui faisait paraître toute conversation non confirmée et la relançait au lieu de la reprendre."
+				}
 			}
 		]
 	},

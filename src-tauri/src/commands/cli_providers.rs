@@ -326,10 +326,14 @@ pub fn discover_session_id(id: &str, cwd: &str, started_after: i64) -> Option<St
 /// `~/.claude/projects/<slug>/<session id>.jsonl`, where the slug is the cwd
 /// with its separators and dots replaced by dashes.
 ///
-/// The slug is not reconstructed here: every line of the transcript carries the
-/// real `cwd`, so matching on that field survives any change to how the
-/// directory name is derived. The id is the file stem, which the entries repeat
-/// as `sessionId`; the stem is preferred because it is what `--resume` takes.
+/// The slug is not reconstructed here: the first line of the transcript that
+/// carries a `cwd` repeats the real one, so matching on that field survives any
+/// change to how the directory name is derived. That line is not always the
+/// first one on disk: a transcript now opens with a few header entries
+/// (`last-prompt`, `mode`, `permission-mode`) that carry no `cwd` at all, so a
+/// short prefix of the file is scanned rather than only its very first line.
+/// The id is the file stem, which the entries repeat as `sessionId`; the stem
+/// is preferred because it is what `--resume` takes.
 ///
 /// A session Claude Code has not written yet simply is not found, which costs a
 /// resume rather than opening the wrong conversation.
@@ -337,15 +341,20 @@ fn claude_session(cwd: &str, started_after: i64) -> Option<String> {
     claude_session_in(&home()?.join(".claude").join("projects"), cwd, started_after)
 }
 
+// Past the handful of header lines a transcript now opens with, without
+// reading a whole multi-megabyte file just to learn which cwd it belongs to.
+const CLAUDE_HEADER_SCAN_LINES: usize = 20;
+
 fn claude_session_in(root: &Path, cwd: &str, started_after: i64) -> Option<String> {
     let mut best: Option<(i64, String)> = None;
     for path in newest_files(root, "jsonl", 60) {
         let Ok(file) = fs::File::open(&path) else { continue };
-        let mut first = String::new();
-        if std::io::BufRead::read_line(&mut std::io::BufReader::new(file), &mut first).is_err() {
-            continue;
-        }
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(&first) else { continue };
+        let entry = std::io::BufRead::lines(std::io::BufReader::new(file))
+            .take(CLAUDE_HEADER_SCAN_LINES)
+            .filter_map(|line| line.ok())
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(&line).ok())
+            .find(|entry| entry.get("cwd").is_some());
+        let Some(entry) = entry else { continue };
         if entry.get("cwd").and_then(|c| c.as_str()) != Some(cwd) {
             continue;
         }
@@ -1237,6 +1246,34 @@ mod tests {
 
         assert_eq!(found.as_deref(), Some(sid));
         assert_eq!(claude_session_in(&dir, "/repo/other", 0), None);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A transcript now opens with a few header lines carrying no `cwd` at
+    /// all - `last-prompt`, `mode`, `permission-mode` - before the line that
+    /// does. Assuming the first line always has it left every current
+    /// session unmatched.
+    #[test]
+    fn a_claude_session_is_found_past_its_leading_header_lines() {
+        let dir = std::env::temp_dir().join(format!("cairn-claude-hdr-{}", std::process::id()));
+        let project = dir.join("-repo-wt");
+        fs::create_dir_all(&project).unwrap();
+        let sid = "b007ec14-2905-4418-bdd9-6f5be80f8f7e";
+        fs::write(
+            project.join(format!("{sid}.jsonl")),
+            [
+                r#"{"type":"last-prompt","sessionId":"b007ec14-2905-4418-bdd9-6f5be80f8f7e"}"#,
+                r#"{"type":"mode","mode":"normal"}"#,
+                r#"{"type":"permission-mode","permissionMode":"auto"}"#,
+                r#"{"cwd":"/repo/wt","timestamp":"2026-09-01T10:00:00.000Z"}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let found = claude_session_in(&dir, "/repo/wt", 0);
+
+        assert_eq!(found.as_deref(), Some(sid));
         let _ = fs::remove_dir_all(&dir);
     }
 
