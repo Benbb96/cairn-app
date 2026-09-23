@@ -314,7 +314,7 @@
         project.path,
         branchNameFeature.providerId,
         FEATURE_SCHEMAS.branchName,
-        { model: branchNameFeature.model || undefined, signal: namingAbort.signal },
+        { model: branchNameFeature.model || undefined, signal: namingAbort.signal, lean: branchNameFeature.lean },
       );
       const slug = titleSlug(answer.slug ?? '');
       if (!slug) {
