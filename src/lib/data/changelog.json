@@ -125,6 +125,13 @@
 					"en": "The New instance dialog asks what it is about to do first, and what the work is called last. The three modes then follow what is already known: creating a branch keeps the ticket before it, since the branch name is generated from it, while starting from a branch or a worktree that already exists fills the ticket in from that branch - the key it carries becomes the id, the rest of the name the title, both there to be overwritten. Opening the dialog from a ref in the graph skips straight to the branch, the mode being settled by the ref itself.",
 					"fr": "La boîte Nouvelle instance demande d'abord ce qu'elle va faire, et en dernier comment le travail s'appelle. Les trois modes suivent ensuite ce qui est déjà connu : créer une branche garde le ticket avant elle, puisque le nom de branche en est généré, tandis que partir d'une branche ou d'un worktree existant remplit le ticket depuis cette branche - la clé qu'elle porte devient l'identifiant, le reste du nom devient le titre, l'un et l'autre restant modifiables. Ouvrir la boîte depuis une ref du graph saute directement à la branche, le mode étant déjà tranché par la ref."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The programs Cairn starts - the terminals, the coding CLIs running in them, the language servers, the formatters, git, and the terminal emulator or file manager opened from a path - no longer inherit the environment of the AppImage itself. In an AppImage build that environment points at the temporary mount the app runs from, which broke python3 in a Cairn terminal (\"Failed to import encodings module\"), took down anything else written in Python such as a Python language server, and could link a system binary against a bundled library instead of its own.",
+					"fr": "Les programmes lancés par Cairn - les terminaux, les CLI de code qui y tournent, les serveurs de langage, les formateurs, git, et l'émulateur de terminal ou le gestionnaire de fichiers ouvert depuis un chemin - n'héritent plus de l'environnement de l'AppImage elle-même. Dans un build AppImage, cet environnement pointe vers le montage temporaire depuis lequel l'application tourne, ce qui cassait python3 dans un terminal de Cairn (\"Failed to import encodings module\"), emportait tout ce qui est écrit en Python comme un serveur de langage Python, et pouvait lier un binaire du système à une bibliothèque embarquée au lieu de la sienne."
+				}
 			}
 		]
 	},
