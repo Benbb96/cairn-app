@@ -22,6 +22,20 @@
 				}
 			},
 			{
+				"kind": "changed",
+				"text": {
+					"en": "Go to definition is now Cmd+click on macOS and Ctrl+click elsewhere, the binding every other editor uses, instead of Shift+click; find references moves to Cmd+Shift+click (Ctrl+Shift+click). Both are listed in the command palette, where they act on the symbol under the cursor. A binding you had already customised is kept.",
+					"fr": "Aller à la définition se fait désormais par Cmd+clic sur macOS et Ctrl+clic ailleurs, le raccourci de tous les autres éditeurs, au lieu de Maj+clic ; la recherche des références passe à Cmd+Maj+clic (Ctrl+Maj+clic). Les deux figurent dans la palette de commandes, où elles agissent sur le symbole sous le curseur. Un raccourci déjà personnalisé est conservé."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "File paths printed in a terminal or an agent conversation are links: Cmd+click (Ctrl+click) on src/lib/a.ts:61 opens the file in the editor at that line. Only paths that exist on disk are underlined, a path wrapped over two rows is still recognised, and web addresses open in the browser the same way. It works with every agent CLI, since only the printed text is read.",
+					"fr": "Les chemins de fichiers affichés dans un terminal ou une conversation d'agent sont des liens : Cmd+clic (Ctrl+clic) sur src/lib/a.ts:61 ouvre le fichier dans l'éditeur à cette ligne. Seuls les chemins qui existent sur le disque sont soulignés, un chemin coupé sur deux lignes reste reconnu, et les adresses web s'ouvrent dans le navigateur de la même façon. Cela fonctionne avec toutes les CLI d'agent, puisque seul le texte affiché est lu."
+				}
+			},
+			{
 				"kind": "added",
 				"text": {
 					"en": "A New session button next to Restart when a CLI has exited, for a conversation whose session the CLI no longer knows: it leaves the missing session behind and starts a new one in the same worktree, keeping the title. Restarting alone would ask the CLI to resume the same missing session again.",

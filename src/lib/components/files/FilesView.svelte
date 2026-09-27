@@ -1611,6 +1611,8 @@ import { get } from 'svelte/store';
       case 'fontSizeDown':      bumpFontSize(-1); break;
       case 'fontSizeReset':     resetFontSize(); break;
       case 'commandPalette':    commandPaletteVisible.set(true); break;
+      case 'goToDefinition':    await runGoToDefinition(); break;
+      case 'findReferences':    await runFindReferences(); break;
       case 'renameSymbol':      startRenameSymbol(); break;
       case 'formatDocument':    await runFormatDocument(); break;
       case 'reloadEditor':      await reloadOpenFiles(); break;

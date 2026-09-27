@@ -366,12 +366,13 @@ export const en = {
 			},
 			goToDefinition: {
 				label: "Go to definition",
-				description: "Click a symbol in the editor to jump to its definition",
+				description:
+					"Jump to the definition of the clicked symbol, or of the one under the cursor",
 			},
 			findReferences: {
 				label: "Find references",
 				description:
-					"Click a symbol in the editor to list its definitions, implementations and usages",
+					"List the definitions, implementations and usages of the clicked symbol, or of the one under the cursor",
 			},
 			renameSymbol: {
 				label: "Rename symbol",
@@ -966,6 +967,7 @@ export const en = {
 		closeSplit: "Close the split view",
 		emptyHint: "No terminal open for this instance. Open one to run commands.",
 		noInstance: "No active instance",
+		openLinkHint: (key: string) => `${key}+click to open`,
 	},
 
 	integrations: {

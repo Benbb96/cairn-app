@@ -377,12 +377,12 @@ export const fr = {
 			goToDefinition: {
 				label: "Aller à la définition",
 				description:
-					"Cliquer sur un symbole dans l'éditeur pour sauter à sa définition",
+					"Sauter à la définition du symbole cliqué, ou de celui sous le curseur",
 			},
 			findReferences: {
 				label: "Rechercher les références",
 				description:
-					"Cliquer sur un symbole dans l'éditeur pour lister ses définitions, implémentations et usages",
+					"Lister les définitions, implémentations et usages du symbole cliqué, ou de celui sous le curseur",
 			},
 			renameSymbol: {
 				label: "Renommer le symbole",
@@ -989,6 +989,7 @@ export const fr = {
 		emptyHint:
 			"Aucun terminal ouvert pour cette instance. Ouvrez-en un pour lancer des commandes dans son worktree.",
 		noInstance: "Aucune instance active",
+		openLinkHint: (key: string) => `${key}+clic pour ouvrir`,
 	},
 
 	integrations: {
