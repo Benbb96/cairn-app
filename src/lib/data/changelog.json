@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Accented characters typed in a terminal no longer resend what was already on the line. The hidden field the webview types into keeps every character until the line is submitted, and xterm's dead-key fallback sent that whole field instead of the one accented character - so \"peut-être\" arrived as \"peut-être\" preceded by \"peut-ê\", and the further into the line the accent sat, the more it repeated. The field is now emptied between keystrokes.",
+					"fr": "Les caractères accentués saisis dans un terminal ne renvoient plus ce qui était déjà sur la ligne. Le champ caché dans lequel la webview écrit conserve chaque caractère jusqu'à la validation de la ligne, et le repli d'xterm pour les touches mortes envoyait ce champ entier au lieu du seul caractère accentué - si bien que « peut-être » arrivait précédé de « peut-ê », et plus l'accent était loin dans la ligne, plus il se répétait. Le champ est désormais vidé entre les frappes."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "On macOS, stopping an agent CLI now also stops the processes it started. The check that guards the group signal read a Linux-only file, so on macOS it always withheld the signal and only the CLI itself was killed.",
 					"fr": "Sur macOS, arrêter une CLI d'agent arrête désormais aussi les processus qu'elle a lancés. La vérification qui protège le signal de groupe lisait un fichier propre à Linux : sur macOS, elle retenait toujours le signal et seule la CLI elle-même était tuée."
 				}
