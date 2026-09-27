@@ -132,6 +132,13 @@
 					"en": "The programs Cairn starts - the terminals, the coding CLIs running in them, the language servers, the formatters, git, and the terminal emulator or file manager opened from a path - no longer inherit the environment of the AppImage itself. In an AppImage build that environment points at the temporary mount the app runs from, which broke python3 in a Cairn terminal (\"Failed to import encodings module\"), took down anything else written in Python such as a Python language server, and could link a system binary against a bundled library instead of its own.",
 					"fr": "Les programmes lancés par Cairn - les terminaux, les CLI de code qui y tournent, les serveurs de langage, les formateurs, git, et l'émulateur de terminal ou le gestionnaire de fichiers ouvert depuis un chemin - n'héritent plus de l'environnement de l'AppImage elle-même. Dans un build AppImage, cet environnement pointe vers le montage temporaire depuis lequel l'application tourne, ce qui cassait python3 dans un terminal de Cairn (\"Failed to import encodings module\"), emportait tout ce qui est écrit en Python comme un serveur de langage Python, et pouvait lier un binaire du système à une bibliothèque embarquée au lieu de la sienne."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Accented characters typed in a terminal no longer resend what was already on the line. The hidden field the webview types into keeps every character until the line is submitted, and xterm's dead-key fallback sent that whole field instead of the one accented character - so \"peut-être\" arrived as \"peut-être\" preceded by \"peut-ê\", and the further into the line the accent sat, the more it repeated. The field is now emptied between keystrokes.",
+					"fr": "Les caractères accentués saisis dans un terminal ne renvoient plus ce qui était déjà sur la ligne. Le champ caché dans lequel la webview écrit conserve chaque caractère jusqu'à la validation de la ligne, et le repli d'xterm pour les touches mortes envoyait ce champ entier au lieu du seul caractère accentué - si bien que « peut-être » arrivait précédé de « peut-ê », et plus l'accent était loin dans la ligne, plus il se répétait. Le champ est désormais vidé entre les frappes."
+				}
 			}
 		]
 	},
