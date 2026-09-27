@@ -500,11 +500,8 @@ describe("CreateInstance", () => {
 			]);
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			ticketSearch.update((st) => ({ ...st, results: [ticket()] }));
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -535,11 +532,8 @@ describe("CreateInstance", () => {
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			ticketSearch.update((st) => ({ ...st, results: [ticket()] }));
 			runOneShotShaped.mockResolvedValue({ slug: "Parse-Nested-Blocks" });
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -548,6 +542,24 @@ describe("CreateInstance", () => {
 			expect((field("branch-name") as HTMLInputElement).value).toBe(
 				"fix/CAIRN-42/parse-nested-blocks",
 			);
+		});
+
+		/**
+		 * The prompt carries the whole ticket, so the CLI has no reason to load
+		 * the MCP servers, the tools and the project's CLAUDE.md first.
+		 */
+		it("runs the assist lean, since it reads nothing off the disk", async () => {
+			settingsState.set({
+				branchTemplate: "feat/{{slug}}",
+				aiEnabled: true,
+			});
+			runOneShotShaped.mockResolvedValue({ slug: "parse-nested-blocks" });
+			mount();
+			await settle();
+			await toBranchStep();
+			await userEvent.click(aiNameButton() as HTMLElement);
+			await settle();
+			expect(runOneShotShaped.mock.calls[0][4]).toMatchObject({ lean: true });
 		});
 
 		it("says so and keeps the derived name when the model fails", async () => {

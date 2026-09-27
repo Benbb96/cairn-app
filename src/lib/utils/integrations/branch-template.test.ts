@@ -3,9 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
-	DEFAULT_BRANCH_TEMPLATE,
 	branchKeySegment,
 	branchKindSegment,
+	DEFAULT_BRANCH_TEMPLATE,
 	renderBranchTemplate,
 	ticketFromBranch,
 	titleSlug,
