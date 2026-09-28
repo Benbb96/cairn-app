@@ -9,10 +9,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
-use crate::commands::cli_providers::{kill_process_group, resolve_binary};
+use crate::commands::cli_providers::resolve_binary;
+#[cfg(not(target_os = "linux"))]
+use crate::commands::cli_providers::kill_process_group;
 use crate::storage::{instance_terminal_state_file, project_terminal_state_file, write_json_atomic};
 
 /// One live PTY: the handle to write to it, resize it, and kill its child.
@@ -20,7 +23,12 @@ struct TerminalSession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     child:  Box<dyn Child + Send + Sync>,
+    serial: u64,
 }
+
+/// Tells apart two sessions spawned under the same frontend id, which a restart
+/// or a reload does by respawning the saved tabs.
+static NEXT_SERIAL: AtomicU64 = AtomicU64::new(0);
 
 /// Every live terminal of the app, keyed by the frontend's session id.
 #[derive(Default)]
@@ -204,11 +212,16 @@ pub async fn terminal_create(
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
 
-    app.state::<TerminalState>()
+    let serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
+    let replaced = app
+        .state::<TerminalState>()
         .sessions
         .lock()
         .map_err(|e| e.to_string())?
-        .insert(id.clone(), TerminalSession { writer, master: pair.master, child });
+        .insert(id.clone(), TerminalSession { writer, master: pair.master, child, serial });
+    if let Some(mut old) = replaced {
+        kill_session(&mut old);
+    }
 
     let reader_id = id.clone();
     let app_out = app.clone();
@@ -284,25 +297,22 @@ pub async fn terminal_create(
             .sessions
             .lock()
             .ok()
-            .and_then(|mut sessions| sessions.remove(&reader_id));
-        // The PTY closing does not mean the group is empty: a shell that exits
+            .and_then(|mut sessions| {
+                if sessions.get(&reader_id).is_some_and(|s| s.serial == serial) {
+                    sessions.remove(&reader_id)
+                } else {
+                    None
+                }
+            });
+        // The PTY closing does not mean the session is empty: a shell that exits
         // while a dev server it started still holds the terminal leaves that
-        // server reparented to init, its port and its memory held for good. But
-        // the PTY child may already have exited by the time this runs, which
-        // frees its pid - and pgid - for the kernel to reuse; a blind group
-        // signal would then land on a stranger, up to the user's own graphical
-        // session. `kill_process_group` withholds the signal unless the pid still
-        // leads its own group, so a recycled pid is a no-op here.
+        // server running, its port and its memory held for good.
         // Gone from the map already means `terminal_close` took it: the app asked
         // for this death and has torn the terminal down on its side, so the
         // event would arrive after the replacement had started and mark a CLI
         // that is running. Only a process that ended on its own is announced.
         let Some(mut sess) = ended else { return };
-        if let Some(pid) = sess.child.process_id() {
-            kill_process_group(pid);
-        }
-        let _ = sess.child.kill();
-        let exit_code = wait_bounded(&mut sess.child);
+        let exit_code = kill_session(&mut sess);
         let _ = app_out.emit("terminal-exit", TerminalExit { id: reader_id, exit_code });
     });
 
@@ -409,22 +419,64 @@ fn wait_bounded(child: &mut Box<dyn portable_pty::Child + Send + Sync>) -> Optio
     }
 }
 
-/// Terminates a session's shell and everything it spawned.
+/// The session id of `pid`, or `None` when no such process exists.
+#[cfg(target_os = "linux")]
+fn session_of(pid: u32) -> Option<u32> {
+    let pid = libc::pid_t::try_from(pid).ok()?;
+    let sid = unsafe { libc::getsid(pid) };
+    u32::try_from(sid).ok()
+}
+
+/// Sends `signal` to every process of the PTY session led by `sid`.
+///
+/// An interactive shell gives each job its own process group, so a group signal
+/// on the shell misses them: they outlive it, reparented to `systemd --user`,
+/// the subreaper of the graphical session. Every one of them stays in the PTY
+/// session, which is what this walks. The leader is our unreaped child, and the
+/// kernel never hands out a pid still in use as a session id, so the sweep
+/// cannot reach a stranger while the leader or any member is alive.
+#[cfg(target_os = "linux")]
+fn signal_pty_session(sid: u32, signal: &str) {
+    if sid <= 1 {
+        return;
+    }
+    let members: Vec<String> = fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok())
+        .filter(|&pid| session_of(pid) == Some(sid))
+        .map(|pid| pid.to_string())
+        .collect();
+    if !members.is_empty() {
+        let _ = std::process::Command::new("kill").arg(signal).args(&members).output();
+    }
+}
+
+/// Terminates a session's shell and everything it spawned, and reaps the shell.
 ///
 /// Killing the PTY leader alone leaves its descendants behind - a dev server, a
-/// watcher, a build - reparented to init and holding their ports and their
-/// memory for the rest of the machine's uptime. The shell is the leader of the
-/// PTY's process group, so signalling the negative pid reaches the whole group.
-/// The pid can already have been reused when this runs, so the group signal goes
-/// through `kill_process_group`, which withholds it unless the pid still leads
-/// its own group; the leader is then killed and reaped by its exact pid, without
-/// which it stays a zombie.
-fn kill_session(sess: &mut TerminalSession) {
-    if let Some(pid) = sess.child.process_id() {
+/// watcher, a build - holding their ports and their memory for the rest of the
+/// machine's uptime. On Linux every process of the PTY session is asked to stop,
+/// then whatever survived the leader's grace period is killed outright. Elsewhere
+/// the leader's process group is signalled through `kill_process_group`, which
+/// withholds it unless the pid still leads its own group.
+fn kill_session(sess: &mut TerminalSession) -> Option<i32> {
+    let pid = sess.child.process_id();
+    #[cfg(target_os = "linux")]
+    if let Some(pid) = pid {
+        signal_pty_session(pid, "-TERM");
+    }
+    #[cfg(not(target_os = "linux"))]
+    if let Some(pid) = pid {
         kill_process_group(pid);
     }
     let _ = sess.child.kill();
-    let _ = wait_bounded(&mut sess.child);
+    #[cfg(target_os = "linux")]
+    if let Some(pid) = pid {
+        signal_pty_session(pid, "-KILL");
+    }
+    wait_bounded(&mut sess.child)
 }
 
 /// Kills one session's shell; the reader thread ends on its own once the PTY
@@ -590,6 +642,30 @@ mod tests {
         let cmd = build_command(Some("echo hi"), Some(&["sh".into()])).unwrap();
         assert!(!rendered(&cmd).contains("echo hi"));
         assert!(build_command(None, Some(&[])).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_session_sweep_reaches_jobs_outside_the_leader_group() {
+        let mut leader = std::process::Command::new("setsid")
+            .args(["sh", "-c", "set -m; sleep 30 & sleep 30"])
+            .spawn()
+            .unwrap();
+        let sid = leader.id();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let members = || {
+            fs::read_dir("/proc")
+                .unwrap()
+                .flatten()
+                .filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok())
+                .filter(|&pid| pid != sid && session_of(pid) == Some(sid))
+                .count()
+        };
+        assert!(members() >= 2);
+        signal_pty_session(sid, "-KILL");
+        let _ = leader.wait();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert_eq!(members(), 0);
     }
 
     #[test]

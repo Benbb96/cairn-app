@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Closing or reloading Cairn with a terminal open no longer leaves its processes behind or kills the wrong one on Linux. An interactive shell gives every job its own process group, so closing a terminal reached the shell but not what it had started: those jobs outlived it, adopted by the process that runs the graphical session. Every process of the terminal is now stopped with it. A reload also no longer kills the terminal that was just respawned under the same tab.",
+					"fr": "Fermer ou recharger Cairn avec un terminal ouvert ne laisse plus ses processus derrière lui et ne tue plus le mauvais sous Linux. Un shell interactif place chaque tâche dans son propre groupe de processus : fermer un terminal atteignait le shell mais pas ce qu'il avait lancé, et ces tâches lui survivaient, adoptées par le processus qui porte la session graphique. Chaque processus du terminal est désormais arrêté avec lui. Un rechargement ne tue plus non plus le terminal qui venait d'être relancé dans le même onglet."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Accented characters typed in a terminal no longer resend what was already on the line. The hidden field the webview types into keeps every character until the line is submitted, and xterm's dead-key fallback sent that whole field instead of the one accented character - so \"peut-être\" arrived as \"peut-être\" preceded by \"peut-ê\", and the further into the line the accent sat, the more it repeated. The field is now emptied between keystrokes.",
 					"fr": "Les caractères accentués saisis dans un terminal ne renvoient plus ce qui était déjà sur la ligne. Le champ caché dans lequel la webview écrit conserve chaque caractère jusqu'à la validation de la ligne, et le repli d'xterm pour les touches mortes envoyait ce champ entier au lieu du seul caractère accentué - si bien que « peut-être » arrivait précédé de « peut-ê », et plus l'accent était loin dans la ligne, plus il se répétait. Le champ est désormais vidé entre les frappes."
 				}
