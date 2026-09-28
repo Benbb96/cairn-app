@@ -449,6 +449,22 @@ states are always shown with an animation:
 No new `loading` / `treeLoading` style i18n keys - if a key only exists to say "loading", it does
 not belong in `en.ts` / `fr.ts`.
 
+### AI generate buttons
+
+Every button that fills a field from a model looks and behaves the same, the reference being the
+commit message in the git panel (`GitView.svelte`, also `MergeRequestForm.svelte`):
+
+- **Label**: `t('git.generateWithAi')` ("Generate" / "Générer") with the `sparkles` icon, and
+  `t('git.aiCancel')` while it runs, the same button cancelling. No feature-specific wording
+  ("Name with AI", "Write with AI"...).
+- **Button**: the global `ai-btn` class from `app.css`, plus `is-busy` while running. No local
+  button style and no `Spinner` - `is-busy` is the pending animation.
+- **Field**: the target field is wrapped in `<div class="ai-field" class:is-generating={...}>`,
+  disabled with `aria-busy` during the run, with an `ai-sweep` layer (and `ai-ghost` lines while it
+  is still empty). The start and the result are announced through an `sr-only` live region.
+- **Master switch**: the whole surface sits behind `$settings.aiEnabled`; a feature with no
+  provider leaves the button disabled with a `title` saying why.
+
 ### Text selection
 
 Interface chrome is not selectable. `body` sets `user-select: none` globally in `app.css`; only
