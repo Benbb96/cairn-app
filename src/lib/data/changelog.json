@@ -167,6 +167,13 @@
 					"en": "The Create a token button of an integration opens the token page of your own instance instead of the vendor's cloud. Jira is unchanged, as its tokens are always issued on id.atlassian.com.",
 					"fr": "Le bouton Créer un jeton d'une intégration ouvre la page des jetons de votre instance plutôt que celle du cloud de l'éditeur. Jira est inchangé, ses jetons étant toujours émis sur id.atlassian.com."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Clicking in a scrolled file while the editor did not have focus selected text instead of placing the cursor, because the editor jumped back to the top before reading the click.",
+					"fr": "Un clic dans un fichier défilé alors que l'éditeur n'avait pas le focus sélectionnait du texte au lieu de placer le curseur, car l'éditeur revenait en haut avant de lire le clic."
+				}
 			}
 		]
 	},

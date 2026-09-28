@@ -163,6 +163,25 @@ export const unselectableGutters: Extension = EditorView.theme({
 	".cm-gutters": { userSelect: "none", "-webkit-user-select": "none" },
 });
 
+/**
+ * A click on an unfocused editor makes CodeMirror read the clicked position,
+ * then focus the content. WebKit ignores `preventScroll` there and scrolls back
+ * to the native caret (line 1 on a freshly opened file), so the same pointer
+ * coordinates now land elsewhere and the click becomes a selection. Focusing
+ * first and restoring the scroll keeps both reads on the same layout.
+ */
+export const focusKeepingScroll: Extension = EditorView.domEventHandlers({
+	mousedown(event, view) {
+		if (view.hasFocus || event.button !== 0 || event.defaultPrevented)
+			return false;
+		const { scrollTop, scrollLeft } = view.scrollDOM;
+		view.contentDOM.focus({ preventScroll: true });
+		view.scrollDOM.scrollTop = scrollTop;
+		view.scrollDOM.scrollLeft = scrollLeft;
+		return false;
+	},
+});
+
 /** Duplicates the line but leaves the caret where it was, unlike `copyLineDown`. */
 function duplicateLineStay(view: EditorView): boolean {
 	const { state } = view;

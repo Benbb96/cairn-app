@@ -61,7 +61,7 @@
     buildDiffGutter, setDiffBase, clearDiffBase, revertChunkAtLine, diffLineKinds,
     type GutterChunk,
   } from '$lib/utils/editor/editor-diff-gutter';
-  import { buildFontSizeTheme, buildMinimap, buildShortcutKeymap, searchMatchLines, SHORTCUT_COMMANDS, unselectableGutters } from '$lib/utils/editor/editor-extensions';
+  import { buildFontSizeTheme, buildMinimap, buildShortcutKeymap, focusKeepingScroll, searchMatchLines, SHORTCUT_COMMANDS, unselectableGutters } from '$lib/utils/editor/editor-extensions';
   import { buildConflictResolver, conflictLines } from '$lib/utils/editor/editor-conflict';
   import { buildStickyScroll, stickyScrollTheme } from '$lib/utils/editor/editor-sticky-scroll';
   import { buildMarkdownWysiwyg, setMarkdownDocPath } from '$lib/utils/editor/editor-markdown-wysiwyg';
@@ -433,6 +433,7 @@
       buildDiffGutter({ onChunkClick: (chunk) => onChunkClick?.(chunk) }),
       buildDiffGutterTheme(),
       buildConflictResolver(),
+      focusKeepingScroll,
       minimapCompartment.of(buildMinimap(minimapEnabled, minimapMarkers)),
       stickyScrollCompartment.of(buildStickyScroll(stickyScrollEnabled)),
       stickyScrollTheme,
