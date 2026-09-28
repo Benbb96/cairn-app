@@ -1,38 +1,101 @@
 [
 	{
 		"version": "1.0.3",
-		"date": "",
+		"date": "2026-09-28",
 		"summary": {
-			"en": "An AppImage build behaves like an installed one: what Cairn starts runs in your environment, and the cairn command outlives the window that installed it.",
-			"fr": "Un build AppImage se comporte comme une installation classique : ce que Cairn lance tourne dans votre environnement, et la commande cairn survit à la fenêtre qui l'a installée."
+			"en": "Git gets branch and remote management, every stash in the graph, rebase onto a commit and tags pushed as soon as they are created. File paths in terminals become links, and a round of fixes steadies terminals, agent conversations and the AppImage build.",
+			"fr": "Git s'enrichit de la gestion des branches et des distants, de chaque stash dans le graphe, du rebase sur un commit et de tags poussés dès leur création. Les chemins de fichiers dans les terminaux deviennent des liens, et une série de correctifs fiabilise les terminaux, les conversations d'agent et le build AppImage."
 		},
 		"changes": [
 			{
-				"kind": "fixed",
+				"kind": "added",
 				"text": {
-					"en": "An agent conversation is no longer named with a stray `11;rgb:...` in front of the prompt. Claude Code asks the terminal for its background colour when it starts, and the terminal's answer was read as if the user had typed it.",
-					"fr": "Une conversation d'agent n'est plus nommée avec un `11;rgb:...` parasite devant le prompt. Claude Code demande au terminal sa couleur de fond au démarrage, et la réponse du terminal était lue comme si l'utilisateur l'avait tapée."
+					"en": "A Branches tab in the git view lists the local and remote branches and manages the remotes of the repository. A branch can be renamed, or deleted locally and on each remote as separate choices; the branch checked out here and those of other instances are protected. Right-clicking a branch chip in the graph opens the same actions.",
+					"fr": "Un onglet Branches dans la vue git liste les branches locales et distantes, et gère les distants du dépôt. Une branche peut être renommée, ou supprimée localement et sur chaque distant par des choix séparés ; la branche extraite ici et celles des autres instances sont protégées. Un clic droit sur l'étiquette d'une branche dans le graphe ouvre les mêmes actions."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The commit graph shows every stash as a hollow node above the commit it was taken on, and clicking one opens it in the Stash tab. Only the latest stash used to appear, mislabelled as a remote branch.",
+					"fr": "Le graphe de commits affiche chaque stash sous forme d'un nœud creux au-dessus du commit sur lequel il a été créé, et un clic l'ouvre dans l'onglet Stash. Seul le dernier stash apparaissait auparavant, étiqueté à tort comme une branche distante."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The commit menu can rebase the current branch onto the picked commit, after a confirmation. A conflict opens the merge and rebase resolver, as a cherry-pick does.",
+					"fr": "Le menu d'un commit permet de rebaser la branche courante sur ce commit, après confirmation. Un conflit ouvre le résolveur de fusion et de rebase, comme pour un cherry-pick."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Tags can be pushed to origin as soon as they are created, from the tag list or the commit menu. The list shows which tags origin already holds, so a pushed tag no longer offers Push and a local-only tag is no longer offered for deletion on the remote.",
+					"fr": "Un tag peut être poussé vers origin dès sa création, depuis la liste des tags ou le menu d'un commit. La liste indique les tags qu'origin possède déjà : un tag poussé ne propose plus Pousser, et un tag uniquement local ne propose plus d'être supprimé sur le distant."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Hovering a commit in the graph shows its full message, the author, the committer, the exact date and the full hash, so a long subject can be read without copying it. The short ages next to commits and tags are now translated.",
+					"fr": "Survoler un commit dans le graphe affiche son message complet, l'auteur, le committeur, la date exacte et le hash complet : un titre long se lit sans avoir à le copier. Les âges courts à côté des commits et des tags sont désormais traduits."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The two columns of the git view can be resized by dragging the divider between them, or with the arrow keys; a double-click puts it back in the middle. The width is remembered.",
+					"fr": "Les deux colonnes de la vue git se redimensionnent en faisant glisser le séparateur, ou avec les flèches du clavier ; un double-clic le remet au milieu. La largeur est mémorisée."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The minimap marks the hits of the current search, from the workspace search as well as the in-file search, so a long file shows where the other matches are. The marks go away when the search is closed.",
+					"fr": "La minimap marque les occurrences de la recherche en cours, qu'elle vienne du projet ou du fichier : un fichier long montre où se trouvent les autres résultats. Les marques disparaissent à la fermeture de la recherche."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "File paths printed in a terminal or an agent conversation are links: Cmd+click (Ctrl+click) on src/lib/a.ts:61 opens the file at that line. Only paths that exist are underlined, web addresses open in the browser, and it works with every agent CLI.",
+					"fr": "Les chemins de fichiers affichés dans un terminal ou une conversation d'agent sont des liens : Cmd+clic (Ctrl+clic) sur src/lib/a.ts:61 ouvre le fichier à cette ligne. Seuls les chemins qui existent sont soulignés, les adresses web s'ouvrent dans le navigateur, et cela fonctionne avec toutes les CLI d'agent."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A New session button next to Restart when a CLI has exited on a session it no longer knows: it starts a fresh session in the same worktree and keeps the title, where Restart would try to resume the missing one again.",
+					"fr": "Un bouton Nouvelle session à côté de Relancer lorsqu'une CLI s'arrête sur une session qu'elle ne connaît plus : il démarre une nouvelle session dans le même worktree en conservant le titre, là où Relancer tenterait à nouveau de reprendre la session manquante."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "Go to definition is now Cmd+click (Ctrl+click), as in other editors, instead of Shift+click; find references moves to Cmd+Shift+click (Ctrl+Shift+click). Both are also in the command palette, and a binding you had customised is kept.",
+					"fr": "Aller à la définition passe à Cmd+clic (Ctrl+clic), comme dans les autres éditeurs, au lieu de Maj+clic ; la recherche des références passe à Cmd+Maj+clic (Ctrl+Maj+clic). Les deux figurent aussi dans la palette de commandes, et un raccourci personnalisé est conservé."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "In the commit graph, a local branch and its remote sitting on the same commit share a single chip instead of one each, leaving more room for the message. Two chips now mean the branch and its remote have drifted apart.",
+					"fr": "Dans le graphe de commits, une branche locale et son distant posés sur le même commit partagent une seule étiquette au lieu d'une chacun, ce qui laisse plus de place au message. Deux étiquettes signifient désormais que la branche et son distant ont divergé."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Closing or reloading Cairn with a terminal open no longer leaves its processes behind or kills the wrong one on Linux. An interactive shell gives every job its own process group, so closing a terminal reached the shell but not what it had started: those jobs outlived it, adopted by the process that runs the graphical session. Every process of the terminal is now stopped with it. A reload also no longer kills the terminal that was just respawned under the same tab.",
-					"fr": "Fermer ou recharger Cairn avec un terminal ouvert ne laisse plus ses processus derrière lui et ne tue plus le mauvais sous Linux. Un shell interactif place chaque tâche dans son propre groupe de processus : fermer un terminal atteignait le shell mais pas ce qu'il avait lancé, et ces tâches lui survivaient, adoptées par le processus qui porte la session graphique. Chaque processus du terminal est désormais arrêté avec lui. Un rechargement ne tue plus non plus le terminal qui venait d'être relancé dans le même onglet."
+					"en": "The commit graph and the history update on their own after a push, pull, fetch, commit, checkout, merge, rebase or tag, including a commit made from a terminal. They used to keep stale branch labels until you left the Graph tab and came back.",
+					"fr": "Le graphe de commits et l'historique se mettent à jour d'eux-mêmes après un push, un pull, un fetch, un commit, un checkout, un merge, un rebase ou un tag, y compris un commit fait depuis un terminal. Ils gardaient des étiquettes périmées tant qu'on ne quittait pas l'onglet Graph pour y revenir."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Accented characters typed in a terminal no longer resend what was already on the line. The hidden field the webview types into keeps every character until the line is submitted, and xterm's dead-key fallback sent that whole field instead of the one accented character - so \"peut-être\" arrived as \"peut-être\" preceded by \"peut-ê\", and the further into the line the accent sat, the more it repeated. The field is now emptied between keystrokes.",
-					"fr": "Les caractères accentués saisis dans un terminal ne renvoient plus ce qui était déjà sur la ligne. Le champ caché dans lequel la webview écrit conserve chaque caractère jusqu'à la validation de la ligne, et le repli d'xterm pour les touches mortes envoyait ce champ entier au lieu du seul caractère accentué - si bien que « peut-être » arrivait précédé de « peut-ê », et plus l'accent était loin dans la ligne, plus il se répétait. Le champ est désormais vidé entre les frappes."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "On macOS, stopping an agent CLI now also stops the processes it started. The check that guards the group signal read a Linux-only file, so on macOS it always withheld the signal and only the CLI itself was killed.",
-					"fr": "Sur macOS, arrêter une CLI d'agent arrête désormais aussi les processus qu'elle a lancés. La vérification qui protège le signal de groupe lisait un fichier propre à Linux : sur macOS, elle retenait toujours le signal et seule la CLI elle-même était tuée."
+					"en": "Scrolling to the bottom of the commit graph no longer spins forever. A page that fails to load shows the git error with a Retry button, and a first page too short to fill the panel keeps loading until it does.",
+					"fr": "Défiler jusqu'en bas du graphe de commits ne tourne plus indéfiniment. Une page qui échoue affiche l'erreur git avec un bouton Réessayer, et une première page trop courte pour remplir le panneau continue de charger jusqu'à le remplir."
 				}
 			},
 			{
@@ -43,150 +106,66 @@
 				}
 			},
 			{
-				"kind": "added",
+				"kind": "fixed",
 				"text": {
-					"en": "The Branches tab also manages the remotes of the repository: list them with their URLs, add one, rename it, point it at another URL, or remove it.",
-					"fr": "L'onglet Branches gère aussi les distants du dépôt : les lister avec leurs URL, en ajouter un, le renommer, le faire pointer vers une autre URL ou le retirer."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "A Branches tab in the git view lists the local and remote branches. A branch can be renamed, and deleted locally and on each remote as separate choices, with an explicit option to delete one whose commits are not merged. The branch checked out here and the branches of other instances are protected. Right-clicking a branch chip in the commit graph opens the same actions, while a plain click still switches instance.",
-					"fr": "Un onglet Branches dans la vue git liste les branches locales et distantes. Une branche peut être renommée, et supprimée localement et sur chaque distant par des choix séparés, avec une option explicite pour supprimer une branche dont les commits ne sont pas fusionnés. La branche extraite ici et celles des autres instances sont protégées. Un clic droit sur l'étiquette d'une branche dans le graphe de commits ouvre les mêmes actions, un clic simple changeant toujours d'instance."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The commit graph shows every stash, drawn as a hollow node just above the commit it was taken on, with its own stash chip; clicking one opens it in the Stash tab. Only the latest stash used to appear, as an ordinary commit mislabelled as a remote branch, with the internal index commit git keeps beside it.",
-					"fr": "Le graphe de commits affiche chaque stash, sous forme d'un nœud creux juste au-dessus du commit sur lequel il a été créé, avec sa propre étiquette ; un clic l'ouvre dans l'onglet Stash. Auparavant, seul le dernier stash apparaissait, comme un commit ordinaire étiqueté à tort comme une branche distante, accompagné du commit d'index interne que git conserve à côté."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "Tags can be pushed to origin as soon as they are created, from the tag list as well as from the commit menu. The tag list now asks origin which tags it already holds: a pushed tag carries a cloud mark and no longer offers Push, a tag origin does not have is marked local, and deleting a local-only tag no longer offers to delete it on the remote. When origin cannot be reached, nothing is marked rather than every tag reading as local.",
-					"fr": "Un tag peut être poussé vers origin dès sa création, depuis la liste des tags comme depuis le menu d'un commit. La liste demande désormais à origin quels tags il possède déjà : un tag poussé porte un nuage et ne propose plus Pousser, un tag absent d'origin est marqué local, et supprimer un tag uniquement local ne propose plus de le supprimer sur le distant. Si origin est injoignable, aucun tag n'est marqué plutôt que de les afficher tous comme locaux."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The commit menu of the graph and the history can rebase the current branch onto the picked commit, after a confirmation. A conflict stops the rebase and opens the merge and rebase resolver, as a cherry-pick does.",
-					"fr": "Le menu d'un commit, dans le graphe comme dans l'historique, permet de rebaser la branche courante sur ce commit, après confirmation. Un conflit arrête le rebase et ouvre le résolveur de fusion et de rebase, comme pour un cherry-pick."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "Hovering a commit in the graph shows a card with its full subject and message body, the author and their email, the committer when it is someone else, the exact local date and time, and the full hash - a long subject no longer has to be selected or copied to be read. The short ages next to commits and tags are now translated, so a French interface reads 2j rather than 2d.",
-					"fr": "Survoler un commit dans le graphe affiche une carte avec son titre complet et le corps de son message, l'auteur et son e-mail, le committeur lorsqu'il s'agit d'une autre personne, la date et l'heure locales exactes, et le hash complet : un titre long n'a plus besoin d'être sélectionné ou copié pour être lu. Les âges courts à côté des commits et des tags sont désormais traduits : l'interface française affiche 2j au lieu de 2d."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The two columns of the git view can be resized by dragging the divider between them, or with the arrow keys once it has focus; a double-click puts it back in the middle. The width is remembered.",
-					"fr": "Les deux colonnes de la vue git se redimensionnent en faisant glisser le séparateur, ou avec les flèches du clavier une fois qu'il a le focus ; un double-clic le remet au milieu. La largeur est mémorisée."
+					"en": "Opening a search result now reliably lands on the matching line. The jump could do nothing after the tabs were restored, or fall back to line 1 when a large file was slow to load.",
+					"fr": "Ouvrir un résultat de recherche arrive désormais de façon fiable sur la ligne correspondante. Le saut pouvait ne rien faire après une restauration des onglets, ou retomber sur la ligne 1 quand un gros fichier tardait à se charger."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Scrolling to the bottom of the commit graph no longer spins forever. A page that failed to load was silently dropped and a page made only of commits already listed kept asking for itself again; either way the spinner never stopped. So did a first page too short to fill the panel, since nothing could be scrolled to ask for the next one: the graph now keeps loading until the panel is full. A failed page now shows the git error and a Retry button, and a page with nothing new ends the scroll.",
-					"fr": "Défiler jusqu'en bas du graphe de commits ne tourne plus indéfiniment. Une page dont le chargement échouait était ignorée en silence, et une page composée uniquement de commits déjà affichés se redemandait sans fin ; dans les deux cas, l'indicateur ne s'arrêtait jamais. Il en allait de même lorsque la première page était trop courte pour remplir le panneau, faute de défilement pour demander la suivante : le graphe continue désormais de charger jusqu'à remplir le panneau. Une page en échec affiche désormais l'erreur git et un bouton Réessayer, et une page sans rien de nouveau met fin au défilement."
+					"en": "Closing or reloading Cairn with a terminal open now stops everything that terminal started. On Linux, jobs launched from a shell used to outlive it, and a reload could kill the terminal just respawned in the same tab. On macOS, stopping an agent CLI now also stops the processes it started.",
+					"fr": "Fermer ou recharger Cairn avec un terminal ouvert arrête désormais tout ce que ce terminal a lancé. Sous Linux, les tâches lancées depuis un shell lui survivaient, et un rechargement pouvait tuer le terminal tout juste relancé dans le même onglet. Sur macOS, arrêter une CLI d'agent arrête aussi les processus qu'elle a lancés."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Opening a search result now reliably lands on the matching line. Two faults compounded: the editor's handle was dropped whenever the open tabs were restored, after which every jump silently did nothing, and the jump that did run was fired on a fixed 60 ms timer, so it clamped to line 1 whenever the document was not yet in the editor - a large file, a cold read, a slow disk. The handle now survives a restore, and the jump waits until the editor is actually showing the target file.",
-					"fr": "Ouvrir un résultat de recherche arrive désormais de façon fiable sur la ligne correspondante. Deux défauts se cumulaient : la référence de l'éditeur était perdue à chaque restauration des onglets, après quoi tout saut ne faisait plus rien en silence, et le saut qui s'exécutait était déclenché par un minuteur fixe de 60 ms, si bien qu'il retombait sur la ligne 1 lorsque le document n'était pas encore dans l'éditeur - fichier volumineux, lecture à froid, disque lent. La référence survit maintenant à une restauration, et le saut attend que l'éditeur affiche réellement le fichier visé."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The minimap paints the hits of the current search, so the overview of a long file shows where the other matches are, not just the git changes and conflicts it already carried. The workspace search in the sidebar and the in-file search both feed it; the marks disappear when the search is closed.",
-					"fr": "La minimap colore les occurrences de la recherche en cours : la vue d'ensemble d'un fichier long montre où se trouvent les autres résultats, et plus seulement les modifications git et les conflits qu'elle portait déjà. La recherche dans le projet depuis la barre latérale comme la recherche dans le fichier l'alimentent ; les marques disparaissent à la fermeture de la recherche."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "Go to definition is now Cmd+click on macOS and Ctrl+click elsewhere, the binding every other editor uses, instead of Shift+click; find references moves to Cmd+Shift+click (Ctrl+Shift+click). Both are listed in the command palette, where they act on the symbol under the cursor. A binding you had already customised is kept.",
-					"fr": "Aller à la définition se fait désormais par Cmd+clic sur macOS et Ctrl+clic ailleurs, le raccourci de tous les autres éditeurs, au lieu de Maj+clic ; la recherche des références passe à Cmd+Maj+clic (Ctrl+Maj+clic). Les deux figurent dans la palette de commandes, où elles agissent sur le symbole sous le curseur. Un raccourci déjà personnalisé est conservé."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "File paths printed in a terminal or an agent conversation are links: Cmd+click (Ctrl+click) on src/lib/a.ts:61 opens the file in the editor at that line. Only paths that exist on disk are underlined, a path wrapped over two rows is still recognised, and web addresses open in the browser the same way. It works with every agent CLI, since only the printed text is read.",
-					"fr": "Les chemins de fichiers affichés dans un terminal ou une conversation d'agent sont des liens : Cmd+clic (Ctrl+clic) sur src/lib/a.ts:61 ouvre le fichier dans l'éditeur à cette ligne. Seuls les chemins qui existent sur le disque sont soulignés, un chemin coupé sur deux lignes reste reconnu, et les adresses web s'ouvrent dans le navigateur de la même façon. Cela fonctionne avec toutes les CLI d'agent, puisque seul le texte affiché est lu."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "A New session button next to Restart when a CLI has exited, for a conversation whose session the CLI no longer knows: it leaves the missing session behind and starts a new one in the same worktree, keeping the title. Restarting alone would ask the CLI to resume the same missing session again.",
-					"fr": "Un bouton Nouvelle session à côté de Relancer lorsqu'un CLI s'est arrêté, pour une conversation dont le CLI ne connaît plus la session : il abandonne la session manquante et en démarre une nouvelle dans le même worktree, en conservant le titre. Relancer seul redemanderait au CLI de reprendre la même session manquante."
+					"en": "Accented characters typed in a terminal no longer resend the text already on the line before them.",
+					"fr": "Les caractères accentués saisis dans un terminal ne renvoient plus le texte déjà présent sur la ligne avant eux."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The cairn command installed from an AppImage build keeps working once the app is closed. It was written as a link into the temporary mount the AppImage runs from - a directory that disappears when the app exits and is named differently at every launch - so the command died with the window that installed it, and reinstalling it only helped until the next close. It now leads to the image file itself, and tells you to reinstall it if you move the image.",
-					"fr": "La commande cairn installée depuis un build AppImage continue de fonctionner après la fermeture de l'application. Elle était écrite comme un lien vers le montage temporaire depuis lequel l'AppImage tourne - un répertoire qui disparaît à la fermeture et porte un nom différent à chaque lancement - si bien que la commande mourait avec la fenêtre qui l'avait installée, et la réinstaller ne servait que jusqu'à la fermeture suivante. Elle mène désormais au fichier image lui-même, et vous invite à la réinstaller si vous déplacez l'image."
+					"en": "Agent conversation titles no longer pick up stray fragments like 11;rgb:... or <35;18;14M: the terminal's replies to the CLI and mouse clicks were read as if they had been typed into the first prompt.",
+					"fr": "Les titres des conversations d'agent ne récupèrent plus de fragments parasites comme 11;rgb:... ou <35;18;14M : les réponses du terminal à la CLI et les clics de souris étaient lus comme s'ils avaient été tapés dans la première invite."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The Create a token button of an integration now opens the token page of the instance whose URL you entered, instead of always going to the vendor's cloud. Jira is unchanged, as its tokens are always issued on id.atlassian.com.",
-					"fr": "Le bouton Créer un jeton d'une intégration ouvre désormais la page des jetons de l'instance dont vous avez saisi l'URL, au lieu de toujours renvoyer vers le cloud de l'éditeur. Jira est inchangé, ses jetons étant toujours émis sur id.atlassian.com."
+					"en": "Renaming an Agent conversation now renames it in place: the field takes the keyboard, and typing or clicking in it no longer opens the conversation and relaunches its CLI.",
+					"fr": "Renommer une conversation d'agent la renomme désormais sur place : le champ prend le clavier, et y taper ou y cliquer n'ouvre plus la conversation en relançant sa CLI."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Renaming an Agent conversation renames it in place and the rename field takes the keyboard: a click or a key press in the entry's action menu or rename field no longer bubbles to the row and opens the conversation - which used to relaunch the CLI, close the rename field before anything could be typed into it, and open the session as soon as the rename was confirmed. The field also used to render without focus when the conversation being renamed was the one on screen, leaving the keystrokes going to the terminal.",
-					"fr": "Renommer une conversation d'agent la renomme sur place et le champ de renommage prend le clavier : un clic ou une touche dans le menu d'actions ou le champ de renommage de l'entree ne remonte plus jusqu'a la ligne pour ouvrir la conversation - ce qui relancait le CLI, fermait le champ avant de pouvoir y saisir quoi que ce soit, et ouvrait la session des que le renommage etait confirme. Le champ s'affichait aussi sans focus quand la conversation renommee etait celle affichee, laissant les frappes partir vers le terminal."
+					"en": "An archived Agent conversation now offers Unarchive, which puts it back in the active list and keeps it open. The button used to read Archive and closed the conversation, which looked like the session had been deleted.",
+					"fr": "Une conversation d'agent archivée propose désormais Désarchiver, qui la remet dans la liste active en la laissant ouverte. Le bouton affichait Archiver et fermait la conversation, ce qui donnait l'impression que la session avait été supprimée."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The archive button of an archived Agent conversation now reads Unarchive and puts the conversation back in the active list, keeping it open. It used to always read Archive and toggling it closed the conversation, dropped it from the view and relaunched nothing - which read as the session being deleted.",
-					"fr": "Le bouton d'archivage d'une conversation d'agent archivee se lit desormais Desarchiver et remet la conversation dans la liste active, en la laissant ouverte. Il se lisait toujours Archiver, et le basculer fermait la conversation, la quittait et ne relancait rien - ce qui donnait l'impression que la session etait supprimee."
+					"en": "Claude Code conversations resume again instead of starting over. A recent CLI update changed the start of its session files, and every conversation looked unconfirmed.",
+					"fr": "Les conversations Claude Code reprennent à nouveau au lieu de repartir de zéro. Une mise à jour récente de la CLI a modifié le début de ses fichiers de session, et chaque conversation semblait non confirmée."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Agent conversation titles no longer contain garbled fragments like <35;18;14M: mouse clicks in the terminal were read as keystrokes while the CLI tracked the mouse, and each click left a piece of escape sequence in the title built from the first prompt.",
-					"fr": "Les titres des conversations d'agent ne contiennent plus de fragments illisibles comme <35;18;14M : les clics de souris dans le terminal étaient lus comme des frappes pendant que le CLI suivait la souris, et chaque clic laissait un morceau de séquence d'échappement dans le titre construit à partir de la première invite."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "In the commit graph, a local branch and the remote refs sitting on the same commit now share a single chip - develop followed by the name of the remote - instead of one chip each. The width they took goes back to the commit message, and two chips again mean the branch and its remote have drifted apart.",
-					"fr": "Dans le graph des commits, une branche locale et les refs distantes posées sur le même commit ne forment plus qu'une seule étiquette - develop suivi du nom du remote - au lieu d'une étiquette chacune. La largeur qu'elles occupaient revient au message de commit, et deux étiquettes signifient à nouveau que la branche et son remote ont divergé."
+					"en": "The cairn command installed from an AppImage keeps working after the app is closed. It pointed into the temporary mount the AppImage runs from, which vanishes on exit; it now points to the image file itself, and asks to be reinstalled if the image moves.",
+					"fr": "La commande cairn installée depuis une AppImage continue de fonctionner après la fermeture de l'application. Elle pointait vers le montage temporaire depuis lequel l'AppImage tourne, qui disparaît à la fermeture ; elle pointe désormais vers le fichier image lui-même, et demande à être réinstallée si l'image est déplacée."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The commit graph and the history now follow the repository on their own: a push, a pull, a fetch, a commit, a checkout, a merge, a rebase or a tag moves their refs right away, and the graph also picks up a commit made from a terminal. It used to take leaving the Graph tab and coming back - the refresh button itself redrew the branch labels where they were, because a layout was reused whenever the commits had not changed.",
-					"fr": "Le graph des commits et l'historique suivent désormais le dépôt tout seuls : un push, un pull, un fetch, un commit, un checkout, un merge, un rebase ou un tag y déplace les refs immédiatement, et le graph reprend aussi un commit fait depuis un terminal. Il fallait auparavant quitter l'onglet Graph et y revenir : le bouton rafraîchir lui-même redessinait les étiquettes à leur ancienne place, car la mise en page était réutilisée dès que les commits n'avaient pas changé."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "A Claude Code conversation is recognized as resumable again. A recent CLI change opens a session's transcript with a few header lines before the one naming its working directory, which made every conversation look unconfirmed and relaunch instead of resume.",
-					"fr": "Une conversation Claude Code est de nouveau reconnue comme reprenable. Un changement récent du CLI ouvre le transcript d'une session par quelques lignes d'en-tête avant celle qui nomme son répertoire de travail, ce qui faisait paraître toute conversation non confirmée et la relançait au lieu de la reprendre."
+					"en": "The Create a token button of an integration opens the token page of your own instance instead of the vendor's cloud. Jira is unchanged, as its tokens are always issued on id.atlassian.com.",
+					"fr": "Le bouton Créer un jeton d'une intégration ouvre la page des jetons de votre instance plutôt que celle du cloud de l'éditeur. Jira est inchangé, ses jetons étant toujours émis sur id.atlassian.com."
 				}
 			}
 		]
