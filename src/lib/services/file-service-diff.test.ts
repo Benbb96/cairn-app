@@ -266,13 +266,25 @@ describe("langFromPath", () => {
 		expect(langFromPath("index.html")).not.toBe("text");
 	});
 
+	it("answers a language-data mode for types without a dedicated one", () => {
+		expect(langFromPath("main.go")).toBe("Go");
+		expect(langFromPath("style.scss")).toBe("SCSS");
+		expect(langFromPath("deploy.sh")).toBe("Shell");
+		expect(langFromPath("/srv/Dockerfile")).toBe("Dockerfile");
+	});
+
+	it("recognises a Makefile by its name", () => {
+		expect(langFromPath("Makefile")).toBe("makefile");
+		expect(langFromPath("/a/GNUmakefile")).toBe("makefile");
+		expect(langFromPath("rules.mk")).toBe("makefile");
+	});
+
 	it("ignores the case of the extension", () => {
 		expect(langFromPath("A.TS")).toBe(langFromPath("a.ts"));
 	});
 
 	it("falls back to text for an unknown or missing extension", () => {
 		expect(langFromPath("file.unknownext")).toBe("text");
-		expect(langFromPath("Makefile")).toBe("text");
 		expect(langFromPath("")).toBe("text");
 	});
 
@@ -298,6 +310,19 @@ describe("isBinaryPath", () => {
 	it("leaves source files alone", () => {
 		expect(isBinaryPath("a.ts")).toBe(false);
 		expect(isBinaryPath("README.md")).toBe(false);
+	});
+
+	it("answers a language-data mode for types without a dedicated one", () => {
+		expect(langFromPath("main.go")).toBe("Go");
+		expect(langFromPath("style.scss")).toBe("SCSS");
+		expect(langFromPath("deploy.sh")).toBe("Shell");
+		expect(langFromPath("/srv/Dockerfile")).toBe("Dockerfile");
+	});
+
+	it("recognises a Makefile by its name", () => {
+		expect(langFromPath("Makefile")).toBe("makefile");
+		expect(langFromPath("/a/GNUmakefile")).toBe("makefile");
+		expect(langFromPath("rules.mk")).toBe("makefile");
 	});
 
 	it("ignores the case of the extension", () => {

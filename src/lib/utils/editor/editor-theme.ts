@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { javascript } from "@codemirror/lang-javascript";
-import { HighlightStyle } from "@codemirror/language";
+import { HighlightStyle, LanguageDescription } from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
@@ -16,7 +16,10 @@ import type { DiffKind } from "./editor-diff-gutter";
 // The editor's look: which CodeMirror language extension a file gets, the
 // syntax highlight style built from the user's tokens, and one palette per theme.
 
-/** The languages the editor can highlight; anything else is `text`. */
+/**
+ * The languages with a dedicated mode, or the name of a `@codemirror/language-data`
+ * description (`langFromPath` answers one for every other known file type).
+ */
 export type EditorLanguage =
 	| "ts"
 	| "tsx"
@@ -37,7 +40,9 @@ export type EditorLanguage =
 	| "java"
 	| "cpp"
 	| "php"
-	| "text";
+	| "makefile"
+	| "text"
+	| (string & {});
 
 /** The app themes an editor palette exists for. */
 export type ThemeName =
@@ -103,11 +108,22 @@ export async function resolveLanguageExtension(
 			return (await import("@codemirror/lang-cpp")).cpp();
 		case "php":
 			return (await import("@codemirror/lang-php")).php();
+		case "makefile":
+			return (await import("./editor-makefile")).makefile;
 		case "mermaid":
 		case "text":
 			return [];
-		default:
+		case "ts":
+		case "js":
 			return javascript({ typescript: lang === "ts", jsx: false });
+		default: {
+			const { languages } = await import("@codemirror/language-data");
+			const description = LanguageDescription.matchLanguageName(
+				languages,
+				lang,
+			);
+			return description ? await description.load() : [];
+		}
 	}
 }
 
@@ -193,6 +209,9 @@ function buildHighlightUncached(
 		{ tag: t.modifier, ...style("kw") },
 		{ tag: t.self, ...style("kw") },
 		{ tag: t.special(t.variableName), ...style("fn") },
+		{ tag: t.macroName, ...style("fn") },
+		{ tag: t.labelName, ...style("meta") },
+		{ tag: t.escape, ...style("re") },
 		{ tag: t.inserted, ...style("str") },
 		{ tag: t.deleted, ...style("err") },
 		{ tag: t.changed, ...style("num") },

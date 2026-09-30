@@ -22,6 +22,20 @@
 				}
 			},
 			{
+				"kind": "added",
+				"text": {
+					"en": "The editor and the diffs highlight many more languages: Go, Shell, TOML, SCSS, Less, Ruby, Kotlin, C#, Swift, Lua, Dart, Makefile, Dockerfile, Protobuf and more.",
+					"fr": "L'éditeur et les diffs colorent bien plus de langages : Go, Shell, TOML, SCSS, Less, Ruby, Kotlin, C#, Swift, Lua, Dart, Makefile, Dockerfile, Protobuf et d'autres."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Rust macros such as println! and loop labels are now coloured.",
+					"fr": "Les macros Rust comme println! et les labels de boucle sont désormais colorés."
+				}
+			},
+			{
 				"kind": "changed",
 				"text": {
 					"en": "The Git profile picked in the commit form is remembered per project instead of being shared.",

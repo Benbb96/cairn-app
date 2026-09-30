@@ -118,6 +118,11 @@ describe("resolveLanguageExtension", () => {
 		).resolves.toBeTruthy();
 	});
 
+	it("loads a language-data mode by its name", async () => {
+		const ext = await resolveLanguageExtension("Go");
+		expect(ext).toHaveProperty("language");
+	});
+
 	it("resolves markdown, which the WYSIWYG rendering needs", async () => {
 		await expect(
 			resolveLanguageExtension("markdown" as never),

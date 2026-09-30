@@ -58,6 +58,9 @@ const HIGHLIGHTER_TAGS: { tag: Tag | Tag[]; class: SyntaxTokenKey }[] = [
 	{ tag: t.modifier, class: "kw" },
 	{ tag: t.self, class: "kw" },
 	{ tag: t.special(t.variableName), class: "fn" },
+	{ tag: t.macroName, class: "fn" },
+	{ tag: t.labelName, class: "meta" },
+	{ tag: t.escape, class: "re" },
 	{ tag: t.invalid, class: "err" },
 ];
 

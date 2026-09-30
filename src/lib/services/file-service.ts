@@ -4,6 +4,8 @@
 // Filesystem access for the editor: tree, read and write, search, and the git
 // views built by shelling out to `git` rather than by a dedicated Rust command.
 
+import { LanguageDescription } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dedupeInflight } from "./inflight";
 
@@ -620,12 +622,13 @@ export function hunkToPatch(relPath: string, hunk: DiffHunk): string {
 	return `--- a/${relPath}\n+++ b/${relPath}\n@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@\n${body}`;
 }
 
-// Extension to syntax mode. The values are the modes the editor knows, so
-// several extensions collapse onto one and anything exotic falls back to text.
+// Extension to the editor's dedicated modes. Any other file type is looked up in
+// `@codemirror/language-data`, and only what it does not know falls back to text.
 const EXT_LANG: Record<string, string> = {
 	ts: "ts",
 	tsx: "tsx",
 	mts: "ts",
+	cts: "ts",
 	js: "js",
 	jsx: "jsx",
 	mjs: "js",
@@ -635,8 +638,6 @@ const EXT_LANG: Record<string, string> = {
 	html: "html",
 	htm: "html",
 	css: "css",
-	scss: "css",
-	less: "css",
 	md: "markdown",
 	mdx: "markdown",
 	mmd: "mermaid",
@@ -651,18 +652,16 @@ const EXT_LANG: Record<string, string> = {
 	cpp: "cpp",
 	cc: "cpp",
 	cxx: "cpp",
+	c: "cpp",
 	h: "cpp",
 	hpp: "cpp",
 	php: "php",
 	sql: "sql",
 	json: "json",
 	jsonc: "json",
-	toml: "text",
-	ini: "text",
 	env: "text",
-	sh: "text",
-	bash: "text",
-	zsh: "text",
+	mk: "makefile",
+	mak: "makefile",
 	txt: "text",
 };
 
@@ -721,7 +720,11 @@ const BINARY_EXT = new Set([
 /** Syntax mode for a path, "text" when the extension is unknown. */
 export function langFromPath(filePath: string): string {
 	const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? "text";
+	const known = EXT_LANG[ext];
+	if (known) return known;
+	const name = filePath.split(/[\\/]/).pop() ?? "";
+	if (/^(?:gnu)?makefile$/i.test(name)) return "makefile";
+	return LanguageDescription.matchFilename(languages, name)?.name ?? "text";
 }
 
 /**
