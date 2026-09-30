@@ -15,7 +15,7 @@
 //! the recursive watcher used to generate came from watching directories nobody
 //! had opened, which no longer happens.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::Mutex;
@@ -170,9 +170,16 @@ pub struct WatchReport {
 /// directory the user has not opened is deliberately left uncovered, exactly like
 /// every other collapsed one.
 /// One worktree's watcher plus the set of directories it currently covers.
+///
+/// Every window asks for its own set - the main editor for what its tree shows,
+/// a detached editor window for the parents of its tabs - and the watcher covers
+/// the union. Replacing the set wholesale on each call let one window unwatch
+/// what another still displayed.
 struct Watched {
     watcher: RecommendedWatcher,
-    dirs: std::collections::HashSet<PathBuf>,
+    gitdir: PathBuf,
+    dirs: HashSet<PathBuf>,
+    requested: HashMap<String, HashSet<PathBuf>>,
     failed: Vec<PathBuf>,
 }
 
@@ -201,6 +208,28 @@ impl Watched {
             let _ = self.watcher.unwatch(dir);
         }
     }
+
+    /// Moves the watches to the union of every window's set, on top of the root
+    /// and the git metadata which are always covered.
+    fn sync(&mut self, root: &Path) {
+        self.failed.clear();
+        let wanted = wanted_dirs(root, &self.gitdir, &self.requested);
+        for stale in self.dirs.difference(&wanted).cloned().collect::<Vec<_>>() {
+            self.remove(&stale);
+        }
+        for dir in &wanted {
+            if !self.dirs.contains(dir) && dir.is_dir() {
+                self.add(dir, RecursiveMode::NonRecursive);
+            }
+        }
+    }
+}
+
+fn wanted_dirs(root: &Path, gitdir: &Path, requested: &HashMap<String, HashSet<PathBuf>>) -> HashSet<PathBuf> {
+    let mut wanted: HashSet<PathBuf> = requested.values().flatten().cloned().collect();
+    wanted.insert(root.to_path_buf());
+    wanted.extend(git_watch_dirs(gitdir));
+    wanted
 }
 
 #[tauri::command]
@@ -218,6 +247,7 @@ impl Watched {
 /// difference, so the frontend can send the whole set on every change.
 pub async fn watch_dirs(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     path: String,
     dirs: Vec<String>,
 ) -> Result<WatchReport, String> {
@@ -243,30 +273,20 @@ pub async fn watch_dirs(
             }
         })
         .map_err(|e| e.to_string())?;
-        watchers.insert(key_path.clone(), Watched { watcher, dirs: Default::default(), failed: Vec::new() });
+        watchers.insert(
+            key_path.clone(),
+            Watched { watcher, gitdir, dirs: HashSet::new(), requested: HashMap::new(), failed: Vec::new() },
+        );
     }
 
     let w = watchers.get_mut(&key_path).ok_or("watcher vanished")?;
-    w.failed.clear();
-
-    let mut wanted: std::collections::HashSet<PathBuf> = dirs
+    let owned: HashSet<PathBuf> = dirs
         .iter()
         .map(|d| resolve(&PathBuf::from(shellexpand::tilde(d).into_owned())))
         .filter(|d| d.starts_with(&root))
         .collect();
-    wanted.insert(root.clone());
-    for dir in git_watch_dirs(&gitdir) {
-        wanted.insert(dir);
-    }
-
-    for stale in w.dirs.difference(&wanted).cloned().collect::<Vec<_>>() {
-        w.remove(&stale);
-    }
-    for dir in &wanted {
-        if !w.dirs.contains(dir) && dir.is_dir() {
-            w.add(dir, RecursiveMode::NonRecursive);
-        }
-    }
+    w.requested.insert(window.label().to_string(), owned);
+    w.sync(&root);
 
     Ok(WatchReport {
         watched: w.dirs.len(),
@@ -274,18 +294,61 @@ pub async fn watch_dirs(
     })
 }
 
+/// Drops the calling window's interest in a worktree; the watcher itself goes
+/// once no window wants it any more.
 #[tauri::command]
-pub async fn unwatch_worktree(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    let key = resolve(&PathBuf::from(shellexpand::tilde(&path).into_owned()))
-        .to_string_lossy()
-        .into_owned();
-    app.state::<WatchState>().watchers.lock().map_err(|e| e.to_string())?.remove(&key);
+pub async fn unwatch_worktree(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<(), String> {
+    let root = resolve(&PathBuf::from(shellexpand::tilde(&path).into_owned()));
+    let state = app.state::<WatchState>();
+    let mut watchers = state.watchers.lock().map_err(|e| e.to_string())?;
+    release(&mut watchers, &root, window.label());
     Ok(())
+}
+
+fn release(watchers: &mut HashMap<String, Watched>, root: &Path, owner: &str) {
+    let key = root.to_string_lossy().into_owned();
+    let Some(w) = watchers.get_mut(&key) else { return };
+    w.requested.remove(owner);
+    if w.requested.is_empty() {
+        watchers.remove(&key);
+    } else {
+        w.sync(root);
+    }
+}
+
+/// A window that closed lets go of every worktree it watched.
+pub fn release_window(app: &tauri::AppHandle, owner: &str) {
+    let state = app.state::<WatchState>();
+    let Ok(mut watchers) = state.watchers.lock() else { return };
+    let roots: Vec<PathBuf> = watchers
+        .iter()
+        .filter(|(_, w)| w.requested.contains_key(owner))
+        .map(|(key, _)| PathBuf::from(key))
+        .collect();
+    for root in roots {
+        release(&mut watchers, &root, owner);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wanted_dirs_is_the_union_of_every_window() {
+        let requested = HashMap::from([
+            ("main".to_string(), HashSet::from([PathBuf::from("/w/src")])),
+            ("editor-1".to_string(), HashSet::from([PathBuf::from("/w/docs"), PathBuf::from("/w/src")])),
+        ]);
+        let wanted = wanted_dirs(Path::new("/w"), Path::new("/nowhere/.git"), &requested);
+        assert!(wanted.contains(Path::new("/w/src")));
+        assert!(wanted.contains(Path::new("/w/docs")));
+        assert!(wanted.contains(Path::new("/w")));
+    }
 
     fn temp_root(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("cairn-fswatch-{}-{}", std::process::id(), label));

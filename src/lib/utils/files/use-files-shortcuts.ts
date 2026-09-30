@@ -60,6 +60,7 @@ interface FilesShortcutsContext {
 	switchTab: (paneIdx: 0 | 1, idx: number) => void;
 	tabHistoryBack: () => void;
 	tabHistoryForward: () => void;
+	detachActiveTab: (paneIdx: 0 | 1) => void;
 	renameSymbol: () => void;
 	formatDocument: () => void;
 	pasteClipboard: (
@@ -147,6 +148,10 @@ export function makeFilesKeyHandler(ctx: FilesShortcutsContext) {
 		if (matchesShortcut(e, sc.tabHistoryForward)) {
 			e.preventDefault();
 			ctx.tabHistoryForward();
+		}
+		if (matchesShortcut(e, sc.detachTab)) {
+			e.preventDefault();
+			ctx.detachActiveTab(activePane);
 		}
 
 		// Jump to tab by number - ⌘1-⌘9, hardcoded (not user-configurable)

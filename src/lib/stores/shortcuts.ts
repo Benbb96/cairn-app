@@ -279,6 +279,12 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
 			ctrl: false,
 		},
 	},
+	{
+		id: "detachTab",
+		...d("detachTab"),
+		group: "tabs",
+		default: { key: "o", mod: true, shift: false, alt: true, ctrl: false },
+	},
 	// -- View group -------------------------------------------------------------
 	{
 		id: "toggleSidebar",

@@ -38,6 +38,15 @@
   import LoadingScreen from '$lib/components/layout/LoadingScreen.svelte';
   import { isUpdateModalOpen, startUpdateChecks } from '$lib/stores/update';
   import type { HomeSection } from '$lib/components/home/HomeSidebar.svelte';
+  import { t } from '$lib/i18n';
+  import { activateInstance } from '$lib/stores/project';
+  import { isBaseInstance } from '$lib/stores/instance';
+  import { showTool } from '$lib/stores/ui.js';
+  import { queueIncomingTabs } from '$lib/stores/editor-windows';
+  import { closeAllEditorWindows, onTabsReceived, otherWindowsDirty, saveAllOtherWindows } from '$lib/services/editor-window-service';
+  import { claimDroppedTabs } from '$lib/utils/files/tab-window-drag';
+  import { onSettingsChangedElsewhere } from '$lib/services/settings-service';
+  import type { TabPayload } from '$lib/utils/files/tab-transfer';
 
   type Screen = 'home' | 'workspace';
 
@@ -85,6 +94,9 @@
   let removeFieldUndoHandler: (() => void) | null = null;
   let stopUpdateChecks: (() => void) | null = null;
   let unlistenCliOpen: (() => void) | null = null;
+  let unlistenTabsReceived: (() => void) | null = null;
+  let unlistenTabDrop: (() => void) | null = null;
+  let unlistenSettings: (() => void) | null = null;
   let unlistenClose: (() => void) | null = null;
   let closeHookDisposed = false;
   onDestroy(() => {
@@ -96,6 +108,9 @@
     removeFieldUndoHandler?.();
     stopUpdateChecks?.();
     unlistenCliOpen?.();
+    unlistenTabsReceived?.();
+    unlistenTabDrop?.();
+    unlistenSettings?.();
     disposeLanguageServers();
     disposeTests();
     disposeIntegrations();
@@ -232,7 +247,13 @@
     removeCopyHandler = installCopySelectionHandler();
     removeFieldUndoHandler = installFieldUndoHandler();
     import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
-      getCurrentWindow().onCloseRequested(async () => { await flushBeforeClose(); }),
+      getCurrentWindow().onCloseRequested(async (event) => {
+        if (await confirmUnsavedBeforeClose()) {
+          await flushBeforeClose();
+          return;
+        }
+        event.preventDefault();
+      }),
     ).then((off) => {
       if (closeHookDisposed) off();
       else unlistenClose = off;
@@ -296,6 +317,17 @@
     }
 
     mounted = true;
+
+    try {
+      unlistenTabsReceived = await onTabsReceived(({ tabs }) => { void receiveTabs(tabs); });
+      unlistenSettings = await onSettingsChangedElsewhere(() => { void settings.load(); });
+      const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+      unlistenTabDrop = await getCurrentWebview().onDragDropEvent(async ({ payload }) => {
+        if (payload.type !== 'drop') return;
+        const { tabs } = await claimDroppedTabs(payload.paths);
+        await receiveTabs(tabs);
+      });
+    } catch {}
 
     try {
       const { listen } = await import('@tauri-apps/api/event');
@@ -434,6 +466,80 @@
       return;
     }
     await handleCliPaths(request.paths);
+  }
+
+  /**
+   * Tabs sent back from a detached window land in the editor of their own
+   * project and instance, switched to first, with their unsaved edits. A file
+   * from outside any project goes to whatever the editor shows.
+   */
+  async function receiveTabs(tabs: TabPayload[]) {
+    if (tabs.length === 0) return;
+    const scope = tabs.find((tab) => tab.scope)?.scope ?? null;
+    if (scope) {
+      if ($activeProjectId !== scope.projectId) {
+        openProject(scope.projectId);
+        await switchTo(scope.projectId);
+      }
+      if ($activeInstance?.id !== scope.instanceId) {
+        await activateInstance(scope.projectId, isBaseInstance(scope.instanceId) ? null : scope.instanceId);
+      }
+    } else if (!$activeProjectId) {
+      const fallback = lastProjectId ?? $openProjects[0]?.id ?? $projects[0]?.id;
+      if (fallback) await handleOpenProject(fallback);
+    }
+    screen = 'workspace';
+    showTool(null);
+    activeStep.set('files');
+    await loadWorkspace();
+    await tick();
+    queueIncomingTabs(tabs);
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    void getCurrentWindow().setFocus().catch(() => {});
+  }
+
+  /** How long closing waits on the detached windows to report their files saved. */
+  const SAVE_ALL_TIMEOUT_MS = 3000;
+
+  /** Saves every buffer of every window; false when one of them could not be written. */
+  async function saveEverywhere(): Promise<boolean> {
+    const isMainSaved = await (workspaceView?.saveAllDirty() ?? Promise.resolve(true));
+    await saveAllOtherWindows().catch(() => {});
+    const deadline = Date.now() + SAVE_ALL_TIMEOUT_MS;
+    let remaining = await otherWindowsDirty().catch(() => []);
+    while (remaining.length > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 150));
+      remaining = await otherWindowsDirty().catch(() => []);
+    }
+    return isMainSaved && remaining.length === 0;
+  }
+
+  /**
+   * Closing the app closes the detached windows with it, so their unsaved
+   * buffers are asked about here, once, together with the editor's own. True
+   * when the close can go ahead.
+   */
+  async function confirmUnsavedBeforeClose(): Promise<boolean> {
+    const others = await otherWindowsDirty().catch(() => []);
+    const dirty = [...new Set([...(workspaceView?.dirtyFiles() ?? []), ...others.map((f) => f.path)])];
+    if (dirty.length === 0) return true;
+    const { message } = await import('@tauri-apps/plugin-dialog');
+    const labels = {
+      yes: t('detachedWindows.saveAll') as string,
+      no: t('detachedWindows.discard') as string,
+      cancel: t('common.cancel') as string,
+    };
+    const answer = await message(
+      (t('detachedWindows.unsavedMessage') as (files: string) => string)(dirty.join('\n')),
+      { title: t('detachedWindows.unsavedTitle') as string, kind: 'warning', buttons: labels },
+    );
+    if (answer === 'Cancel' || answer === labels.cancel) return false;
+    if ((answer === 'Yes' || answer === labels.yes) && !(await saveEverywhere())) {
+      await message(t('detachedWindows.saveFailed') as string, { kind: 'warning' });
+      return false;
+    }
+    await closeAllEditorWindows().catch(() => {});
+    return true;
   }
 
   function handleSectionChange(e: CustomEvent<{ section: string; settingsTab: string }>) {

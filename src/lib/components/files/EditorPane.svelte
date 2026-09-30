@@ -75,6 +75,19 @@
   export let binaryReloadToken = 0;
   /** 1-based lines of the workspace search hits in the active file, for the minimap. */
   export let searchLines: number[] = [];
+  /**
+   * What identifies a tab in the bar. The path is enough in the main editor; a
+   * detached window mixes worktrees, where two tabs can share a relative path.
+   */
+  export let tabKey: (tab: Tab) => string = (tab) => tab.path;
+  /** Extra line for a tab's tooltip, such as the project it belongs to. */
+  export let tabHint: (tab: Tab) => string | undefined = () => undefined;
+  /** The active document's path on disk, for markdown links and images; defaults to the tab path. */
+  export let activeDocPath: string | null = null;
+  /** Shown at the right of the path bar: takes the tab out to another window. */
+  export let onMoveTab: (() => void) | undefined = undefined;
+  export let moveTabLabel = '';
+  export let moveTabIcon = 'external';
 
   let svgPreview = true;
   let showLineHistory = false;
@@ -153,7 +166,7 @@
   {/if}
   {#if tabs.length > 0}
     <div class="tabs-bar" role="tablist" bind:this={tabsBarEl}>
-      {#each tabs as tab, i (tab.path)}
+      {#each tabs as tab, i (tabKey(tab))}
         {#if dragActive && dragSrcIndex !== null && insertIndex === i && !(insertIndex === dragSrcIndex || insertIndex === dragSrcIndex + 1)}
           <div class="drop-indicator"></div>
         {/if}
@@ -163,7 +176,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="file-tab {i === activeTabIdx ? 'tab-active' : ''} {dragActive && dragSrcIndex === i ? 'tab-dragging' : ''} {gitStatusMap[tab.path] === 'deleted' ? 'tab-deleted' : ''} {tab.pinned ? 'tab-pinned' : ''} {isExternalPath(tab.path) ? 'tab-external' : ''}"
-          title={isExternalPath(tab.path) ? `${t('files.externalFile')} - ${tab.path}` : undefined}
+          title={[isExternalPath(tab.path) ? `${t('files.externalFile')} - ${tab.path}` : undefined, tabHint(tab)].filter(Boolean).join('\n') || undefined}
           role="tab"
           aria-selected={i === activeTabIdx}
           tabindex="0"
@@ -219,6 +232,17 @@
         {/each}
         {/if}
       </nav>
+      {#if onMoveTab}
+        <button
+          type="button"
+          class="topbar-action"
+          on:click={onMoveTab}
+          title={moveTabLabel}
+          aria-label={moveTabLabel}
+        >
+          <Icon name={moveTabIcon} size={13}/>
+        </button>
+      {/if}
     </div>
   {/if}
   <div class="editor-body">
@@ -268,7 +292,7 @@
             initialCursorPos={activeTab?.cursorPos ?? 0}
             initialScrollTop={activeTab?.scrollTop ?? 0}
             savedState={editorState}
-            docPath={activeTab?.path ?? null}
+            docPath={activeDocPath ?? activeTab?.path ?? null}
             {lspDoc}
             {lspDiagnostics}
             {onOpenLink}
@@ -516,6 +540,23 @@
     font-family: var(--font-ui);
     font-size: 12px;
   }
+
+  .topbar-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    margin-right: -8px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--fg-3);
+    cursor: pointer;
+  }
+  .topbar-action:hover { background: var(--bg-4); color: var(--fg-0); }
+  .topbar-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
   .breadcrumb-sep {
     color: var(--fg-4);

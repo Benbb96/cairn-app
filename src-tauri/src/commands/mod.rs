@@ -8,6 +8,7 @@
 //! list them in a single `generate_handler!`.
 
 pub mod coalesce;
+pub mod editor_windows;
 pub mod file_protocol;
 pub mod fs_watch;
 pub mod cli;
@@ -41,6 +42,12 @@ pub mod toolchain;
 pub mod ui_state;
 
 pub use commit_state::{get_commit_state, save_commit_state};
+pub use editor_windows::{
+    editor_window_at_cursor, editor_drag_start, editor_window_open, editor_window_take_tabs,
+    editor_window_transfer, editor_window_sync, editor_window_focus_owner, editor_windows_dirty,
+    editor_windows_save_all, editor_windows_close_all, editor_drag_begin, editor_drag_claim,
+    editor_drag_finish,
+};
 pub use review::{get_diff_unified, get_diff_hunks, load_review_state, save_review_state};
 pub use conversations::{get_conversation_index, save_conversation_index};
 pub use custom_commands::{

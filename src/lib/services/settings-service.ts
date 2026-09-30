@@ -5,6 +5,8 @@
 // struct in commands/settings.rs: a new field has to be added on both sides.
 
 import { invoke } from "@tauri-apps/api/core";
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { WorkflowStep } from "$lib/types/instance";
 import type { ShortcutConfig } from "$lib/types/shortcuts";
 import type { ThemeName } from "$lib/utils/editor/editor-theme";
@@ -140,11 +142,38 @@ export function getSettings(): Promise<CairnSettings> {
 	return invoke<CairnSettings>("get_settings");
 }
 
-/** Rewrites settings.json whole and answers with what was stored, so pass a complete object. */
-export function updateSettings(
+const SETTINGS_CHANGED = "settings-changed";
+
+/** Outside the app shell (tests, a plain browser) there is no window to name. */
+function windowLabel(): string | null {
+	try {
+		return getCurrentWebviewWindow().label;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Rewrites settings.json whole and answers with what was stored, so pass a
+ * complete object. The other windows of the app are told, so a theme or a
+ * shortcut changed in one applies to every detached editor window too.
+ */
+export async function updateSettings(
 	settings: CairnSettings,
 ): Promise<CairnSettings> {
-	return invoke<CairnSettings>("update_settings", { settings });
+	const stored = await invoke<CairnSettings>("update_settings", { settings });
+	void emit(SETTINGS_CHANGED, windowLabel()).catch(() => {});
+	return stored;
+}
+
+/** Settings saved by another window of the app. */
+export function onSettingsChangedElsewhere(
+	handler: () => void,
+): Promise<UnlistenFn> {
+	const own = windowLabel();
+	return listen<string | null>(SETTINGS_CHANGED, (e) => {
+		if (e.payload !== own) handler();
+	});
 }
 
 /** Toggles the native window blur; separate from settings because it acts on the window itself. */

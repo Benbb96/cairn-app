@@ -45,6 +45,9 @@ pub enum ServerStatus {
 pub struct OpenDoc {
     pub version: i32,
     pub text:    String,
+    /// How many views hold the document: a tab moving between windows is opened
+    /// by the target before the source lets go of it.
+    pub holders: u32,
 }
 
 /// A running server: its client, its process, and the workspace it indexed.

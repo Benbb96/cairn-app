@@ -36,6 +36,42 @@ fn focus_main_window(app: &tauri::AppHandle) {
     }
 }
 
+/// A window with the app's chrome: the channel in its title, the transparency
+/// setting, and the overlay title bar on macOS. Shared by the main window and
+/// the detached editor windows.
+///
+/// Transparency is decided when the window is created and cannot be changed
+/// afterwards, so windows are built here rather than declared in
+/// tauri.conf.json. A transparent window is composited with alpha every frame,
+/// which costs the webview its opaque fast path while scrolling, which is what
+/// the transparency effects setting trades away.
+pub(crate) fn window_builder<'a>(
+    app: &'a tauri::AppHandle,
+    label: &str,
+    url: tauri::WebviewUrl,
+) -> tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    let transparent = commands::settings::read_settings()
+        .map(|s| s.transparency_effects)
+        .unwrap_or(true);
+    // A beta or dev build says so in its title: it is otherwise
+    // indistinguishable from the installed app, and the two are meant to
+    // run side by side.
+    let title = match storage::channel().label() {
+        Some(label) => format!("Cairn Foundry ({label})"),
+        None => "Cairn Foundry".to_string(),
+    };
+    let builder = tauri::WebviewWindowBuilder::new(app, label, url)
+        .title(&title)
+        .min_inner_size(480.0, 360.0)
+        .resizable(true)
+        .transparent(transparent);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    builder
+}
+
 /// Builds and runs the app: plugins, managed state, the macOS menu bar, the
 /// command handlers, and the LSP shutdown on exit.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -56,7 +92,7 @@ pub fn run() {
             let request = commands::cli::parse_cli_args(&args, &base);
             if !request.paths.is_empty() || request.open_dir.is_some() || request.clone_url.is_some()
             {
-                let _ = app.emit("cli-open", CliOpenRequest { request, cwd });
+                let _ = app.emit_to(commands::editor_windows::MAIN_WINDOW, "cli-open", CliOpenRequest { request, cwd });
             }
         }))
     } else {
@@ -78,43 +114,16 @@ pub fn run() {
         .manage(TestState::new())
         .manage(LspState::new())
         .manage(commands::WatchState::default())
+        .manage(commands::editor_windows::EditorWindows::default())
         .manage(QuickSearchCache::default())
         .manage(IntegrationState::default())
         .manage(PendingCliPaths::from_args())
         .setup(|app| {
             commands::lsp::spawn_idle_reaper(app.handle().clone());
 
-            /* Transparency is decided when the window is created and cannot be
-               changed afterwards, so the window is built here rather than
-               declared in tauri.conf.json. A transparent window is composited
-               with alpha every frame, which costs the webview its opaque fast
-               path while scrolling, which is what the transparency effects
-               setting trades away. */
-            let transparent = commands::settings::read_settings()
-                .map(|s| s.transparency_effects)
-                .unwrap_or(true);
-            // A beta or dev build says so in its title: it is otherwise
-            // indistinguishable from the installed app, and the two are meant to
-            // run side by side.
-            let title = match storage::channel().label() {
-                Some(label) => format!("Cairn Foundry ({label})"),
-                None => "Cairn Foundry".to_string(),
-            };
-            let builder = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::default(),
-            )
-            .title(&title)
-            .inner_size(1440.0, 900.0)
-            .min_inner_size(480.0, 360.0)
-            .resizable(true)
-            .transparent(transparent);
-            #[cfg(target_os = "macos")]
-            let builder = builder
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true);
-            builder.build()?;
+            window_builder(app.handle(), commands::editor_windows::MAIN_WINDOW, tauri::WebviewUrl::default())
+                .inner_size(1440.0, 900.0)
+                .build()?;
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{MenuBuilder, SubmenuBuilder};
@@ -142,8 +151,34 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let app = window.app_handle();
+                let label = window.label();
+                commands::fs_watch::release_window(app, label);
+                app.state::<commands::editor_windows::EditorWindows>().release(label);
+                // Detached windows never outlive the main one: the app is
+                // quitting, and they would keep the process alive otherwise.
+                if label == commands::editor_windows::MAIN_WINDOW {
+                    commands::editor_windows::editor_windows_close_all(app.clone());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_cli_status,
+            editor_window_at_cursor,
+            editor_drag_start,
+            editor_window_open,
+            editor_window_take_tabs,
+            editor_window_transfer,
+            editor_window_sync,
+            editor_window_focus_owner,
+            editor_windows_dirty,
+            editor_windows_save_all,
+            editor_windows_close_all,
+            editor_drag_begin,
+            editor_drag_claim,
+            editor_drag_finish,
             install_cli,
             uninstall_cli,
             take_pending_cli_paths,

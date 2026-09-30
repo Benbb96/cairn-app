@@ -27,6 +27,7 @@ export type ShortcutId =
 	| "prevTab"
 	| "tabHistoryBack"
 	| "tabHistoryForward"
+	| "detachTab"
 	// Find & navigation (editor)
 	| "goToLine"
 	// Multi-cursor (editor)

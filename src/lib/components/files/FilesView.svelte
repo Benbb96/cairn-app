@@ -114,6 +114,11 @@ import { get } from 'svelte/store';
   import { EDITOR_JUMP_READY_TIMEOUT_MS, EDITOR_JUMP_RETRY_MS } from '$lib/utils/timing';
   import { EDITOR_DEFAULTS, FONT_SIZE_MIN, FONT_SIZE_MAX } from '$lib/utils/editor/editor-config';
   import { makeFilesKeyHandler } from '$lib/utils/files/use-files-shortcuts';
+  import { diskContentOf, writeTab } from '$lib/utils/files/tab-io';
+  import { focusFileOwner, onRevealFile, openEditorWindow, syncWindowFiles, type OpenFile } from '$lib/services/editor-window-service';
+  import { incomingTabs, takeIncomingTabs } from '$lib/stores/editor-windows';
+  import { payloadToTab, tabToPayload, tokenFromDroppedPath, type TabPayload, type TabScope } from '$lib/utils/files/tab-transfer';
+  import { dragTabNatively, dropTabOutside, isOutsideViewport, usesNativeDrag } from '$lib/utils/files/tab-window-drag';
 
   export let onGoSettings: (() => void) | undefined = undefined;
   export let onGoLanguageServers: (() => void) | undefined = undefined;
@@ -237,7 +242,7 @@ import { get } from 'svelte/store';
    * the last few scopes so a session that visited many instances does not
    * pin every file it ever showed in memory.
    */
-  interface SavedScope { persisted: PersistedState; dirty: Map<string, Tab>; recentFiles: string[]; panes: PaneTabState[] }
+  interface SavedScope { persisted: PersistedState; dirty: Map<string, Tab>; recentFiles: string[]; panes: PaneTabState[]; worktreePath: string | null }
   const SAVED_SCOPES_MAX = 4;
   const savedState = new Map<string, SavedScope>();
 
@@ -504,7 +509,7 @@ import { get } from 'svelte/store';
       // stack is bounded and never persisted, so closing anyway would drop them
       // for good. The tab stays open on the conflict modal instead, which is the
       // only place the user can choose which version wins.
-      const written = await writeTab(tab, wc, worktreePath);
+      const written = await writeTab(tab, wc, absolutePathOf(tab.path, worktreePath));
       if (!written.written) {
         tab.conflicted = true;
         pane.activeTabIdx = idx;
@@ -528,6 +533,167 @@ import { get } from 'svelte/store';
     panes = panes;
     notifyLspClosed(tab.path);
     if (activeChanged) refreshDiff(i, pane.tabs[activeTabIdx] ?? null);
+  }
+
+  // -- Detached windows -----------------------------------------------------------
+
+  function currentTabScope(): TabScope | null {
+    return currentProjectId && currentInstanceId && worktreePath
+      ? { projectId: currentProjectId, instanceId: currentInstanceId, worktreePath }
+      : null;
+  }
+
+  function payloadOf(i: number, tab: Tab): TabPayload {
+    if (panes[i].tabs[panes[i].activeTabIdx] === tab) captureEditorState(i);
+    return tabToPayload(tab, currentTabScope());
+  }
+
+  /**
+   * Drops a tab that now lives in another window. Nothing is written and nothing
+   * goes on the reopen stack: the tab was moved, not closed, and its unsaved
+   * edits travelled with it.
+   */
+  function removeMovedTab(i: number, tab: Tab) {
+    const pane = panes[i];
+    const idx = pane.tabs.indexOf(tab);
+    if (idx === -1) return;
+    pane.editorStateCache.delete(tab.path);
+    if (i === 0) {
+      tabNavBack = tabNavBack.map(j => j > idx ? j - 1 : j).filter(j => j !== idx);
+      tabNavForward = tabNavForward.map(j => j > idx ? j - 1 : j).filter(j => j !== idx);
+    }
+    const previousActiveIdx = pane.activeTabIdx;
+    pane.tabs = pane.tabs.filter((_, j) => j !== idx);
+    const { activeTabIdx, activeChanged } = resolveTabClose(previousActiveIdx, idx, pane.tabs.length);
+    pane.activeTabIdx = activeTabIdx;
+    panes = panes;
+    notifyLspClosed(tab.path);
+    if (activeChanged) refreshDiff(i, pane.tabs[activeTabIdx] ?? null);
+    persistState();
+  }
+
+  /** Takes a tab out into a window of its own, opened at `at` (logical screen coordinates) when given. */
+  async function detachTab(i: number, idx: number, at: { x: number; y: number } | null = null) {
+    const tab = panes[i].tabs[idx];
+    if (!tab || tab.diskSnapshot) return;
+    try {
+      await openEditorWindow([payloadOf(i, tab)], at?.x ?? null, at?.y ?? null);
+    } catch (e) {
+      error = String(e);
+      return;
+    }
+    removeMovedTab(i, tab);
+  }
+
+  /** Another window already holds this file: it is brought to the front instead of opening it twice. */
+  async function isOpenElsewhere(path: string): Promise<boolean> {
+    if (!worktreePath && !isExternalPath(path)) return false;
+    return Boolean(await focusFileOwner(absolutePathOf(path, worktreePath)).catch(() => null));
+  }
+
+  /**
+   * Tabs sent back from a detached window. The root page has already switched to
+   * their project; they are taken once this scope's own tabs are restored, so the
+   * restore cannot overwrite them, and they arrive with their unsaved edits.
+   */
+  $: adoptIncomingTabs($incomingTabs.length, isScopeReady);
+
+  function adoptIncomingTabs(queued: number, ready: boolean) {
+    if (queued === 0 || !ready || !worktreePath) return;
+    const wtp = worktreePath;
+    const taken = takeIncomingTabs(p =>
+      p.scope === null ||
+      (p.scope.projectId === currentProjectId && p.scope.instanceId === currentInstanceId),
+    );
+    if (taken.length === 0) return;
+    const i = splitMode && focusedPane === 1 ? 1 : 0;
+    const pane = panes[i];
+    captureEditorState(i);
+    for (const payload of taken) {
+      const { key: _key, scope: _scope, ...tab } = payloadToTab(payload, wtp);
+      const existing = pane.tabs.findIndex(t => t.path === tab.path);
+      if (existing !== -1) {
+        pane.activeTabIdx = existing;
+        continue;
+      }
+      pane.tabs = [...pane.tabs, tab];
+      pane.activeTabIdx = pane.tabs.length - 1;
+    }
+    panes = panes;
+    activeStep.set('files');
+    persistState();
+    refreshDiff(i, pane.tabs[pane.activeTabIdx] ?? null);
+  }
+
+  /** Brings the tab showing a file to the front, asked by another window that wanted to open it. */
+  function revealOpenFile(absolute: string) {
+    for (let i = 0; i < panes.length; i++) {
+      const idx = panes[i].tabs.findIndex(t => !t.diskSnapshot && absolutePathOf(t.path, worktreePath) === absolute);
+      if (idx === -1) continue;
+      activeStep.set('files');
+      focusedPane = i as 0 | 1;
+      void switchTab(i, idx);
+      return;
+    }
+  }
+
+  /** The files this window holds, for the registry that keeps each file in one window only. */
+  let syncedWindowFiles = '';
+  $: syncOpenFiles(panes, dirtyTabPaths);
+
+  function syncOpenFiles(current: PaneState[], dirty: Set<string>) {
+    const files: OpenFile[] = [];
+    for (const pane of current) {
+      for (const tab of pane.tabs) {
+        if (tab.diskSnapshot || (!worktreePath && !isExternalPath(tab.path))) continue;
+        files.push({ path: absolutePathOf(tab.path, worktreePath), isDirty: dirty.has(tab.path) });
+      }
+    }
+    const key = JSON.stringify(files);
+    if (key === syncedWindowFiles) return;
+    syncedWindowFiles = key;
+    void syncWindowFiles(files).catch(() => {});
+  }
+
+  /** Every unsaved buffer this window holds, absolute, in the scope on screen and in the ones left earlier. */
+  export function dirtyFiles(): string[] {
+    return [...new Set(dirtyTabsWithRoot().map(({ tab, root }) => absolutePathOf(tab.path, root)))];
+  }
+
+  function dirtyTabsWithRoot(): { tab: Tab; root: string | null }[] {
+    const found: { tab: Tab; root: string | null }[] = [];
+    for (const pane of panes) {
+      for (const tab of pane.tabs) if (!tab.diskSnapshot && isDirty(tab)) found.push({ tab, root: worktreePath });
+    }
+    for (const [scope, saved] of savedState) {
+      if (scope === currentScope) continue;
+      for (const tab of saved.dirty.values()) if (isDirty(tab)) found.push({ tab, root: saved.worktreePath });
+    }
+    return found;
+  }
+
+  /**
+   * Writes every unsaved buffer, for the app closing. A file that moved on disk is
+   * not overwritten: it is flagged and the answer is false, so the app stays open
+   * on it rather than losing either version.
+   */
+  export async function saveAllDirty(): Promise<boolean> {
+    let isAllSaved = true;
+    for (const { tab, root } of dirtyTabsWithRoot()) {
+      const doc = tab.doc;
+      try {
+        const written = await writeTab(tab, diskContentOf(tab), absolutePathOf(tab.path, root));
+        if (written.written) tab.savedDoc = doc;
+        else {
+          tab.conflicted = true;
+          isAllSaved = false;
+        }
+      } catch {
+        isAllSaved = false;
+      }
+    }
+    panes = panes;
+    return isAllSaved;
   }
 
   /**
@@ -595,31 +761,6 @@ import { get } from 'svelte/store';
     /** Applied once the user has chosen, so the tab stops looking dirty. */
     doc: Text;
   } | null = null;
-
-  /**
-   * Writes a tab's content, refusing to clobber a file that moved since the tab
-   * last read it. Returns whether the write went through; the caller decides what
-   * a refusal means - raising the modal, or just marking the tab.
-   *
-   * The mtime check happens inside `write_file`, so nothing can slip between the
-   * check and the write.
-   */
-  async function writeTab(
-    tab: Tab,
-    content: string,
-    root: string,
-  ): Promise<{ written: true } | { written: false; deleted: boolean }> {
-    const absolute = absolutePathOf(tab.path, root);
-    // The version comes from the read, not from a fresh stat taken here: stat'ing
-    // now would compare the file against itself and wave through the very
-    // overwrite this exists to catch. `readFile` records it as it receives the
-    // bytes, so it provably belongs to the content the tab is showing.
-    const outcome = await writeFile(absolute, content, tab.version ?? null);
-    if (isWriteConflict(outcome)) return { written: false, deleted: outcome.actualVersion === null };
-    tab.version = outcome.version;
-    tab.conflicted = false;
-    return { written: true };
-  }
 
   /** Re-runs a refused write with no mtime guard: the user asked for their version to win. */
   async function overwriteConflict() {
@@ -805,6 +946,7 @@ import { get } from 'svelte/store';
       refreshDiff(i, { path: node.path });
       return;
     }
+    if (await isOpenElsewhere(node.path)) return;
     if (isBinaryPath(node.path)) {
       pane.tabs = [...pane.tabs, { path: node.path, doc: Text.empty, savedDoc: Text.empty, cursorPos: 0, scrollTop: 0, lastUsedAt: Date.now() }];
       pane.activeTabIdx = pane.tabs.length - 1;
@@ -1588,7 +1730,7 @@ import { get } from 'svelte/store';
     'duplicateLine', 'treeSelectAll', 'treeCopy', 'treeCut', 'treePaste',
     'treeDelete', 'treeRename', 'treeNewFile', 'treeNewFolder',
     'reloadEditor', 'reloadProject',
-    'renameSymbol', 'formatDocument',
+    'renameSymbol', 'formatDocument', 'detachTab',
   ]);
 
   /** Runs a shortcut or palette command; anything unknown falls through to the focused editor. */
@@ -1606,6 +1748,7 @@ import { get } from 'svelte/store';
       case 'prevTab':           if (panes[0].tabs.length > 1) await switchTab(0, (panes[0].activeTabIdx - 1 + panes[0].tabs.length) % panes[0].tabs.length); break;
       case 'tabHistoryBack':    await tabHistoryBack(); break;
       case 'tabHistoryForward': await tabHistoryForward(); break;
+      case 'detachTab':         await detachTab(focusedPane, panes[focusedPane].activeTabIdx); break;
       case 'saveFile':          await flushSave(0); break;
       case 'fontSizeUp':        bumpFontSize(+1); break;
       case 'fontSizeDown':      bumpFontSize(-1); break;
@@ -1697,6 +1840,7 @@ import { get } from 'svelte/store';
     switchTab,
     tabHistoryBack,
     tabHistoryForward,
+    detachActiveTab: (i) => { void detachTab(i, panes[i].activeTabIdx); },
     renameSymbol: startRenameSymbol,
     formatDocument: () => { void runFormatDocument(); },
     pasteClipboard,
@@ -1757,12 +1901,22 @@ import { get } from 'svelte/store';
           dragOverPane = treeDir === null ? paneDropAt(x, y) : null;
           return;
         }
-        void handleOsFileDrop(payload.paths, x, y);
+        // A `cairn-tab:` drop is a tab from another window, taken by the root page.
+        const files = payload.paths.filter(path => tokenFromDroppedPath(path) === null);
+        if (files.length > 0) void handleOsFileDrop(files, x, y);
+        else { dragOverPane = null; dragOverDir = null; }
       }).then(unlisten => {
         if (osDropDisposed) unlisten();
         else unlistenOsDrop = unlisten;
       });
     });
+
+    let unlistenReveal: (() => void) | null = null;
+    let revealDisposed = false;
+    void onRevealFile(revealOpenFile).then(unlisten => {
+      if (revealDisposed) unlisten();
+      else unlistenReveal = unlisten;
+    }).catch(() => {});
 
     // External edits - an agent, a script, git - arrive as watcher events and are
     // handled there, focused or not. Nothing polls the filesystem any more; this
@@ -1799,6 +1953,8 @@ import { get } from 'svelte/store';
       unlistenFocus?.();
       osDropDisposed = true;
       unlistenOsDrop?.();
+      revealDisposed = true;
+      unlistenReveal?.();
       unsubInst();
       unsubProj();
       clearInterval(watchRetryTimer);
@@ -1954,7 +2110,7 @@ import { get } from 'svelte/store';
     for (const p of state.panes) for (const t of p.tabs) if (isDirty(t)) dirty.set(t.path, t);
     const scope = `${currentProjectId}:${currentInstanceId}`;
     savedState.delete(scope);
-    savedState.set(scope, { persisted: toPersistedState(state), dirty, recentFiles, panes: state.panes });
+    savedState.set(scope, { persisted: toPersistedState(state), dirty, recentFiles, panes: state.panes, worktreePath: currentWorktree });
     for (const key of savedState.keys()) {
       if (savedState.size <= SAVED_SCOPES_MAX) break;
       if (savedState.get(key)!.dirty.size === 0) savedState.delete(key);
@@ -1966,6 +2122,9 @@ import { get } from 'svelte/store';
   let currentInstanceId: string | null = null;
   let currentProjectId: string | null = null;
   let currentScope: string | null = null;
+  let currentWorktree: string | null = null;
+  /** False while a scope's tabs are being restored: a tab adopted then would be overwritten by the restore. */
+  let isScopeReady = false;
   $: {
     const id = $activeInstance?.id ?? null;
     const wtp = $activeInstance?.worktreePath ?? null;
@@ -1976,6 +2135,8 @@ import { get } from 'svelte/store';
       currentInstanceId = id;
       currentProjectId = pid;
       currentScope = scope;
+      currentWorktree = wtp;
+      isScopeReady = false;
       editState = null;
       contextMenu = null;
       const saved = scope !== null ? savedState.get(scope) ?? null : null;
@@ -1996,6 +2157,7 @@ import { get } from 'svelte/store';
             expanded = new Set();
             splitMode = false;
             splitLeftWidth = 0;
+            isScopeReady = true;
             return;
           }
           /* A scope left this session keeps its documents: coming back to it
@@ -2008,6 +2170,7 @@ import { get } from 'svelte/store';
             : await rehydrateTabs(wtp, persisted);
           if (currentScope !== scope) return;
           panes = restored;
+          isScopeReady = true;
           if (saved) void reloadOpenFilesFromDisk();
           syncActiveTabToTree();
           refreshDiff(0, panes[0].tabs[panes[0].activeTabIdx] ?? null);
@@ -2019,6 +2182,7 @@ import { get } from 'svelte/store';
         expanded = new Set();
         splitMode = false;
         splitLeftWidth = 0;
+        isScopeReady = true;
       }
     }
   }
@@ -2483,6 +2647,7 @@ import { get } from 'svelte/store';
     }
 
     if (loadingPaths.has(node.path)) return;
+    if (await isOpenElsewhere(node.path)) return;
 
     captureEditorState(0);
     if (($settings.saveOn) === 'blur') await flushSave(0);
@@ -2527,6 +2692,7 @@ import { get } from 'svelte/store';
     if (gitStatusMap[node.path] === 'deleted') return;
     if (pane.tabs.some(t => t.path === node.path)) return;
     if (loadingPaths.has(node.path)) return;
+    if (await isOpenElsewhere(node.path)) return;
 
     if (isBinaryPath(node.path)) {
       pane.tabs = [...pane.tabs, { path: node.path, doc: Text.empty, savedDoc: Text.empty, cursorPos: 0, scrollTop: 0, lastUsedAt: Date.now() }];
@@ -2638,6 +2804,37 @@ import { get } from 'svelte/store';
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
+  /** Resolved once: Wayland hands a tab leaving the window to a native drag. */
+  let isNativeTabDrag = false;
+  void usesNativeDrag().then((native) => { isNativeTabDrag = native; });
+
+  /** Ends a tab drag without committing anything; `didDrag` stays up so the release is not taken for a click. */
+  function resetTabDrag(pane: PaneState) {
+    pane.dragSrcIndex = null;
+    pane.insertIndex = null;
+    pane.dragActive = false;
+    pane.didDrag = true;
+    dragOverPane = null;
+    document.body.classList.remove('dragging');
+    panes = panes;
+  }
+
+  /**
+   * Wayland: the pointer left the window with a tab, and nothing can say which
+   * window it will be released over. GTK takes the drag from here.
+   */
+  function handOverToNativeDrag(e: PointerEvent, i: number) {
+    const pane = panes[i];
+    const tab = pane.dragSrcIndex === null ? null : pane.tabs[pane.dragSrcIndex];
+    try { (e.currentTarget as HTMLElement | null)?.releasePointerCapture(e.pointerId); } catch {}
+    resetTabDrag(pane);
+    if (!tab || tab.diskSnapshot) return;
+    void dragTabNatively(payloadOf(i, tab)).then(
+      (outcome) => { if (outcome === 'moved') removeMovedTab(i, tab); },
+      (err) => { error = String(err); },
+    );
+  }
+
   /** Starts the drag past the threshold, then tracks the insert slot and the pane under the pointer. */
   function tabPointerMove(e: PointerEvent, i: number) {
     const pane = panes[i];
@@ -2650,6 +2847,17 @@ import { get } from 'svelte/store';
       document.body.classList.add('dragging');
     }
 
+    if (isOutsideViewport(e)) {
+      if (isNativeTabDrag) {
+        handOverToNativeDrag(e, i);
+        return;
+      }
+      dragOverPane = null;
+      pane.insertIndex = null;
+      panes = panes;
+      return;
+    }
+
     const barBottom = pane.tabsBarEl?.getBoundingClientRect().bottom ?? 0;
     const drop = paneDropAt(e.clientX, e.clientY);
     const movesPane = drop && (drop.pane !== i || (drop.openSplit && e.clientY > barBottom));
@@ -2660,11 +2868,26 @@ import { get } from 'svelte/store';
     panes = panes;
   }
 
-  /** Commits the tab drag: moves it to the other pane if one was targeted, otherwise reorders in place. */
-  async function tabPointerUp(_e: PointerEvent, i: number) {
+  /**
+   * Commits the tab drag: released outside the window, the tab goes to the window
+   * under the cursor or to a new one; inside, it moves to the other pane if one
+   * was targeted, otherwise it is reordered in place.
+   */
+  async function tabPointerUp(e: PointerEvent, i: number) {
     const pane = panes[i];
     const paneTarget = dragOverPane;
     dragOverPane = null;
+    if (pane.dragActive && pane.dragSrcIndex !== null && isOutsideViewport(e)) {
+      const tab = pane.tabs[pane.dragSrcIndex];
+      resetTabDrag(pane);
+      if (!tab || tab.diskSnapshot) return;
+      const outcome = await dropTabOutside(payloadOf(i, tab), e).catch((err) => {
+        error = String(err);
+        return 'stayed' as const;
+      });
+      if (outcome === 'moved') removeMovedTab(i, tab);
+      return;
+    }
     if (pane.dragSrcIndex === null || pane.insertIndex === null) return;
 
     if (pane.dragActive && paneTarget) {
@@ -3085,6 +3308,8 @@ import { get } from 'svelte/store';
           lspDoc={lspDocs[i]}
           formatting={formattingPanes[i]}
           lspDiagnostics={paneDiagnostics[i]}
+          onMoveTab={activeTabs[i] && !activeTabs[i]?.diskSnapshot ? () => void detachTab(i, panes[i].activeTabIdx) : undefined}
+          moveTabLabel={t('files.openInNewWindow') as string}
         />
       {/if}
     {/each}
@@ -3188,6 +3413,10 @@ import { get } from 'svelte/store';
     </button>
     <button type="button" class="ctx-item" on:click={() => closeAllTabs(tabCtxMenu!.pane)}>
       <Icon name="x" size={13}/> {t('files.tabContextMenu.closeAll')}
+    </button>
+    <div class="ctx-sep"></div>
+    <button type="button" class="ctx-item" on:click={() => { const m = tabCtxMenu!; closeTabCtxMenu(); void detachTab(m.pane, m.idx); }}>
+      <Icon name="external" size={13}/> {t('files.tabContextMenu.openInNewWindow')}
     </button>
     <div class="ctx-sep"></div>
     <button type="button" class="ctx-item" on:click={() => revealTabInTree(tabCtxMenu!.idx, tabCtxMenu!.pane)}>

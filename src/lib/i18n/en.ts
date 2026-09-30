@@ -347,6 +347,10 @@ export const en = {
 				label: "Tab history forward",
 				description: "Navigate forward in tab history",
 			},
+			detachTab: {
+				label: "Open tab in new window",
+				description: "Move the active tab to a window of its own",
+			},
 			toggleSidebar: {
 				label: "Toggle sidebar",
 				description: "Show or hide the file tree sidebar",
@@ -1222,6 +1226,8 @@ export const en = {
 	},
 
 	files: {
+		openInNewWindow: "Open in new window",
+		moveToMainWindow: "Move to the main window",
 		watchUnavailable: "Not watched",
 		watchUnavailableHint:
 			"This project has no filesystem watcher, so changes made outside Cairn are not picked up on their own. Click to reload it. Saving still refuses to overwrite a file that changed on disk.",
@@ -1297,7 +1303,19 @@ export const en = {
 			revealInTree: "Reveal in Tree",
 			copyRelativePath: "Copy Relative Path",
 			copyAbsolutePath: "Copy Absolute Path",
+			openInNewWindow: "Open in New Window",
+			moveToMainWindow: "Move to Main Window",
 		},
+	},
+
+	detachedWindows: {
+		unsavedTitle: "Unsaved changes",
+		unsavedMessage: (files: string) =>
+			`These files have unsaved changes:\n\n${files}\n\nSave them before quitting?`,
+		saveAll: "Save All",
+		discard: "Don't Save",
+		saveFailed:
+			"Some files could not be saved, so the app stays open to let you deal with them.",
 	},
 
 	quickOpen: {

@@ -91,6 +91,9 @@
 
   /** Frees what a closed or deleted project's worktree still held onto. */
   export function releaseWorktree(root: string) { filesView?.releaseWorktree(root); }
+  /** Unsaved buffers of the editor, absolute, for the confirmation shown when the app closes. */
+  export function dirtyFiles(): string[] { return filesView?.dirtyFiles() ?? []; }
+  export function saveAllDirty(): Promise<boolean> { return filesView?.saveAllDirty() ?? Promise.resolve(true); }
 
 
   async function handleQuickOpen(hit: QuickSearchHit) {

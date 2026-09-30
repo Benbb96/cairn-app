@@ -8,6 +8,20 @@
 		},
 		"changes": [
 			{
+				"kind": "added",
+				"text": {
+					"en": "An editor tab can be taken out into a window of its own, for a second screen: from the tab's menu, the button beside the file path, a shortcut, or by dragging the tab out of the app. A detached window holds as many tabs as you like, from several projects and from outside any project, with the whole editor, and tabs move between windows by dragging them, unsaved edits included.",
+					"fr": "Un onglet de l'éditeur peut sortir dans une fenêtre dédiée, pour un second écran : depuis le menu de l'onglet, le bouton à côté du chemin du fichier, un raccourci, ou en glissant l'onglet hors de l'application. Une fenêtre détachée accueille autant d'onglets que voulu, de plusieurs projets et de hors de tout projet, avec l'éditeur complet, et les onglets passent d'une fenêtre à l'autre en les glissant, modifications non enregistrées comprises."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Closing the app with unsaved files, in the editor or in a detached window, now asks once whether to save them.",
+					"fr": "Fermer l'application avec des fichiers non enregistrés, dans l'éditeur ou dans une fenêtre détachée, demande désormais une seule fois s'il faut les enregistrer."
+				}
+			},
+			{
 				"kind": "fixed",
 				"text": {
 					"en": "Scrolling to the end of a panel, such as a diff in the Git view, no longer scrolls the view around it, and the elastic bounce at the edges on macOS is gone.",

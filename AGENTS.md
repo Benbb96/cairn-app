@@ -204,6 +204,9 @@ finished once its "is it open" flag is persisted, which means the four layers, a
 
 Skipping any one of them reads as "the app forgot where I was".
 
+The one deliberate exception is the detached editor windows (below): they are a comfort for a
+second screen, and they are not reopened on the next launch.
+
 ### Workflow tabs and tools
 
 The workflow tabs are **user-configurable data**, not a hardcoded list: `settings.workflowTabs`
@@ -310,6 +313,34 @@ with code N" banner with Restart / Archive. There is no persisted busy/done stat
   PTY (`shareTerminal` / `unshareTerminal` in `stores/terminal.ts`).
 - On launch `initTerminals()` closes everything once; command terminals (spawned by custom
   commands) are not restored. On app exit `shutdown` kills all children by process group.
+
+### Detached editor windows
+
+An editor tab can be taken out into a window of its own (`editor-<n>`, route `src/routes/editor`),
+from the tab menu, the button beside the file path, the `detachTab` shortcut, or by dragging the
+tab out of the app. Such a window runs `DetachedEditor.svelte`: one pane of tabs, no split, where
+each tab carries its own scope (`TabScope`: project, instance, worktree), so tabs of several
+projects and external files sit side by side. The main editor stays single-scope.
+
+- **The route runs nothing of `+page.svelte`.** `initTerminals()` there kills every PTY of the
+  app, and the main page also writes `ui-state.json` and watches integrations. The route loads
+  settings, projects and the language-server listeners only, and removes `#boot-splash` itself.
+- **A file lives in one window.** `commands/editor_windows.rs` keeps a registry of what each window
+  holds (synced by every window, main included) and focuses the owner instead of opening a file
+  twice. Tabs move whole, unsaved buffer included (`TabPayload`, `utils/files/tab-transfer.ts`),
+  never written on the way; a tab moving into the main window switches it to the tab's project.
+- **Dragging a tab out** (`utils/files/tab-window-drag.ts`): the source window keeps the pointer
+  outside its bounds, and `editor_window_at_cursor` finds the window under it. Wayland exposes no
+  window or cursor positions, so there the drag is handed to GTK carrying a `cairn-tab:<token>`
+  URI - never the real file, which a file manager would copy - and the tab only moves when a Cairn
+  window claims the token. The HTML5 drag and drop rule above still holds: this is the OS drag.
+- **Shared backend state is per window.** The LSP counts the holders of an open document
+  (`claim_doc` / `release_doc`), and `watch_dirs` keeps one directory set per window and watches
+  their union. Settings saved in one window are broadcast (`settings-changed`) and reloaded by the
+  others. `cli-open` goes to `main` only.
+- **Closing.** Closing the main window asks once about every unsaved buffer of every window, then
+  closes the detached ones; a detached window closed on its own writes its tabs first, and closes
+  itself once its last tab is gone.
 
 ### Filesystem watcher
 

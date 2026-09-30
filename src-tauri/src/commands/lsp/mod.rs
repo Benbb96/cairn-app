@@ -934,6 +934,32 @@ fn stop_matching(
     Ok(())
 }
 
+/// Registers one more holder of a document; true when it was not open yet and
+/// the server has to be told.
+fn claim_doc(docs: &mut HashMap<PathBuf, OpenDoc>, path: PathBuf, text: &str) -> bool {
+    match docs.entry(path) {
+        std::collections::hash_map::Entry::Occupied(mut slot) => {
+            slot.get_mut().holders += 1;
+            false
+        }
+        std::collections::hash_map::Entry::Vacant(slot) => {
+            slot.insert(OpenDoc { version: 1, text: text.to_string(), holders: 1 });
+            true
+        }
+    }
+}
+
+/// Lets go of one holder; true when it was the last and the server has to be told.
+fn release_doc(docs: &mut HashMap<PathBuf, OpenDoc>, path: &Path) -> bool {
+    let Some(doc) = docs.get_mut(path) else { return false };
+    if doc.holders > 1 {
+        doc.holders -= 1;
+        return false;
+    }
+    docs.remove(path);
+    true
+}
+
 #[tauri::command]
 pub async fn lsp_did_open(
     app: tauri::AppHandle,
@@ -947,13 +973,11 @@ pub async fn lsp_did_open(
         let handle = require(&app, &server_id, &root)?;
         // Claimed in one turn of the lock: two panes opening the same file at
         // once would otherwise both find it absent and announce it twice.
-        let claimed = match handle.open_docs.lock().map_err(|e| e.to_string())?.entry(PathBuf::from(&path)) {
-            std::collections::hash_map::Entry::Occupied(_) => false,
-            std::collections::hash_map::Entry::Vacant(slot) => {
-                slot.insert(OpenDoc { version: 1, text: text.clone() });
-                true
-            }
-        };
+        let claimed = claim_doc(
+            &mut *handle.open_docs.lock().map_err(|e| e.to_string())?,
+            PathBuf::from(&path),
+            &text,
+        );
         if !claimed {
             return Ok(());
         }
@@ -1077,12 +1101,10 @@ pub async fn lsp_did_close(
 ) -> Result<(), String> {
     blocking(move || {
         let handle = require(&app, &server_id, &root)?;
-        let removed = handle
-            .open_docs
-            .lock()
-            .map_err(|e| e.to_string())?
-            .remove(&PathBuf::from(&path))
-            .is_some();
+        let removed = release_doc(
+            &mut *handle.open_docs.lock().map_err(|e| e.to_string())?,
+            &PathBuf::from(&path),
+        );
         if !removed {
             return Ok(());
         }
@@ -1259,6 +1281,24 @@ pub async fn lsp_format(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_document_held_twice_closes_on_the_last_release() {
+        let mut docs = HashMap::new();
+        let path = PathBuf::from("/w/a.ts");
+        assert!(super::claim_doc(&mut docs, path.clone(), "x"));
+        assert!(!super::claim_doc(&mut docs, path.clone(), "x"));
+        assert!(!super::release_doc(&mut docs, &path));
+        assert!(docs.contains_key(&path));
+        assert!(super::release_doc(&mut docs, &path));
+        assert!(!docs.contains_key(&path));
+    }
+
+    #[test]
+    fn releasing_an_unknown_document_tells_nobody() {
+        let mut docs = HashMap::new();
+        assert!(!super::release_doc(&mut docs, Path::new("/w/none.ts")));
+    }
+
     use super::*;
 
     fn range(l1: u32, c1: u32, l2: u32, c2: u32) -> Value {

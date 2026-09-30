@@ -354,6 +354,10 @@ export const fr = {
 				label: "Historique d'onglets avant",
 				description: "Avancer dans l'historique des onglets",
 			},
+			detachTab: {
+				label: "Ouvrir l'onglet dans une fenêtre",
+				description: "Déplacer l'onglet actif dans une fenêtre dédiée",
+			},
 			toggleSidebar: {
 				label: "Afficher/masquer la barre lat.",
 				description: "Afficher ou masquer la barre latérale de l'arborescence",
@@ -1244,6 +1248,8 @@ export const fr = {
 	},
 
 	files: {
+		openInNewWindow: "Ouvrir dans une nouvelle fenêtre",
+		moveToMainWindow: "Déplacer vers la fenêtre principale",
 		watchUnavailable: "Non surveillé",
 		watchUnavailableHint:
 			"Ce projet n'a pas de surveillance du système de fichiers, donc les changements faits en dehors de Cairn ne remontent pas tout seuls. Cliquez pour le recharger. La sauvegarde refuse toujours d'écraser un fichier qui a changé sur le disque.",
@@ -1319,7 +1325,19 @@ export const fr = {
 			revealInTree: "Révéler dans l'arborescence",
 			copyRelativePath: "Copier le chemin relatif",
 			copyAbsolutePath: "Copier le chemin absolu",
+			openInNewWindow: "Ouvrir dans une nouvelle fenêtre",
+			moveToMainWindow: "Déplacer vers la fenêtre principale",
 		},
+	},
+
+	detachedWindows: {
+		unsavedTitle: "Modifications non enregistrées",
+		unsavedMessage: (files: string) =>
+			`Ces fichiers ont des modifications non enregistrées :\n\n${files}\n\nLes enregistrer avant de quitter ?`,
+		saveAll: "Tout enregistrer",
+		discard: "Ne pas enregistrer",
+		saveFailed:
+			"Certains fichiers n'ont pas pu être enregistrés : l'application reste ouverte pour vous laisser les traiter.",
 	},
 
 	quickOpen: {
