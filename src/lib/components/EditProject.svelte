@@ -16,12 +16,14 @@
   import type { Project } from '$lib/types/project';
   import type { ProjectIntegrations } from '$lib/types/integrations';
 
+  type Tab = 'identity' | 'integrations';
+
   export let project: Project;
+  export let initialTab: Tab = 'identity';
 
   const dispatch = createEventDispatcher<{ close: void }>();
 
-  type Tab = 'identity' | 'integrations';
-  let activeTab: Tab = 'identity';
+  let activeTab: Tab = initialTab;
 
   let name = project.name;
   let color = project.color;

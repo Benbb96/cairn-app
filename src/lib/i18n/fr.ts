@@ -1204,7 +1204,7 @@ export const fr = {
 		noCi: "Aucune CI connectée",
 		noCiBody:
 			"Liez ce projet à une forge qui fournit une CI (GitLab ou GitHub) pour voir ici les pipelines de la branche.",
-		goToIntegrations: "Ouvrir les intégrations",
+		goToIntegrations: "Relier les intégrations",
 		onBranch: (branch: string) => `sur ${branch}`,
 		retry: "Relancer",
 		cancel: "Annuler",
@@ -1799,6 +1799,7 @@ export const fr = {
 		showMoreLines: (n: number) =>
 			`Afficher ${n} ligne${n !== 1 ? "s" : ""} de plus (ouvrez le fichier pour le diff complet)`,
 		notARepoTitle: "Pas un dépôt Git",
+		initRepo: "Initialiser un dépôt",
 		notARepoBody:
 			"Ce dossier de projet n'est pas suivi par Git. Les fonctionnalités de gestion de version sont indisponibles tant qu'il n'est pas un dépôt.",
 		logSearchPlaceholder: "Rechercher par message, auteur ou hash...",
@@ -2237,8 +2238,7 @@ export const fr = {
 		noBase: "Aucune branche de base à comparer",
 		noBaseBody:
 			"Cette instance a été créée depuis une branche existante sans base, il n'y a donc rien à comparer : une branche mesurée contre elle-même n'a pas de diff.",
-		noBaseWhere:
-			"Définissez-en une depuis la barre de branche de la step Git, ou dans les réglages de l'instance.",
+		pickBase: "Choisir une branche de base",
 		changedFiles: (n: number) => `Fichiers modifiés · ${n}`,
 		agentNotes: "Notes de l'agent",
 		openFile: "Ouvrir",

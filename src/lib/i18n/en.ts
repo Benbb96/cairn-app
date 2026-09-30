@@ -1182,7 +1182,7 @@ export const en = {
 		noCi: "No CI connected",
 		noCiBody:
 			"Link this project to a forge that provides CI (GitLab or GitHub) to see the pipelines of the branch here.",
-		goToIntegrations: "Open Integrations",
+		goToIntegrations: "Link integrations",
 		onBranch: (branch: string) => `on ${branch}`,
 		retry: "Retry",
 		cancel: "Cancel",
@@ -1768,6 +1768,7 @@ export const en = {
 		showMoreLines: (n: number) =>
 			`Show ${n} more line${n !== 1 ? "s" : ""} (open the file for the full diff)`,
 		notARepoTitle: "Not a Git repository",
+		initRepo: "Initialize a repository",
 		notARepoBody:
 			"This project folder is not tracked by Git. Version control features are unavailable until it becomes a repository.",
 		logSearchPlaceholder: "Search by message, author or hash...",
@@ -2198,8 +2199,7 @@ export const en = {
 		noBase: "No base branch to compare against",
 		noBaseBody:
 			"This instance was created from an existing branch without a base, so there is nothing to compare it with: a branch measured against itself has no diff.",
-		noBaseWhere:
-			"Set one from the branch bar of the Git step, or in the instance settings.",
+		pickBase: "Pick a base branch",
 		changedFiles: (n: number) => `Changed files · ${n}`,
 		agentNotes: "Agent notes",
 		openFile: "Open",

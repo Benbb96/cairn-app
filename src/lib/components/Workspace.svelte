@@ -49,6 +49,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import Spinner from '$lib/components/Spinner.svelte';
   import ManageInstances from '$lib/components/ManageInstances.svelte';
+  import EditProject from '$lib/components/EditProject.svelte';
   import FinalizeInstance from '$lib/components/FinalizeInstance.svelte';
   import ShortcutReference from '$lib/components/ShortcutReference.svelte';
   import TicketPanel from '$lib/components/layout/TicketPanel.svelte';
@@ -60,6 +61,7 @@
 
   let showInstanceMenu = false;
   let showManageModal = false;
+  let showProjectIntegrations = false;
   let showFinalizeModal = false;
   let showShortcuts = false;
   let showTools = false;
@@ -227,7 +229,6 @@
     goLanguageServers: void;
     goProviders: void;
     goGitSettings: void;
-    goIntegrations: void;
     createInstance: { branch?: string };
     reorderTabs: string[];
   }>();
@@ -703,7 +704,7 @@
       <div class="step-view" class:step-hidden={!reviewActive}><LazyView prewarm={prewarmViews} active={reviewActive} load={() => import('$lib/components/review/ReviewView.svelte')} on:openFile={async (e) => { openStep('files'); await tick(); filesView?.openFileByPath(e.detail); }}/></div>
       <div class="step-view" class:step-hidden={!testsActive}><LazyView prewarm={prewarmViews} active={testsActive} load={() => import('$lib/components/tests/TestsView.svelte')} on:openFile={async (e) => { openStep('files'); await tick(); filesView?.openFileAtLine(e.detail.path, e.detail.line); }}/></div>
       <div class="step-view" class:step-hidden={!gitActive}><LazyView prewarm={prewarmViews} active={gitActive} load={() => import('$lib/components/git/GitView.svelte')} on:openFile={async (e) => { openStep('files'); await tick(); filesView?.openFileByPath(e.detail); }} on:fileDiscarded={(e) => filesView?.reloadFileByPath(e.detail)} on:filesChanged={() => filesView?.reloadOpenFiles()} on:goGitSettings={() => dispatch('goGitSettings')} on:createInstanceFromRef={(e) => dispatch('createInstance', { branch: e.detail })}/></div>
-      <div class="step-view" class:step-hidden={!cicdActive}><LazyView prewarm={prewarmViews} active={cicdActive} load={() => import('$lib/components/cicd/CiCdView.svelte')} on:goIntegrations={() => dispatch('goIntegrations')}/></div>
+      <div class="step-view" class:step-hidden={!cicdActive}><LazyView prewarm={prewarmViews} active={cicdActive} load={() => import('$lib/components/cicd/CiCdView.svelte')} on:goIntegrations={() => showProjectIntegrations = true}/></div>
       <div class="step-view" class:step-hidden={!$terminalActive}><LazyView prewarm={prewarmViews} active={$terminalActive} load={() => import('$lib/components/terminal/TerminalView.svelte')}/></div>
       <div class="step-view" class:step-hidden={!$commandsActive}><LazyView prewarm={prewarmViews} active={$commandsActive} load={() => import('$lib/components/commands/CommandsView.svelte')}/></div>
       <div class="step-view" class:step-hidden={!$envActive}><LazyView prewarm={prewarmViews} active={$envActive} load={() => import('$lib/components/env/EnvView.svelte')}/></div>
@@ -771,6 +772,14 @@
       void runAction(id);
     }}
     onRunCommand={runCommandFromPalette}
+  />
+{/if}
+
+{#if showProjectIntegrations && $activeProject}
+  <EditProject
+    project={$activeProject}
+    initialTab="integrations"
+    on:close={() => showProjectIntegrations = false}
   />
 {/if}
 

@@ -220,6 +220,13 @@ export function refreshStatus(silent = false): Promise<void> {
 let diffsWanted = false;
 
 /** Called by the git view as it opens and closes. */
+export async function initRepository(): Promise<void> {
+	const wt = worktree();
+	if (!wt) return;
+	await gitService.initRepository(wt);
+	await refreshStatus();
+}
+
 export function setDiffsWanted(wanted: boolean): void {
 	const was = diffsWanted;
 	diffsWanted = wanted;

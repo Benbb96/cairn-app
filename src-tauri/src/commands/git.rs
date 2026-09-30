@@ -703,6 +703,13 @@ pub async fn git_read_exclude(worktree_path: String) -> Result<String, GitError>
 }
 
 #[tauri::command]
+/// Turns a plain folder into a repository.
+pub async fn git_init(worktree_path: String) -> Result<(), GitError> {
+    run(git_cmd(&expand(&worktree_path)).args(["init", "-q"]))?;
+    Ok(())
+}
+
+#[tauri::command]
 /// Replaces the repository-local ignore file, creating `info/` if needed.
 pub async fn git_write_exclude(worktree_path: String, content: String) -> Result<(), GitError> {
     let path = exclude_path(&worktree_path)?;

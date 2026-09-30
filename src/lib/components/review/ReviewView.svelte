@@ -22,7 +22,9 @@
     fetch as gitFetch,
     toGitError,
   } from '$lib/services/git-service';
-  import { activeInstance } from '$lib/stores/instance';
+  import { activeInstance, setInstanceBaseBranch } from '$lib/stores/instance';
+  import { git, loadBranches } from '$lib/stores/git';
+  import BaseBranchSelect from '$lib/components/git/BaseBranchSelect.svelte';
   import { activeStep } from '$lib/stores/ui';
   import { forgeTerms, hasForge } from '$lib/stores/integrations';
   import {
@@ -73,6 +75,19 @@
    * compare the branch with itself and show an empty diff with no explanation.
    */
   $: isBaseUnusable = !mr && ((base ?? '').trim() === '' || base === instance?.branch);
+
+  let branchesLoadedFor = '';
+  $: if (isBaseUnusable && $activeStep === 'review' && worktreePath && branchesLoadedFor !== worktreePath) {
+    branchesLoadedFor = worktreePath;
+    void loadBranches(worktreePath, { fetch: false });
+  }
+  $: baseChoices = [...($git.branches ?? []), ...($git.remoteBranches ?? [])]
+    .filter(b => b !== instance?.branch);
+
+  async function applyBase(branch: string) {
+    if (!instance) return;
+    await setInstanceBaseBranch(instance.id, instance.projectId, branch).catch(() => {});
+  }
   $: head = mr ? mr.headSha : 'HEAD';
   $: worktreePath = instance?.worktreePath ?? '';
 
@@ -368,7 +383,14 @@
       <Icon name="branch" size={26} style="color: var(--fg-3)"/>
       <h3>{t('review.noBase')}</h3>
       <p class="base-note">{t('review.noBaseBody')}</p>
-      <p class="base-note dim">{t('review.noBaseWhere')}</p>
+      <BaseBranchSelect
+        value={base ?? ''}
+        branches={baseChoices}
+        exclude={instance?.branch ?? ''}
+        loading={$git.isLoadingBranches && baseChoices.length === 0}
+        placeholder={t('review.pickBase') as string}
+        on:change={(e) => applyBase(e.detail.branch)}
+      />
     </div>
   {:else if scope && !reviewState.isDiffMode && $aiEnabled}
     <!--

@@ -485,7 +485,6 @@
       on:goShortcuts={() => { homeOpenSection = 'settings'; homeOpenSettingsTab = 'shortcuts'; goScreen('home'); }}
       on:goLanguageServers={() => { homeOpenSection = 'settings'; homeOpenSettingsTab = 'languageServers'; goScreen('home'); }}
       on:goGitSettings={() => { homeOpenSection = 'settings'; homeOpenSettingsTab = 'git'; goScreen('home'); }}
-      on:goIntegrations={() => { homeOpenSection = 'integrations'; goScreen('home'); }}
       on:createInstance={(e) => { createFromBranch = e.detail?.branch ?? ''; showCreate = true; }}
     />
     {/if}

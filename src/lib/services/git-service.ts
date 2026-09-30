@@ -248,6 +248,10 @@ export async function readExclude(worktreePath: string): Promise<string> {
 }
 
 /** Replaces the repository-local ignore file. */
+export async function initRepository(worktreePath: string): Promise<void> {
+	return invoke("git_init", { worktreePath });
+}
+
 export async function writeExclude(
 	worktreePath: string,
 	content: string,

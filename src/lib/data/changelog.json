@@ -10,6 +10,34 @@
 			{
 				"kind": "added",
 				"text": {
+					"en": "A project folder that is not a Git repository can be initialized from the Git step.",
+					"fr": "Un dossier de projet qui n'est pas un dépôt Git peut être initialisé depuis la step Git."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "When no base branch is set, the Review step lets you pick one directly.",
+					"fr": "Quand aucune branche de base n'est définie, la step Review permet d'en choisir une directement."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The CI/CD step without integrations opens the project settings on the Integrations tab, to link them right away, instead of the home screen.",
+					"fr": "La step CI/CD sans intégration ouvre les réglages du projet sur l'onglet Intégrations, pour les relier tout de suite, au lieu de l'écran d'accueil."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The tabs of the Git step scroll horizontally when they do not fit.",
+					"fr": "Les onglets de la step Git défilent horizontalement quand ils ne tiennent pas."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
 					"en": "The Local section of the Branches tab has a Create branch button, which branches off a base branch picked from the local and remote branches (the current one by default) and checks the new one out.",
 					"fr": "La section Locales de l'onglet Branches a un bouton Créer une branche, qui crée une branche depuis une branche de base choisie parmi les branches locales et distantes (la branche courante par défaut) et l'extrait."
 				}

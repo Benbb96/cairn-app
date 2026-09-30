@@ -198,6 +198,7 @@ pub fn run() {
             git_check_ignore,
             git_read_exclude,
             git_write_exclude,
+            git_init,
             git_diff_unstaged,
             git_diff_staged,
             git_blame_file,

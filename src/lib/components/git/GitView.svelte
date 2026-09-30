@@ -42,6 +42,7 @@
     loadMoreGraph,
     loadAllGraph,
     refreshStashes,
+    initRepository,
     refreshTags,
     getStashDiff,
     getHeadCommitMessage,
@@ -856,6 +857,29 @@
     e.preventDefault();
   }
 
+  let isInitializing = false;
+  let initError = '';
+
+  async function handleInitRepository() {
+    isInitializing = true;
+    initError = '';
+    try {
+      await initRepository();
+    } catch (err) {
+      initError = describeGitError(toGitError(err)).title;
+    } finally {
+      isInitializing = false;
+    }
+  }
+
+  /** A vertical wheel scrolls the tab strip sideways, so a mouse without a horizontal wheel reaches every tab. */
+  function scrollTabsSideways(e: WheelEvent) {
+    const el = e.currentTarget as HTMLElement;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return;
+    el.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+
   /** Stashes live in their own tab, which knows how to show and apply one. */
   async function openStashFromGraph(index: number) {
     gitLeftTab.set('stash');
@@ -1519,7 +1543,7 @@
 <div class="git-layout" bind:this={layoutEl}>
   <!-- Left column: changes / log tabs -->
   <div class="git-col git-col-left" style="flex-basis:{splitRatio * 100}%">
-    <div class="git-col-head tab-head" bind:offsetHeight={tabHeadHeight}>
+    <div class="git-col-head tab-head" bind:offsetHeight={tabHeadHeight} on:wheel={scrollTabsSideways}>
       <button
         class="col-tab"
         class:active={$gitLeftTab === 'changes'}
@@ -2367,6 +2391,15 @@
     <div class="git-nonrepo-icon"><Icon name="git" size={44}/></div>
     <h3 class="git-nonrepo-title">{t('git.notARepoTitle')}</h3>
     <p class="git-nonrepo-text">{t('git.notARepoBody')}</p>
+    <button class="btn primary" disabled={isInitializing} on:click={handleInitRepository}>
+      {#if isInitializing}
+        <Spinner size={13} trackColor="oklch(1 0 0 / 0.3)" color="white"/>
+      {:else}
+        <Icon name="git" size={13}/>
+      {/if}
+      {t('git.initRepo')}
+    </button>
+    {#if initError}<p class="git-nonrepo-error selectable">{initError}</p>{/if}
   </div>
 {/if}
 </div>
@@ -2739,6 +2772,12 @@
     line-height: 1.5;
     color: var(--fg-3);
   }
+  .git-nonrepo-error {
+    margin: 0;
+    max-width: 380px;
+    font-size: 12px;
+    color: var(--danger);
+  }
 
   .git-col {
     flex: 1;
@@ -2814,7 +2853,12 @@
   .tab-head {
     padding: 0;
     gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
   }
+  .tab-head::-webkit-scrollbar { height: 4px; }
+  .tab-head::-webkit-scrollbar-thumb { background: var(--stroke-1); border-radius: 2px; }
 
   .col-tab {
     display: flex;
