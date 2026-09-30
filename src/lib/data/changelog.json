@@ -1,59 +1,59 @@
 [
 	{
 		"version": "1.1.0",
-		"date": "",
+		"date": "2026-10-01",
 		"summary": {
-			"en": "Branches can be created from the Local section, very large diffs open in the editor instead of inline, and the Git profile is remembered per project. Undo works in every text field, and the line history panel stays open.",
-			"fr": "Les branches se créent depuis la section Locales, les très gros diffs s'ouvrent dans l'éditeur au lieu d'être affichés, et le profil Git est mémorisé par projet. L'annulation fonctionne dans tous les champs de texte, et le panneau d'historique de ligne reste ouvert."
+			"en": "Editor tabs can move out into windows of their own for a second screen, branch names for new instances follow a template you control, and an existing worktree can be adopted as an instance. Projects can be relocated, duplicated on disk and initialized as Git repositories, the editor highlights many more languages, and the AppImage no longer leaks its environment into terminals and tools.",
+			"fr": "Les onglets de l'éditeur peuvent sortir dans leurs propres fenêtres pour un second écran, les noms de branche des nouvelles instances suivent un modèle que vous maîtrisez, et un worktree existant peut être adopté comme instance. Les projets se relocalisent, se dupliquent sur le disque et s'initialisent en dépôt Git, l'éditeur colore bien plus de langages, et l'AppImage ne transmet plus son environnement aux terminaux et aux outils."
 		},
 		"changes": [
 			{
 				"kind": "added",
 				"text": {
-					"en": "An editor tab can be taken out into a window of its own, for a second screen: from the tab's menu, the button beside the file path, a shortcut, or by dragging the tab out of the app. A detached window holds as many tabs as you like, from several projects and from outside any project, with the whole editor, and tabs move between windows by dragging them, unsaved edits included.",
-					"fr": "Un onglet de l'éditeur peut sortir dans une fenêtre dédiée, pour un second écran : depuis le menu de l'onglet, le bouton à côté du chemin du fichier, un raccourci, ou en glissant l'onglet hors de l'application. Une fenêtre détachée accueille autant d'onglets que voulu, de plusieurs projets et de hors de tout projet, avec l'éditeur complet, et les onglets passent d'une fenêtre à l'autre en les glissant, modifications non enregistrées comprises."
+					"en": "An editor tab can move out into a window of its own, from its menu, the button beside the file path, a shortcut, or by dragging it out of the app. A detached window holds tabs from several projects or from outside any project, and tabs move between windows by dragging, unsaved edits included.",
+					"fr": "Un onglet de l'éditeur peut sortir dans une fenêtre dédiée, depuis son menu, le bouton à côté du chemin du fichier, un raccourci, ou en le glissant hors de l'application. Une fenêtre détachée accueille des onglets de plusieurs projets ou hors de tout projet, et les onglets passent d'une fenêtre à l'autre en les glissant, modifications non enregistrées comprises."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "Closing the app with unsaved files, in the editor or in a detached window, now asks once whether to save them.",
-					"fr": "Fermer l'application avec des fichiers non enregistrés, dans l'éditeur ou dans une fenêtre détachée, demande désormais une seule fois s'il faut les enregistrer."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Scrolling to the end of a panel, such as a diff in the Git view, no longer scrolls the view around it, and the elastic bounce at the edges on macOS is gone.",
-					"fr": "Arriver au bout d'un panneau en le faisant défiler, comme un diff dans la vue Git, ne fait plus défiler la vue qui le contient, et le rebond élastique aux extrémités sur macOS a disparu."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "Duplicating a project now copies its folder on disk, with a chosen name, color, folder name and destination, instead of registering the same folder twice.",
-					"fr": "Dupliquer un projet copie désormais son dossier sur le disque, avec le nom, la couleur, le nom de dossier et la destination choisis, au lieu d'enregistrer deux fois le même dossier."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "A file tree error no longer stays on screen after switching to another project.",
-					"fr": "Une erreur de l'arborescence de fichiers ne reste plus affichée après être passé à un autre projet."
+					"en": "Closing the app with unsaved files, in any window, asks once whether to save them.",
+					"fr": "Fermer l'application avec des fichiers non enregistrés, dans n'importe quelle fenêtre, demande une seule fois s'il faut les enregistrer."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "A project's location on disk can be changed from its settings, after moving or renaming its folder.",
-					"fr": "L'emplacement d'un projet sur le disque se modifie depuis ses réglages, après avoir déplacé ou renommé son dossier."
+					"en": "The branch name of a new instance is derived from the ticket title, with the ticket type mapped to the usual prefix (Bug becomes fix, User Story becomes feat). A Generate button lets a model write it instead.",
+					"fr": "Le nom de branche d'une nouvelle instance est dérivé du titre du ticket, avec le type du ticket ramené au préfixe habituel (Bug devient fix, User Story devient feat). Un bouton Générer permet de le faire rédiger par un modèle."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "Opening a project whose folder no longer exists offers to locate it again or to remove the project.",
-					"fr": "Ouvrir un projet dont le dossier n'existe plus propose de le localiser à nouveau ou de supprimer le projet."
+					"en": "The branch name template ({{kind}}, {{key}}, {{slug}}) is editable in Settings > Git with a live preview, and each project can override it. The default is now {{kind}}/{{key}}/{{slug}}.",
+					"fr": "Le modèle de nom de branche ({{kind}}, {{key}}, {{slug}}) se modifie dans Réglages > Git avec un aperçu en direct, et chaque projet peut le redéfinir. Le modèle par défaut est désormais {{kind}}/{{key}}/{{slug}}."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The Local section of the Branches tab has a Create branch button, from a base branch picked among local and remote ones.",
+					"fr": "La section Locales de l'onglet Branches a un bouton Créer une branche, depuis une branche de base choisie parmi les locales et les distantes."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The New instance dialog can adopt a worktree that already exists, such as one created by hand in a terminal: it lists the worktrees of the repository that no instance stands for, and leaves them where they are.",
+					"fr": "La fenêtre Nouvelle instance peut adopter un worktree qui existe déjà, comme un worktree créé à la main dans un terminal : elle liste les worktrees du dépôt qu'aucune instance ne représente, et les laisse où ils sont."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A project's location on disk can be changed from its settings, and opening a project whose folder is gone offers to locate it or remove the project.",
+					"fr": "L'emplacement d'un projet sur le disque se modifie depuis ses réglages, et ouvrir un projet dont le dossier a disparu propose de le localiser ou de supprimer le projet."
 				}
 			},
 			{
@@ -66,36 +66,15 @@
 			{
 				"kind": "added",
 				"text": {
-					"en": "When no base branch is set, the Review step lets you pick one directly.",
-					"fr": "Quand aucune branche de base n'est définie, la step Review permet d'en choisir une directement."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "The CI/CD step without integrations opens the project settings on the Integrations tab, to link them right away, instead of the home screen.",
-					"fr": "La step CI/CD sans intégration ouvre les réglages du projet sur l'onglet Intégrations, pour les relier tout de suite, au lieu de l'écran d'accueil."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "The tabs of the Git step scroll horizontally when they do not fit.",
-					"fr": "Les onglets de la step Git défilent horizontalement quand ils ne tiennent pas."
+					"en": "The Review step lets you pick a base branch when none is set.",
+					"fr": "La step Review permet de choisir une branche de base quand aucune n'est définie."
 				}
 			},
 			{
 				"kind": "added",
 				"text": {
-					"en": "The Local section of the Branches tab has a Create branch button, which branches off a base branch picked from the local and remote branches (the current one by default) and checks the new one out.",
-					"fr": "La section Locales de l'onglet Branches a un bouton Créer une branche, qui crée une branche depuis une branche de base choisie parmi les branches locales et distantes (la branche courante par défaut) et l'extrait."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The git view no longer renders the diff of a very large file; a button opens the file in the editor instead. The threshold (2000 lines by default) is set in Settings > Git.",
-					"fr": "La vue git n'affiche plus le diff d'un fichier très volumineux ; un bouton propose de l'ouvrir dans l'éditeur. Le seuil (2000 lignes par défaut) se règle dans Réglages > Git."
+					"en": "Very large diffs (2000 lines by default, set in Settings > Git) are no longer rendered in the Git view; a button opens the file in the editor.",
+					"fr": "Les très gros diffs (2000 lignes par défaut, réglable dans Réglages > Git) ne sont plus affichés dans la vue Git ; un bouton ouvre le fichier dans l'éditeur."
 				}
 			},
 			{
@@ -106,94 +85,108 @@
 				}
 			},
 			{
-				"kind": "fixed",
+				"kind": "added",
 				"text": {
-					"en": "Rust macros such as println! and loop labels are now coloured.",
-					"fr": "Les macros Rust comme println! et les labels de boucle sont désormais colorés."
+					"en": "Adding a project without any integration configured explains where to create one.",
+					"fr": "Ajouter un projet sans intégration configurée indique où en créer une."
 				}
 			},
 			{
 				"kind": "changed",
 				"text": {
-					"en": "The Git profile picked in the commit form is remembered per project instead of being shared.",
-					"fr": "Le profil Git choisi dans le formulaire de commit est mémorisé par projet au lieu d'être partagé."
+					"en": "Deleting an instance asks whether to delete its worktree too, and shows where it is. Cairn removes the worktrees it created by default and keeps the ones it adopted.",
+					"fr": "Supprimer une instance demande s'il faut aussi supprimer son worktree, et indique où il se trouve. Par défaut, Cairn supprime les worktrees qu'il a créés et garde ceux qu'il a adoptés."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "Duplicating a project copies its folder on disk, with a chosen name, color, folder name and destination, instead of registering the same folder twice.",
+					"fr": "Dupliquer un projet copie son dossier sur le disque, avec le nom, la couleur, le nom de dossier et la destination choisis, au lieu d'enregistrer deux fois le même dossier."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The Git profile picked in the commit form is remembered per project.",
+					"fr": "Le profil Git choisi dans le formulaire de commit est mémorisé par projet."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The CI/CD step without integrations opens the project settings on the Integrations tab.",
+					"fr": "La step CI/CD sans intégration ouvre les réglages du projet sur l'onglet Intégrations."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo in every text field of the app.",
-					"fr": "Ctrl/Cmd+Z et Ctrl/Cmd+Maj+Z annulent et rétablissent la saisie dans tous les champs de texte de l'application."
+					"en": "In the AppImage build, terminals, coding CLIs, language servers, formatters, git and anything opened from Cairn no longer inherit the AppImage environment, which broke python3 (\"Failed to import encodings module\") and Python-based tools.",
+					"fr": "Dans le build AppImage, les terminaux, les CLI de code, les serveurs de langage, les formateurs, git et tout ce qu'ouvre Cairn n'héritent plus de l'environnement de l'AppImage, qui cassait python3 (\"Failed to import encodings module\") et les outils écrits en Python."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The line history panel in the editor no longer closes by itself after a few seconds.",
-					"fr": "Le panneau d'historique de ligne de l'éditeur ne se ferme plus tout seul au bout de quelques secondes."
+					"en": "The branch suggested for a new instance no longer repeats the ticket key (feat/app-214-app-214), and the key keeps the tracker's case.",
+					"fr": "La branche suggérée pour une nouvelle instance ne répète plus la clé du ticket (feat/app-214-app-214), et la clé garde la casse du tracker."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Items of the context menus in the git graph highlight across the full width of the menu on hover.",
-					"fr": "Les entrées des menus contextuels du graphe git sont surlignées sur toute la largeur du menu au survol."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "When no integration is configured, the integrations step of adding a project explains where to create one instead of staying empty.",
-					"fr": "Quand aucune intégration n'est configurée, l'étape intégrations de l'ajout d'un projet indique où en créer une au lieu de rester vide."
+					"en": "Deleting an instance whose worktree was not named after its branch no longer leaves a stale worktree entry in the repository.",
+					"fr": "Supprimer une instance dont le worktree ne porte pas le nom de sa branche ne laisse plus d'entrée de worktree périmée dans le dépôt."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The git view of a folder that is not a git repository no longer shows a red error banner above the explanation.",
-					"fr": "La vue git d'un dossier qui n'est pas un dépôt git n'affiche plus de bandeau d'erreur rouge au-dessus de l'explication."
+					"en": "The Reset button of the branch bar undoes the last commit (soft, mixed or hard) instead of doing nothing.",
+					"fr": "Le bouton Reset de la barre de branche annule le dernier commit (soft, mixed ou hard) au lieu de ne rien faire."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The Reset button of the branch bar undoes the last commit (soft, mixed or hard) instead of resetting to the current commit, which did nothing.",
-					"fr": "Le bouton Reset de la barre de branche annule le dernier commit (soft, mixed ou hard) au lieu de revenir sur le commit courant, ce qui ne faisait rien."
+					"en": "A generated commit message no longer puts a placeholder in the title and the whole message in the description.",
+					"fr": "Un message de commit généré ne met plus un texte générique dans le titre et tout le message dans la description."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "A generated commit message no longer puts a placeholder such as \"Commit title generated\" in the title and the whole message in the description.",
-					"fr": "Un message de commit généré ne met plus un texte générique comme \"Commit title generated\" dans le titre et tout le message dans la description."
+					"en": "Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo in every text field.",
+					"fr": "Ctrl/Cmd+Z et Ctrl/Cmd+Maj+Z annulent et rétablissent dans tous les champs de texte."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The programs Cairn starts - the terminals, the coding CLIs running in them, the language servers, the formatters, git, the terminal emulator or file manager opened from a path, and the browser or viewer a link or a file is opened in - no longer inherit the environment of the AppImage itself, nor the X11 backend and stock theme it forces on GTK applications, and no longer start inside its mount. In an AppImage build that environment points at the temporary mount the app runs from, which broke python3 in a Cairn terminal (\"Failed to import encodings module\"), took down anything else written in Python such as a Python language server, and could link a system binary against a bundled library instead of its own.",
-					"fr": "Les programmes lancés par Cairn - les terminaux, les CLI de code qui y tournent, les serveurs de langage, les formateurs, git, l'émulateur de terminal ou le gestionnaire de fichiers ouvert depuis un chemin, et le navigateur ou la visionneuse dans lesquels s'ouvre un lien ou un fichier - n'héritent plus de l'environnement de l'AppImage elle-même, ni du backend X11 et du thème par défaut qu'elle impose aux applications GTK, et ne démarrent plus dans son montage. Dans un build AppImage, cet environnement pointe vers le montage temporaire depuis lequel l'application tourne, ce qui cassait python3 dans un terminal de Cairn (\"Failed to import encodings module\"), emportait tout ce qui est écrit en Python comme un serveur de langage Python, et pouvait lier un binaire du système à une bibliothèque embarquée au lieu de la sienne."
+					"en": "The line history panel no longer closes by itself after a few seconds.",
+					"fr": "Le panneau d'historique de ligne ne se ferme plus tout seul au bout de quelques secondes."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "The branch suggested for a new instance no longer repeats the ticket key twice. The descriptive half of the name now comes from the ticket title rather than from its key, which is what produced names like feat/app-214-app-214, and the key itself keeps the case the tracker gave it - APP-214, not app-214, so the branch still matches what you search for everywhere else.",
-					"fr": "La branche suggérée pour une nouvelle instance ne répète plus deux fois la clé du ticket. La partie descriptive du nom vient désormais du titre du ticket et non de sa clé, ce qui produisait des noms comme feat/app-214-app-214, et la clé garde la casse que le tracker lui a donnée - APP-214 et non app-214, pour que la branche corresponde encore à ce que vous cherchez partout ailleurs."
+					"en": "Scrolling to the end of a panel no longer scrolls the view around it, and the elastic bounce on macOS is gone.",
+					"fr": "Arriver au bout d'un panneau ne fait plus défiler la vue qui le contient, et le rebond élastique sur macOS a disparu."
 				}
 			},
 			{
-				"kind": "added",
+				"kind": "fixed",
 				"text": {
-					"en": "The branch name is derived from the ticket title without asking a model: accents folded, every word kept, cut to a handful of words, and the tracker issue type mapped to the prefix a repository actually uses (Bug becomes fix, User Story becomes feat). A Generate button next to the field replaces the slug with one a model wrote from the ticket title and description, for when the deterministic one reads poorly.",
-					"fr": "Le nom de branche est dérivé du titre du ticket sans solliciter de modèle : accents repliés, tous les mots conservés, coupé à une poignée de mots, et le type du ticket ramené au préfixe qu'un dépôt utilise réellement (Bug devient fix, User Story devient feat). Un bouton « Générer » à côté du champ remplace le slug par un slug rédigé par un modèle à partir du titre et de la description du ticket, pour les cas où celui dérivé se lit mal."
+					"en": "Rust macros such as println! and loop labels are coloured.",
+					"fr": "Les macros Rust comme println! et les labels de boucle sont colorés."
 				}
 			},
 			{
-				"kind": "added",
+				"kind": "fixed",
 				"text": {
-					"en": "The branch name template is editable. The global one lives in Settings > Git, with its placeholders ({{kind}}, {{key}}, {{slug}}) and a live preview, and every project can override it from its own Branch tab - a repository whose team names branches its own way no longer has to be renamed by hand on every instance. The default is now {{kind}}/{{key}}/{{slug}}.",
-					"fr": "Le modèle de nom de branche est modifiable. Le modèle global se trouve dans Réglages > Git, avec ses variables ({{kind}}, {{key}}, {{slug}}) et un aperçu en direct, et chaque projet peut le redéfinir depuis son propre onglet Branche - un dépôt dont l'équipe nomme ses branches à sa façon n'a plus à être renommé à la main à chaque instance. Le modèle par défaut est désormais {{kind}}/{{key}}/{{slug}}."
+					"en": "Small interface fixes: Git step tabs scroll when they overflow, git graph menu items highlight across their full width, no red error banner on a folder that is not a Git repository, and no stale file tree error after switching projects.",
+					"fr": "Petits correctifs d'interface : les onglets de la step Git défilent quand ils débordent, les entrées des menus du graphe git sont surlignées sur toute la largeur, plus de bandeau d'erreur rouge sur un dossier qui n'est pas un dépôt Git, et plus d'erreur d'arborescence résiduelle après un changement de projet."
 				}
 			}
 		]
