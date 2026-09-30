@@ -5,7 +5,8 @@
 //! have no plugin: opening a terminal, revealing a file, cloning a repo.
 
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use crate::child_env;
 use crate::storage::{CommandOutput, copy_dir_recursive};
 
 /// Runs a program to completion and captures its output. A spawn failure comes
@@ -13,7 +14,7 @@ use crate::storage::{CommandOutput, copy_dir_recursive};
 /// Async: the callers shell out to git, which blocks the UI thread.
 #[tauri::command]
 pub async fn run_shell_command(program: String, args: Vec<String>, cwd: Option<String>) -> CommandOutput {
-    let mut cmd = Command::new(&program);
+    let mut cmd = child_env::command(&program);
     cmd.args(&args);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
@@ -35,7 +36,7 @@ pub async fn run_shell_command(program: String, args: Vec<String>, cwd: Option<S
 /// Same, with `stdin` written to the process before its output is read.
 #[tauri::command]
 pub async fn run_shell_command_with_stdin(program: String, args: Vec<String>, cwd: Option<String>, stdin: String) -> CommandOutput {
-    let mut cmd = Command::new(&program);
+    let mut cmd = child_env::command(&program);
     cmd.args(&args);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
@@ -69,17 +70,17 @@ pub async fn open_in_terminal(path: String) -> Result<(), String> {
         if p.is_dir() { expanded.clone() } else { p.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or(expanded.clone()) }
     };
     #[cfg(target_os = "macos")]
-    Command::new("open").args(["-a", "Terminal", &dir]).spawn().map_err(|e| e.to_string())?;
+    child_env::command("open").args(["-a", "Terminal", &dir]).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    Command::new("cmd").args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)]).spawn().map_err(|e| e.to_string())?;
+    child_env::command("cmd").args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)]).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     {
         let launched =
-            Command::new("x-terminal-emulator").current_dir(&dir).spawn().is_ok() ||
-            Command::new("gnome-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
-            Command::new("xfce4-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
-            Command::new("konsole").args(["--workdir", &dir]).spawn().is_ok() ||
-            Command::new("xterm").current_dir(&dir).spawn().is_ok();
+            child_env::command("x-terminal-emulator").current_dir(&dir).spawn().is_ok() ||
+            child_env::command("gnome-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
+            child_env::command("xfce4-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
+            child_env::command("konsole").args(["--workdir", &dir]).spawn().is_ok() ||
+            child_env::command("xterm").current_dir(&dir).spawn().is_ok();
         if !launched {
             return Err("No supported terminal emulator found. Install gnome-terminal, xfce4-terminal, konsole, or x-terminal-emulator.".to_string());
         }
@@ -92,23 +93,64 @@ pub async fn open_in_terminal(path: String) -> Result<(), String> {
 pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
     let expanded = shellexpand::tilde(&path).into_owned();
     #[cfg(target_os = "macos")]
-    Command::new("open").arg("-R").arg(&expanded).spawn().map_err(|e| e.to_string())?;
+    child_env::command("open").arg("-R").arg(&expanded).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "windows")]
-    Command::new("explorer").arg(format!("/select,{}", expanded)).spawn().map_err(|e| e.to_string())?;
+    child_env::command("explorer").arg(format!("/select,{}", expanded)).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     {
         let p = std::path::Path::new(&expanded);
         let parent = p.parent().unwrap_or(p);
         let launched =
-            Command::new("nautilus").args(["--select", &expanded]).spawn().is_ok() ||
-            Command::new("dolphin").args(["--select", &expanded]).spawn().is_ok() ||
-            Command::new("nemo").arg(&expanded).spawn().is_ok() ||
-            Command::new("thunar").arg(&expanded).spawn().is_ok();
+            child_env::command("nautilus").args(["--select", &expanded]).spawn().is_ok() ||
+            child_env::command("dolphin").args(["--select", &expanded]).spawn().is_ok() ||
+            child_env::command("nemo").arg(&expanded).spawn().is_ok() ||
+            child_env::command("thunar").arg(&expanded).spawn().is_ok();
         if !launched {
-            Command::new("xdg-open").arg(parent).spawn().map_err(|e| e.to_string())?;
+            child_env::command("xdg-open").arg(parent).spawn().map_err(|e| e.to_string())?;
         }
     }
     Ok(())
+}
+
+/// Opens a URL or a file with the application the desktop associates with it.
+/// Goes through `child_env`: an opener inheriting the AppImage environment starts
+/// the browser or the viewer on the bundle's libraries.
+#[tauri::command]
+pub async fn open_external(target: String) -> Result<(), String> {
+    let target = openable(&target).ok_or_else(|| format!("Refusing to open {target}"))?;
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
+        let mut last = String::from("No opener found");
+        for mut cmd in open::commands(&target) {
+            child_env::scrub(&mut cmd);
+            // Out of Cairn's group, a Ctrl+C in the terminal that launched it spares the browser.
+            cmd.process_group(0);
+            match cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+                Ok(mut child) => {
+                    // Some openers wait for the application they start.
+                    std::thread::spawn(move || child.wait());
+                    return Ok(());
+                }
+                Err(e) => last = e.to_string(),
+            }
+        }
+        Err(last)
+    }
+    #[cfg(not(target_os = "linux"))]
+    open::that_detached(&target).map_err(|e| e.to_string())
+}
+
+/// What `open_external` agrees to hand to the desktop: a web, mail or phone
+/// link, or a file that exists.
+fn openable(target: &str) -> Option<String> {
+    let lower = target.to_ascii_lowercase();
+    if ["http://", "https://", "mailto:", "tel:"].iter().any(|s| lower.starts_with(s)) {
+        return Some(target.to_string());
+    }
+    let expanded = shellexpand::tilde(target).into_owned();
+    let path = std::path::Path::new(&expanded);
+    (path.is_absolute() && path.exists()).then_some(expanded)
 }
 
 /// Copies a file or a whole directory, creating the missing parents.
@@ -153,7 +195,7 @@ pub async fn clone_repository(url: String, dest_parent: String, name: String) ->
         if dest.exists() {
             return Err(format!("Destination already exists: {}", dest.display()));
         }
-        let output = Command::new("git")
+        let output = child_env::command("git")
             .args(["clone", "--", &url, dest.to_str().unwrap_or(&name)])
             .output()
             .map_err(|e| format!("Failed to run git: {}", e))?;
@@ -167,4 +209,39 @@ pub async fn clone_repository(url: String, dest_parent: String, name: String) ->
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opens_the_web_and_mail_links() {
+        for url in ["https://forge/mr/1", "HTTP://example.com", "mailto:a@b.c", "tel:+331"] {
+            assert_eq!(openable(url).as_deref(), Some(url));
+        }
+    }
+
+    #[test]
+    fn refuses_any_other_scheme() {
+        for url in ["file:///etc/passwd", "javascript:alert(1)", "smb://host/share", "ftp://host"] {
+            assert_eq!(openable(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn opens_a_file_that_exists() {
+        let dir = std::env::temp_dir();
+        let file = dir.join("cairn-open-external-test");
+        std::fs::write(&file, b"x").unwrap();
+        let path = file.to_string_lossy().into_owned();
+        assert_eq!(openable(&path), Some(path.clone()));
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(openable(&path), None);
+    }
+
+    #[test]
+    fn refuses_a_relative_path() {
+        assert_eq!(openable("Cargo.toml"), None);
+    }
 }
