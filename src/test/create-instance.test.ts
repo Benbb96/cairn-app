@@ -10,17 +10,23 @@ import type { Instance } from "$lib/types/instance";
 import type { Ticket } from "$lib/types/integrations";
 
 const spawnInstance = vi.fn<(...a: unknown[]) => unknown>();
+const adoptWorktree = vi.fn<(...a: unknown[]) => unknown>();
 const instancesStore = writable<Instance[]>([]);
 vi.mock("$lib/stores/instance", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	instances: { subscribe: instancesStore.subscribe },
 	spawnInstance: (...a: unknown[]) => spawnInstance(...a),
+	adoptWorktree: (...a: unknown[]) => adoptWorktree(...a),
 }));
 
 const listBranchesDetailed = vi.fn<(...a: unknown[]) => unknown>();
+const listUnclaimedWorktrees = vi.fn<(...a: unknown[]) => unknown>();
+const suggestBaseBranches = vi.fn<(...a: unknown[]) => unknown>();
 vi.mock("$lib/services/instance-service", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
 	listBranchesDetailed: (...a: unknown[]) => listBranchesDetailed(...a),
+	listUnclaimedWorktrees: (...a: unknown[]) => listUnclaimedWorktrees(...a),
+	suggestBaseBranches: (...a: unknown[]) => suggestBaseBranches(...a),
 }));
 
 const gitFetch = vi.fn<(...a: unknown[]) => unknown>();
@@ -160,18 +166,31 @@ async function fill(input: HTMLInputElement, value: string) {
 	await userEvent.type(input, value);
 }
 
-/** Fills the ticket step by hand and moves to the mode step. */
+/**
+ * The wizard opens on the mode step: what it is about to do comes before what
+ * the work is called, so a test that wants the ticket walks one step in.
+ */
 async function toModeStep() {
+	await settle();
+}
+
+/** Accepts the default mode, then fills the ticket the branch is named after. */
+async function toBranchStep() {
+	await userEvent.click(primary());
+	await settle();
 	await fill(field("ticket-id") as HTMLInputElement, "CAIRN-42");
 	await fill(field("ticket-title") as HTMLInputElement, "Fix the parser");
 	await userEvent.click(primary());
 	await settle();
 }
 
-async function toBranchStep() {
-	await toModeStep();
+/** Mounts and stops on the ticket step, the way accepting the default mode does. */
+async function mountOnTicket(props: Record<string, unknown> = {}) {
+	const handles = mount(props);
+	await settle();
 	await userEvent.click(primary());
 	await settle();
+	return handles;
 }
 
 beforeEach(() => {
@@ -180,6 +199,15 @@ beforeEach(() => {
 		return 0;
 	});
 	spawnInstance.mockReset().mockResolvedValue({ id: "new-i", projectId: "p1" });
+	adoptWorktree.mockReset().mockResolvedValue({ id: "new-i", projectId: "p1" });
+	listUnclaimedWorktrees.mockReset().mockResolvedValue([
+		{
+			path: "/home/someone/elsewhere",
+			branch: "fix/PORE-3243-mikrotik-casing",
+		},
+		{ path: "/home/someone/detached", branch: null },
+	]);
+	suggestBaseBranches.mockReset().mockResolvedValue([]);
 	listBranchesDetailed
 		.mockReset()
 		.mockResolvedValue({ local: ["main", "develop"], remote: ["origin/main"] });
@@ -210,8 +238,7 @@ beforeEach(() => {
 describe("CreateInstance", () => {
 	describe("the ticket step", () => {
 		it("needs both an id and a title before going on", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			expect(primary().disabled).toBe(true);
 			await fill(field("ticket-id") as HTMLInputElement, "CAIRN-42");
 			expect(primary().disabled).toBe(true);
@@ -220,8 +247,7 @@ describe("CreateInstance", () => {
 		});
 
 		it("refuses an id of spaces only", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			await fill(field("ticket-id") as HTMLInputElement, "   ");
 			await fill(field("ticket-title") as HTMLInputElement, "Fix it");
 			expect(primary().disabled).toBe(true);
@@ -229,15 +255,13 @@ describe("CreateInstance", () => {
 
 		/** Without a tracker there is nothing to pick a ticket from. */
 		it("offers no ticket picker without a tracker", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			expect(tabs()).toHaveLength(0);
 		});
 
 		it("offers the picker when a tracker is bound", async () => {
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
-			mount();
-			await settle();
+			await mountOnTicket();
 			expect(tabs()).toHaveLength(2);
 			expect(searchTickets).toHaveBeenCalled();
 		});
@@ -250,8 +274,7 @@ describe("CreateInstance", () => {
 		});
 
 		it("fills the ticket in from the one that was picked", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
 			await settle();
 			expect(
@@ -261,8 +284,7 @@ describe("CreateInstance", () => {
 		});
 
 		it("clears the ticket on request", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
 			await settle();
 			await userEvent.click(
@@ -280,8 +302,7 @@ describe("CreateInstance", () => {
 					ticket: { id: "1", title: "Fix the parser", key: "CAIRN-42" },
 				}),
 			]);
-			mount();
-			await settle();
+			await mountOnTicket();
 			expect(ticketItems()).toHaveLength(0);
 		});
 
@@ -291,8 +312,7 @@ describe("CreateInstance", () => {
 					ticket: { id: "1", title: "Fix the parser", key: "CAIRN-42" },
 				}),
 			]);
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(
 				document.querySelector(".assigned-toggle") as HTMLElement,
 			);
@@ -310,8 +330,7 @@ describe("CreateInstance", () => {
 					ticket: { id: "1", title: "Fix the parser", key: "CAIRN-42" },
 				}),
 			]);
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(
 				document.querySelector(".assigned-toggle") as HTMLElement,
 			);
@@ -320,8 +339,7 @@ describe("CreateInstance", () => {
 		});
 
 		it("searches the scope that was chosen", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			searchTickets.mockClear();
 			await userEvent.click(
 				Array.from(document.querySelectorAll<HTMLElement>(".ticket-scope"))[2],
@@ -333,8 +351,7 @@ describe("CreateInstance", () => {
 		/** A pasted reference is resolved rather than searched for. */
 		it("resolves a pasted ticket reference", async () => {
 			resolveTicketInput.mockResolvedValue(ticket({ key: "CAIRN-9" }));
-			mount();
-			await settle();
+			await mountOnTicket();
 			const input = branchSearch();
 			input.focus();
 			await userEvent.paste("CAIRN-9");
@@ -349,15 +366,13 @@ describe("CreateInstance", () => {
 				results: [],
 				error: { message: "token expired" },
 			}));
-			mount();
-			await settle();
+			await mountOnTicket();
 			expect(document.body.textContent).toContain("token expired");
 		});
 
 		/** Switching back to the manual tab drops the ticket that was picked. */
 		it("drops the picked ticket when switching to manual", async () => {
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
 			await settle();
 			await userEvent.click(tabs()[1]);
@@ -469,11 +484,8 @@ describe("CreateInstance", () => {
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			ticketSearch.update((s) => ({ ...s, results: [ticket()] }));
 			settingsState.set({ branchTemplate: "{{kind}}/{{key}}" });
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -492,11 +504,8 @@ describe("CreateInstance", () => {
 			]);
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			ticketSearch.update((st) => ({ ...st, results: [ticket()] }));
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -527,11 +536,8 @@ describe("CreateInstance", () => {
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			ticketSearch.update((st) => ({ ...st, results: [ticket()] }));
 			runOneShotShaped.mockResolvedValue({ slug: "Parse-Nested-Blocks" });
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -566,12 +572,8 @@ describe("CreateInstance", () => {
 
 			await userEvent.click(backButton());
 			await settle();
-			await userEvent.click(backButton());
-			await settle();
 			await fill(field("ticket-id") as HTMLInputElement, "CAIRN-99");
 			await fill(field("ticket-title") as HTMLInputElement, "Widen the cache");
-			await userEvent.click(primary());
-			await settle();
 			await userEvent.click(primary());
 			await settle();
 
@@ -631,11 +633,7 @@ describe("CreateInstance", () => {
 			await fill(field("branch-name") as HTMLInputElement, "mine");
 			await userEvent.click(backButton());
 			await settle();
-			await userEvent.click(backButton());
-			await settle();
 			await fill(field("ticket-id") as HTMLInputElement, "CAIRN-99");
-			await userEvent.click(primary());
-			await settle();
 			await userEvent.click(primary());
 			await settle();
 			expect((field("branch-name") as HTMLInputElement).value).toBe("mine");
@@ -648,12 +646,8 @@ describe("CreateInstance", () => {
 			await toBranchStep();
 			await userEvent.click(backButton());
 			await settle();
-			await userEvent.click(backButton());
-			await settle();
 			await fill(field("ticket-id") as HTMLInputElement, "CAIRN-99");
 			await fill(field("ticket-title") as HTMLInputElement, "Widen the cache");
-			await userEvent.click(primary());
-			await settle();
 			await userEvent.click(primary());
 			await settle();
 			expect((field("branch-name") as HTMLInputElement).value).toBe(
@@ -671,6 +665,20 @@ describe("CreateInstance", () => {
 			await toBranchStep();
 			expect(primary().disabled).toBe(true);
 			expect(fieldError()).not.toBe("");
+		});
+
+		/** A worktree kept on disk still holds its branch, and the work in it. */
+		it("refuses a branch a worktree left on disk still holds", async () => {
+			mount();
+			await settle();
+			await toBranchStep();
+			await fill(
+				field("branch-name") as HTMLInputElement,
+				"fix/PORE-3243-mikrotik-casing",
+			);
+			await settle();
+			expect(primary().disabled).toBe(true);
+			expect(fieldError()).toContain("/home/someone/elsewhere");
 		});
 
 		it("allows a branch nothing else uses", async () => {
@@ -740,6 +748,22 @@ describe("CreateInstance", () => {
 			expect(primary().disabled).toBe(true);
 		});
 
+		/** Cutting a second worktree for it would clear the first one away. */
+		it("refuses a branch a worktree left on disk still holds", async () => {
+			listBranchesDetailed.mockResolvedValue({
+				local: ["main", "fix/PORE-3243-mikrotik-casing"],
+				remote: [],
+			});
+			mount();
+			await settle();
+			await toExistingStep();
+			const held = branchItems().find(
+				(b) => b.textContent?.trim() === "fix/PORE-3243-mikrotik-casing",
+			) as HTMLButtonElement;
+			expect(held.disabled).toBe(true);
+			expect(held.title).toContain("/home/someone/elsewhere");
+		});
+
 		it("allows a branch nothing else uses", async () => {
 			instancesStore.set([instance("i1", "p1", { branch: "develop" })]);
 			mount();
@@ -763,6 +787,10 @@ describe("CreateInstance", () => {
 			) as HTMLElement;
 			await userEvent.click(remote);
 			await settle();
+			// The branch is known, so the ticket step opens filled in from it.
+			await userEvent.click(primary());
+			await settle();
+			expect((field("ticket-id") as HTMLInputElement).value).toBe("main");
 			await userEvent.click(primary());
 			await settle();
 			expect(spawnInstance.mock.calls[0][0]).toMatchObject({
@@ -783,6 +811,8 @@ describe("CreateInstance", () => {
 				b.textContent?.includes("origin/main"),
 			) as HTMLElement;
 			await userEvent.click(remote);
+			await settle();
+			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -832,11 +862,8 @@ describe("CreateInstance", () => {
 				autoTransition: {},
 			});
 			ticketSearch.update((s) => ({ ...s, results: [ticket()] }));
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -861,11 +888,8 @@ describe("CreateInstance", () => {
 				autoTransition: { onCreate: "in-progress" },
 			});
 			ticketSearch.update((s) => ({ ...s, results: [ticket()] }));
-			mount();
-			await settle();
+			await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -890,11 +914,8 @@ describe("CreateInstance", () => {
 			});
 			transitionTicketToStatus.mockRejectedValue(new Error("no permission"));
 			ticketSearch.update((s) => ({ ...s, results: [ticket()] }));
-			const { onCreate } = mount();
-			await settle();
+			const { onCreate } = await mountOnTicket();
 			await userEvent.click(ticketItems()[0]);
-			await settle();
-			await userEvent.click(primary());
 			await settle();
 			await userEvent.click(primary());
 			await settle();
@@ -912,7 +933,8 @@ describe("CreateInstance", () => {
 			mount();
 			await settle();
 			const first = stepLabel();
-			await toModeStep();
+			await userEvent.click(primary());
+			await settle();
 			expect(stepLabel()).not.toBe(first);
 		});
 
@@ -925,10 +947,12 @@ describe("CreateInstance", () => {
 		it("goes back to the step before", async () => {
 			mount();
 			await settle();
-			await toModeStep();
-			await userEvent.click(backButton());
+			await userEvent.click(primary());
 			await settle();
 			expect(field("ticket-id")).not.toBeNull();
+			await userEvent.click(backButton());
+			await settle();
+			expect(modeCards()).toHaveLength(3);
 		});
 
 		it("closes on the close button", async () => {
@@ -959,11 +983,20 @@ describe("CreateInstance", () => {
 			});
 			mount({ initialBranch: "feat/cairn-42" });
 			await settle();
+			// The mode being settled, the wizard opens on the branch itself.
+			expect(branchItems().some((b) => b.classList.contains("active"))).toBe(
+				true,
+			);
+			await userEvent.click(primary());
+			await settle();
 			expect((field("ticket-id") as HTMLInputElement).value).toBe("CAIRN-42");
 		});
 
 		it("ignores a branch the repository does not have", async () => {
 			mount({ initialBranch: "gone" });
+			await settle();
+			expect(modeCards()).toHaveLength(3);
+			await userEvent.click(primary());
 			await settle();
 			expect((field("ticket-id") as HTMLInputElement).value).toBe("");
 		});
@@ -975,7 +1008,238 @@ describe("CreateInstance", () => {
 			});
 			mount({ initialBranch: "feat/cairn-42" });
 			await settle();
+			await userEvent.click(primary());
+			await settle();
 			expect((field("ticket-id") as HTMLInputElement).value).toBe("CAIRN-42");
+		});
+	});
+
+	describe("adopting a worktree that already exists", () => {
+		const worktreeItems = () =>
+			Array.from(document.querySelectorAll<HTMLElement>(".wt-item"));
+
+		async function toWorktreeStep() {
+			await toModeStep();
+			await userEvent.click(modeCards()[2]);
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+		}
+
+		it("offers adopting a worktree as its own way in", async () => {
+			mount();
+			await settle();
+			await toModeStep();
+			expect(modeCards()).toHaveLength(3);
+			expect(modeCards()[2].textContent).toContain("worktree");
+		});
+
+		it("lists the worktrees no instance stands for, with their path", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect(worktreeItems()).toHaveLength(2);
+			expect(worktreeItems()[0].textContent).toContain(
+				"fix/PORE-3243-mikrotik-casing",
+			);
+			expect(worktreeItems()[0].textContent).toContain(
+				"/home/someone/elsewhere",
+			);
+		});
+
+		/** A detached HEAD is a checkout, not a unit of work. */
+		it("refuses the one with no branch", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect((worktreeItems()[1] as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		it("refuses to go on before a worktree is chosen", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect(primary().disabled).toBe(true);
+			await userEvent.click(worktreeItems()[0]);
+			await settle();
+			expect(primary().disabled).toBe(false);
+		});
+
+		/** Adopting creates no worktree, so it must not go through the call that does. */
+		/**
+		 * The whole point of the reordering: the worktree comes first, and the
+		 * ticket step opens filled in from its branch - nothing is typed before
+		 * the thing it describes has been chosen.
+		 */
+		it("fills the ticket in from the branch of the chosen worktree", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			await userEvent.click(worktreeItems()[0]);
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			expect((field("ticket-id") as HTMLInputElement).value).toBe("PORE-3243");
+			expect((field("ticket-title") as HTMLInputElement).value).toBe(
+				"Mikrotik casing",
+			);
+			expect(primary().disabled).toBe(false);
+		});
+
+		it("leaves a ticket the user typed over alone", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			await userEvent.click(worktreeItems()[0]);
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			await fill(field("ticket-id") as HTMLInputElement, "MINE-1");
+			await userEvent.click(backButton());
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			expect((field("ticket-id") as HTMLInputElement).value).toBe("MINE-1");
+		});
+
+		it("adopts the chosen path instead of creating anything", async () => {
+			const { onCreate } = mount();
+			await settle();
+			await toWorktreeStep();
+			await userEvent.click(worktreeItems()[0]);
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+
+			expect(spawnInstance).not.toHaveBeenCalled();
+			expect(adoptWorktree).toHaveBeenCalledWith(
+				expect.objectContaining({
+					projectId: "p1",
+					path: "/home/someone/elsewhere",
+					ticket: expect.objectContaining({
+						id: "PORE-3243",
+						title: "Mikrotik casing",
+					}),
+				}),
+			);
+			expect(onCreate).toHaveBeenCalledWith({ instanceId: "new-i" });
+		});
+
+		it("resolves the base of the adopted branch and records it", async () => {
+			suggestBaseBranches.mockResolvedValue([
+				{ branch: "develop", reason: "fork" },
+			]);
+			mount();
+			await settle();
+			await toWorktreeStep();
+			await userEvent.click(worktreeItems()[0]);
+			await settle();
+			expect(suggestBaseBranches).toHaveBeenCalledWith(
+				"/repo",
+				"fix/PORE-3243-mikrotik-casing",
+			);
+			await userEvent.click(primary());
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			expect(adoptWorktree).toHaveBeenCalledWith(
+				expect.objectContaining({ baseBranch: "develop" }),
+			);
+		});
+
+		/** Its branch already has an instance, so adopting could only fail at the end. */
+		it("refuses a worktree whose branch another instance holds", async () => {
+			instancesStore.set([
+				instance("i1", "p1", { branch: "fix/PORE-3243-mikrotik-casing" }),
+			]);
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect((worktreeItems()[0] as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		/** A worktree made from a terminal while the dialog is open shows up. */
+		it("reads the worktrees again on every visit", async () => {
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect(listUnclaimedWorktrees).toHaveBeenCalledTimes(1);
+			await userEvent.click(backButton());
+			await settle();
+			await userEvent.click(primary());
+			await settle();
+			expect(listUnclaimedWorktrees).toHaveBeenCalledTimes(2);
+		});
+
+		describe("with a tracker bound", () => {
+			beforeEach(() => {
+				capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
+			});
+
+			async function toTicketStep() {
+				mount();
+				await settle();
+				await toWorktreeStep();
+				await userEvent.click(worktreeItems()[0]);
+				await settle();
+				await userEvent.click(primary());
+				await settle();
+			}
+
+			/** The search would hide the suggestion; the manual fields show it. */
+			it("shows the ticket read from the branch when the tracker does not know it", async () => {
+				await toTicketStep();
+				expect(resolveTicketInput).toHaveBeenCalledWith("p1", "PORE-3243");
+				expect((field("ticket-id") as HTMLInputElement).value).toBe(
+					"PORE-3243",
+				);
+				expect((field("ticket-title") as HTMLInputElement).value).toBe(
+					"Mikrotik casing",
+				);
+			});
+
+			it("picks the tracker's ticket the branch names", async () => {
+				resolveTicketInput.mockResolvedValue(
+					ticket({ key: "PORE-3243", title: "Casing for the Mikrotik" }),
+				);
+				await toTicketStep();
+				expect(
+					document.querySelector(".selected-ticket")?.textContent,
+				).toContain("Casing for the Mikrotik");
+				await userEvent.click(primary());
+				await settle();
+				expect(adoptWorktree).toHaveBeenCalledWith(
+					expect.objectContaining({
+						ticket: expect.objectContaining({ key: "PORE-3243" }),
+					}),
+				);
+			});
+
+			it("keeps the suggestion when switching back to manual", async () => {
+				resolveTicketInput.mockResolvedValue(
+					ticket({ key: "PORE-3243", title: "Casing for the Mikrotik" }),
+				);
+				await toTicketStep();
+				await userEvent.click(tabs()[1]);
+				await settle();
+				expect((field("ticket-id") as HTMLInputElement).value).toBe(
+					"PORE-3243",
+				);
+				expect((field("ticket-title") as HTMLInputElement).value).toBe(
+					"Mikrotik casing",
+				);
+			});
+		});
+
+		it("says so when every worktree already has an instance", async () => {
+			listUnclaimedWorktrees.mockResolvedValue([]);
+			mount();
+			await settle();
+			await toWorktreeStep();
+			expect(worktreeItems()).toHaveLength(0);
+			expect(document.querySelector(".branch-empty")?.textContent).toBeTruthy();
 		});
 	});
 });

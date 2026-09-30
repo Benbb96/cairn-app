@@ -8,9 +8,10 @@
      thousands of them would otherwise build the whole list on every keystroke. */
   const BRANCH_RENDER_MAX = 100;
   /**
-   * Multi-step modal creating an instance: ticket, then a new branch or an
-   * existing one, then its git configuration. Dispatches `create` with the new
-   * instance id. Blocking work is shown as a centered spinner over a dimmed body.
+   * Multi-step modal creating an instance: what it is about to do first (a new
+   * branch, an existing one, or a worktree that already exists), then the panels
+   * that mode needs, in the order `SEQUENCES` gives. Dispatches `create` with the
+   * new instance id. Blocking work is shown as a centered spinner over a dimmed body.
    */
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
@@ -18,8 +19,8 @@
   import Spinner from '$lib/components/Spinner.svelte';
   import { t } from '$lib/i18n';
   import { activeProject } from '$lib/stores/project';
-  import { spawnInstance, instances } from '$lib/stores/instance';
-  import { type BaseSuggestion, listBranchesDetailed, suggestBaseBranches } from '$lib/services/instance-service';
+  import { adoptWorktree, spawnInstance, instances } from '$lib/stores/instance';
+  import { type BaseSuggestion, type UnclaimedWorktree, listBranchesDetailed, listUnclaimedWorktrees, suggestBaseBranches } from '$lib/services/instance-service';
   import { fetch as gitFetch } from '$lib/services/git-service';
   import { forgeFindMergeRequest } from '$lib/services/integration-service';
   import BaseBranchSelect from '$lib/components/git/BaseBranchSelect.svelte';
@@ -38,7 +39,7 @@
   import type { Ticket, TicketQuery } from '$lib/types/integrations';
   import type { Instance, InstanceTicket } from '$lib/types/instance';
   import { matchesSearch } from '$lib/utils/files/files-search';
-  import { DEFAULT_BRANCH_TEMPLATE, renderBranchTemplate, slugSegment, titleSlug } from '$lib/utils/integrations/branch-template';
+  import { DEFAULT_BRANCH_TEMPLATE, isTicketKey, renderBranchTemplate, slugSegment, ticketFromBranch, titleSlug } from '$lib/utils/integrations/branch-template';
   import { AiAssistError, runOneShotShaped } from '$lib/services/ai-assist-service';
   import { isAssistCliInstalled, loadCliProviders } from '$lib/stores/cli-providers';
   import { FEATURE_SCHEMAS, resolveAiFeature } from '$lib/utils/home/ai-features';
@@ -50,9 +51,28 @@
 
   const dispatch = createEventDispatcher<{ close: void; create: { instanceId: string } }>();
 
-  // step: 0 = ticket, 1 = mode, 2 = git config
+  /**
+   * Which panels a mode walks through, in order. What the wizard asks first is
+   * always what it is about to do; after that the order follows what is already
+   * known. Creating a branch keeps the ticket before it, because the branch name
+   * is generated from the ticket through `branchTemplate`. The two modes that
+   * start from a branch that already exists put the ticket last instead and fill
+   * it in from that branch, so nothing has to be typed before the thing it
+   * describes has even been chosen.
+   */
+  const SEQUENCES = {
+    create:   ['mode', 'ticket', 'branch'],
+    existing: ['mode', 'branch', 'ticket'],
+    worktree: ['mode', 'worktree', 'ticket'],
+  } as const;
+
+  type Panel = (typeof SEQUENCES)[keyof typeof SEQUENCES][number];
+
   let step = 0;
-  let mode: 'create' | 'existing' = 'create';
+  let mode: 'create' | 'existing' | 'worktree' = 'create';
+  $: sequence = SEQUENCES[mode] as readonly Panel[];
+  $: panel = sequence[Math.min(step, sequence.length - 1)];
+  $: isLastStep = step >= sequence.length - 1;
   let ticketId = '';
   let ticketTitle = '';
   let branchName = '';
@@ -162,8 +182,11 @@
   function switchTicketMode(next: 'ticket' | 'manual') {
     if (ticketMode === next) return;
     ticketMode = next;
-    if (next === 'manual') clearSelectedTicket();
-    else if ($ticketSearch.results.length === 0) runTicketSearch();
+    if (next === 'manual' && selectedTicket) {
+      clearSelectedTicket();
+      ticketId = suggestedId;
+      ticketTitle = suggestedTitle;
+    } else if (next === 'ticket' && $ticketSearch.results.length === 0) runTicketSearch();
   }
 
   /** Loads local and remote branches, and picks a sensible base branch if the current one is gone. */
@@ -205,17 +228,17 @@
         .slice(0, 6)
     : [];
 
-  const TICKET_SEGMENT = /^[a-z][a-z0-9]*-\d+$/i;
-
-  /** Preselects the branch the modal was opened on, deriving the ticket id from its name when it carries one. */
+  /** Preselects the branch the modal was opened on, deriving the ticket from its name. */
   function applyInitialBranch() {
     const match = [initialBranch, ...remoteBranches.filter(r => r.endsWith(`/${initialBranch}`))]
       .find(b => availableBranches.includes(b) || remoteBranches.includes(b));
     if (!match) return;
     mode = 'existing';
     existingBranch = match;
-    const segment = match.split('/').find(s => TICKET_SEGMENT.test(s));
-    if (segment) ticketId = segment.toUpperCase();
+    // The mode is settled by the ref the modal was opened on, so the first
+    // panel has nothing left to ask.
+    step = 1;
+    void suggestTicket(match);
   }
 
   onMount(async () => {
@@ -360,9 +383,13 @@
   let resolvingBase = false;
   let resolvedFor = '';
 
-  $: if (mode === 'existing' && existingBranch && resolvedFor !== existingBranch) {
-    resolvedFor = existingBranch;
-    void resolveBase(existingBranch);
+  $: selectedWorktreeBranch = unclaimed.find(w => w.path === selectedWorktree)?.branch ?? '';
+
+  $: baseTarget = mode === 'existing' ? existingBranch : mode === 'worktree' ? selectedWorktreeBranch : '';
+
+  $: if (baseTarget && resolvedFor !== baseTarget) {
+    resolvedFor = baseTarget;
+    void resolveBase(baseTarget);
   }
 
   /** Fills the base field from the strongest signal available, without locking it. */
@@ -400,39 +427,138 @@
     ? existingBranch.split('/').slice(1).join('/')
     : existingBranch;
 
+  /**
+   * Worktrees of the repository no instance stands for: the ones the adopt mode
+   * offers, and the branches the other two modes must not cut a second worktree
+   * for, since doing so would clear the existing one out of the way.
+   */
+  let unclaimed: UnclaimedWorktree[] = [];
+  let selectedWorktree = '';
+  let loadingWorktrees = false;
+
+  async function loadUnclaimedWorktrees() {
+    if (!$activeProject) return;
+    loadingWorktrees = true;
+    try {
+      unclaimed = await listUnclaimedWorktrees($activeProject.id, $activeProject.path);
+      if (!unclaimed.some(w => w.path === selectedWorktree)) selectedWorktree = '';
+    } catch {
+      unclaimed = [];
+    } finally {
+      loadingWorktrees = false;
+    }
+  }
+
+  // Read again on every arrival on a panel that depends on it: a worktree can
+  // be made from a terminal while this very dialog is open.
+  let previousPanel = '';
+  $: {
+    if ((panel === 'worktree' || panel === 'branch') && previousPanel !== panel) {
+      void loadUnclaimedWorktrees();
+    }
+    previousPanel = panel;
+  }
+
+  $: adoptable = unclaimed.filter(w => !!w.branch);
+
+  $: worktreeOf = (branch: string) => unclaimed.find(w => w.branch === branch)?.path ?? '';
+
   $: effectiveBranch = mode === 'create' ? branchName : existingLocalName;
 
   $: worktreePath = `${$channel.displayDir}/worktrees/${effectiveBranch.replace(/\//g, '-')}`;
 
-  $: totalSteps = 3;
+  $: totalSteps = sequence.length;
 
   $: displayStep = step + 1;
 
-  const stepMeta: Record<number, { label: string; title: string }> = {
-    0: { label: t('createInstance.stepLabels.ticket') as string, title: t('createInstance.stepTitles.ticket') as string },
-    1: { label: t('createInstance.stepLabels.mode') as string, title: t('createInstance.stepTitles.mode') as string },
-    2: { label: t('createInstance.stepLabels.branch') as string, title: t('createInstance.stepTitles.branch') as string },
+  const stepMeta: Record<Panel, { label: string; title: string }> = {
+    ticket:   { label: t('createInstance.stepLabels.ticket') as string,   title: t('createInstance.stepTitles.ticket') as string },
+    mode:     { label: t('createInstance.stepLabels.mode') as string,     title: t('createInstance.stepTitles.mode') as string },
+    branch:   { label: t('createInstance.stepLabels.branch') as string,   title: t('createInstance.stepTitles.branch') as string },
+    worktree: { label: t('createInstance.stepLabels.worktree') as string, title: t('createInstance.stepTitles.worktree') as string },
   };
 
   $: duplicateBranch = mode === 'create'
     && branchName.trim().length > 0
     && $instances.some(i => i.branch === branchName.trim());
 
+  $: createHeldBy = mode === 'create' ? worktreeOf(branchName.trim()) : '';
+
   $: existingInUse = mode === 'existing'
     && existingLocalName.length > 0
     && $instances.some(i => i.branch === existingLocalName);
 
+  $: existingHeldBy = mode === 'existing' ? worktreeOf(existingLocalName) : '';
+
+  $: selectedWorktreeInUse = !!selectedWorktreeBranch
+    && $instances.some(i => i.branch === selectedWorktreeBranch);
+
   $: canNext =
-    step === 0 ? ticketId.trim().length > 0 && ticketTitle.trim().length > 0 :
-    step === 1 ? isGitRepo :
-    step === 2 ? (mode === 'create'
-      ? isGitRepo && branchName.trim().length > 0 && !duplicateBranch && !isNamingBranch
-      : isGitRepo && existingBranch.length > 0 && !existingInUse) :
+    panel === 'ticket' ? ticketId.trim().length > 0 && ticketTitle.trim().length > 0 :
+    panel === 'mode' ? isGitRepo :
+    panel === 'branch' ? (mode === 'create'
+      ? isGitRepo && branchName.trim().length > 0 && !duplicateBranch && !createHeldBy && !isNamingBranch
+      : isGitRepo && existingBranch.length > 0 && !existingInUse && !existingHeldBy) :
+    panel === 'worktree' ? isGitRepo && selectedWorktree.length > 0 && !selectedWorktreeInUse :
     true;
 
   function next() {
     error = '';
-    step = Math.min(2, step + 1);
+    const leaving = panel;
+    step = Math.min(sequence.length - 1, step + 1);
+    // The branch is now known, so the ticket step has something to open with.
+    if (leaving === 'branch' && mode === 'existing') void suggestTicket(existingLocalName);
+    if (leaving === 'worktree') void suggestTicket(selectedWorktreeBranch);
+  }
+
+  /**
+   * Fills the ticket in from a branch name, leaving anything the user typed
+   * alone: a field is only written while it still holds what was suggested for
+   * it, so going back and picking another branch updates it, and typing over it
+   * settles the matter.
+   *
+   * With a tracker bound, a key the branch carries is looked up and picked when
+   * the tracker knows it; otherwise the panel opens on the manual fields, where
+   * the suggestion can be seen, rather than on a search that hides it.
+   */
+  let suggestedId = '';
+  let suggestedTitle = '';
+  let suggestedTicketKey = '';
+
+  async function suggestTicket(branch: string) {
+    const derived = branch ? ticketFromBranch(branch) : null;
+    if (!derived) return;
+    if (!ticketId.trim() || ticketId === suggestedId) ticketId = derived.id;
+    if (!ticketTitle.trim() || ticketTitle === suggestedTitle) ticketTitle = derived.title;
+    suggestedId = derived.id;
+    suggestedTitle = derived.title;
+
+    const project = $activeProject;
+    if (!hasTracker || !project) return;
+    // A ticket picked by the user, or handed in by the caller, stands.
+    if (selectedTicket && selectedTicket.key !== suggestedTicketKey) return;
+    if (selectedTicket?.key === derived.id) return;
+    if (selectedTicket) {
+      clearSelectedTicket();
+      ticketId = derived.id;
+      ticketTitle = derived.title;
+    }
+    suggestedTicketKey = '';
+    ticketMode = 'manual';
+    if (!isTicketKey(derived.id)) return;
+    isResolvingTicket = true;
+    try {
+      const found = await resolveTicketInput(project.id, derived.id);
+      if (found && ticketId === derived.id) {
+        suggestedTicketKey = found.key;
+        ticketMode = 'ticket';
+        pickTicket(found);
+      }
+    } catch {
+      // Not found or unreachable: the manual fields keep the suggestion.
+    } finally {
+      isResolvingTicket = false;
+    }
   }
 
   function back() {
@@ -442,7 +568,7 @@
     step = Math.max(0, step - 1);
   }
 
-  $: dots = [0, 1, 2];
+  $: dots = sequence.map((_, i) => i);
 
   /** Spawns the instance and its worktree; yields two frames first so the spinner is painted before the blocking call. */
   async function handleCreate() {
@@ -462,15 +588,22 @@
         }
       : { id: ticketId.trim(), title: ticketTitle.trim() };
     try {
-      const instance = await spawnInstance({
+      const common = {
         id: crypto.randomUUID(),
         projectId: $activeProject.id,
         projectPath: $activeProject.path,
         ticket,
-        ...(mode === 'create'
-          ? { branch: branchName.trim(), baseBranch, linkExisting: false }
-          : { branch: existingBranch, baseBranch: existingBase.trim(), linkExisting: true }),
-      });
+      };
+      // Adopting touches no directory, so it goes through its own call rather
+      // than through the worktree-creating one.
+      const instance = mode === 'worktree'
+        ? await adoptWorktree({ ...common, path: selectedWorktree, baseBranch: existingBase.trim() })
+        : await spawnInstance({
+            ...common,
+            ...(mode === 'create'
+              ? { branch: branchName.trim(), baseBranch, linkExisting: false }
+              : { branch: existingBranch, baseBranch: existingBase.trim(), linkExisting: true }),
+          });
       if (selectedTicket) {
         setTicket(instance.projectId, instance.id, selectedTicket);
         const onCreate = $projectBindings.autoTransition.onCreate;
@@ -497,8 +630,8 @@
   <div class="modal" on:click|stopPropagation role="presentation">
     <div class="modal-head">
       <div>
-        <div class="step-count">{(t('common.stepOf') as (s: number, t: number) => string)(displayStep, totalSteps)} - {stepMeta[step].label}</div>
-        <h3>{stepMeta[step].title}</h3>
+        <div class="step-count">{(t('common.stepOf') as (s: number, t: number) => string)(displayStep, totalSteps)} - {stepMeta[panel].label}</div>
+        <h3>{stepMeta[panel].title}</h3>
       </div>
       <button class="icon-btn close" on:click={() => dispatch('close')}><Icon name="x" size={16}/></button>
     </div>
@@ -511,7 +644,44 @@
         </div>
       {/if}
 
-      {#if step === 0}
+      {#snippet baseField(exclude: string)}
+          <div class="form-row">
+            <div class="field-label">
+              {t('createInstance.baseBranch')}
+              <span class="field-optional">{t('createInstance.baseOptional')}</span>
+            </div>
+            <BaseBranchSelect
+              bind:value={existingBase}
+              branches={[...availableBranches, ...remoteBranches]}
+              exclude={exclude}
+              placeholder={t('createInstance.basePlaceholder') as string}
+              loading={resolvingBase}
+            />
+            {#if baseSource === 'forge'}
+              <div class="field-hint"><Icon name="check" size={11}/> {t('createInstance.baseFromForge')}</div>
+            {:else if baseSource === 'merge'}
+              <div class="field-hint"><Icon name="info" size={11}/> {t('createInstance.baseFromMerge')}</div>
+            {:else if baseSource === 'fork'}
+              <div class="field-hint"><Icon name="info" size={11}/> {t('createInstance.baseFromFork')}</div>
+            {/if}
+            {#if baseSuggestions.length > 1}
+              <div class="base-suggestions">
+                {#each baseSuggestions.slice(0, 4) as s (s.branch)}
+                  <button
+                    class="base-chip {existingBase === s.branch ? 'active' : ''}"
+                    type="button"
+                    on:click={() => { existingBase = s.branch; baseSource = s.reason; }}
+                  >{s.branch}</button>
+                {/each}
+              </div>
+            {/if}
+            {#if existingBase.trim() === ''}
+              <div class="field-hint">{t('createInstance.baseEmptyHint')}</div>
+            {/if}
+          </div>
+      {/snippet}
+
+      {#if panel === 'ticket'}
         {#if hasTracker}
           <div class="ticket-tabs" role="tablist">
             <button role="tab" aria-selected={ticketMode === 'ticket'} class="ticket-tab" class:active={ticketMode === 'ticket'} on:click={() => switchTicketMode('ticket')}>{t('createInstance.fromTicket')}</button>
@@ -617,7 +787,7 @@
         {/if}
       {/if}
 
-      {#if step === 1}
+      {#if panel === 'mode'}
         {#if isGitRepo}
           <div class="mode-grid">
             <button
@@ -636,6 +806,14 @@
               <span class="mode-label">{t('createInstance.existingBranch')}</span>
               <span class="mode-desc">{t('createInstance.existingBranchDesc')}</span>
             </button>
+            <button
+              class="mode-card {mode === 'worktree' ? 'active' : ''}"
+              on:click={() => mode = 'worktree'}
+            >
+              <span class="mode-icon"><Icon name="folder" size={22}/></span>
+              <span class="mode-label">{t('createInstance.adoptWorktree')}</span>
+              <span class="mode-desc">{t('createInstance.adoptWorktreeDesc')}</span>
+            </button>
           </div>
         {:else}
           <div class="info-box">
@@ -645,7 +823,7 @@
         {/if}
       {/if}
 
-      {#if step === 2 && mode === 'create'}
+      {#if panel === 'branch' && mode === 'create'}
         <div class="form-row">
           <div class="field-label">{t('createInstance.baseBranch')}</div>
           {#if ticketBaseSuggestions.length > 0}
@@ -784,6 +962,11 @@
               <Icon name="info" size={12}/>
               {(t('createInstance.duplicateBranch') as (name: string) => string)(branchName.trim())}
             </div>
+          {:else if createHeldBy}
+            <div class="field-error">
+              <Icon name="info" size={12}/>
+              {(t('createInstance.branchInWorktree') as (name: string, path: string) => string)(branchName.trim(), createHeldBy)}
+            </div>
           {/if}
           {#if namingError}
             <div class="field-error" role="alert">
@@ -801,7 +984,67 @@
         </div>
       {/if}
 
-      {#if step === 2 && mode === 'existing'}
+      {#if panel === 'worktree'}
+        <div class="form-row">
+          <div class="field-label">{t('createInstance.selectWorktree')}</div>
+          <div class="branch-list-wrap">
+            <div class="branch-search-row">
+              <Icon name="folder" size={13}/>
+              <span class="wt-count">{adoptable.length}</span>
+              <button
+                class="branch-refresh"
+                type="button"
+                title={t('createInstance.refreshWorktrees') as string}
+                disabled={loadingWorktrees}
+                on:click={loadUnclaimedWorktrees}
+              >
+                {#if loadingWorktrees}
+                  <Spinner size={12} trackColor="var(--stroke-1)" color="var(--accent)"/>
+                {:else}
+                  <Icon name="refresh" size={13}/>
+                {/if}
+              </button>
+            </div>
+            <div class="branch-list">
+              {#if loadingWorktrees && unclaimed.length === 0}
+                <Skeleton lines={2} height={28} gap={6}/>
+              {:else if unclaimed.length === 0}
+                <div class="branch-empty">{t('createInstance.noWorktrees')}</div>
+              {/if}
+              {#each unclaimed as w (w.path)}
+                {@const inUse = !!w.branch && $instances.some(i => i.branch === w.branch)}
+                <button
+                  class="branch-item wt-item {selectedWorktree === w.path ? 'active' : ''}"
+                  disabled={!w.branch || inUse}
+                  title={!w.branch
+                    ? (t('createInstance.worktreeDetached') as string)
+                    : inUse
+                      ? (t('createInstance.branchInUse') as (name: string) => string)(w.branch)
+                      : w.path}
+                  on:click={() => selectedWorktree = w.path}
+                >
+                  <Icon name="branch" size={13}/>
+                  <span class="wt-text">
+                    <span class="branch-name">{w.branch ?? t('createInstance.worktreeDetached')}</span>
+                    <span class="wt-path">{w.path}</span>
+                  </span>
+                  {#if selectedWorktree === w.path}<Icon name="check" size={12}/>{/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        </div>
+
+        {#if selectedWorktree}
+          {@render baseField(selectedWorktreeBranch)}
+          <div class="info-box">
+            <div class="info-icon"><Icon name="info" size={14}/></div>
+            <div>{t('createInstance.adoptInfo')}</div>
+          </div>
+        {/if}
+      {/if}
+
+      {#if panel === 'branch' && mode === 'existing'}
         <div class="form-row">
           <div class="field-label">{t('createInstance.selectExistingBranch')}</div>
           {#if availableBranches.length > 0 || remoteBranches.length > 0}
@@ -842,10 +1085,15 @@
                   <div class="branch-group-label">{t('createInstance.localBranches')}</div>
                   {#each localMatches as b (b)}
                     {@const inUse = $instances.some(i => i.branch === b)}
+                    {@const heldBy = worktreeOf(b)}
                     <button
                       class="branch-item {existingBranch === b ? 'active' : ''}"
-                      disabled={inUse}
-                      title={inUse ? (t('createInstance.branchInUse') as (name: string) => string)(b) : ''}
+                      disabled={inUse || !!heldBy}
+                      title={inUse
+                        ? (t('createInstance.branchInUse') as (name: string) => string)(b)
+                        : heldBy
+                          ? (t('createInstance.branchInWorktree') as (name: string, path: string) => string)(b, heldBy)
+                          : ''}
                       on:click={() => existingBranch = b}
                     >
                       <Icon name="branch" size={13}/>
@@ -885,44 +1133,16 @@
               <Icon name="info" size={12}/>
               {(t('createInstance.branchInUse') as (name: string) => string)(existingLocalName)}
             </div>
+          {:else if existingHeldBy}
+            <div class="field-error">
+              <Icon name="info" size={12}/>
+              {(t('createInstance.branchInWorktree') as (name: string, path: string) => string)(existingLocalName, existingHeldBy)}
+            </div>
           {/if}
         </div>
 
         {#if existingBranch.length > 0}
-          <div class="form-row">
-            <div class="field-label">
-              {t('createInstance.baseBranch')}
-              <span class="field-optional">{t('createInstance.baseOptional')}</span>
-            </div>
-            <BaseBranchSelect
-              bind:value={existingBase}
-              branches={[...availableBranches, ...remoteBranches]}
-              exclude={existingLocalName}
-              placeholder={t('createInstance.basePlaceholder') as string}
-              loading={resolvingBase}
-            />
-            {#if baseSource === 'forge'}
-              <div class="field-hint"><Icon name="check" size={11}/> {t('createInstance.baseFromForge')}</div>
-            {:else if baseSource === 'merge'}
-              <div class="field-hint"><Icon name="info" size={11}/> {t('createInstance.baseFromMerge')}</div>
-            {:else if baseSource === 'fork'}
-              <div class="field-hint"><Icon name="info" size={11}/> {t('createInstance.baseFromFork')}</div>
-            {/if}
-            {#if baseSuggestions.length > 1}
-              <div class="base-suggestions">
-                {#each baseSuggestions.slice(0, 4) as s (s.branch)}
-                  <button
-                    class="base-chip {existingBase === s.branch ? 'active' : ''}"
-                    type="button"
-                    on:click={() => { existingBase = s.branch; baseSource = s.reason; }}
-                  >{s.branch}</button>
-                {/each}
-              </div>
-            {/if}
-            {#if existingBase.trim() === ''}
-              <div class="field-hint">{t('createInstance.baseEmptyHint')}</div>
-            {/if}
-          </div>
+          {@render baseField(existingLocalName)}
         {/if}
         {#if existingBranch.length > 0}
           <div class="info-box">
@@ -960,7 +1180,7 @@
         <button class="btn primary" on:click={() => dispatch('create', { instanceId: createdInstanceId })}>
           {t('common.continue')} <Icon name="chev-r" size={14}/>
         </button>
-      {:else if step < 2}
+      {:else if !isLastStep}
         <button
           class="btn primary"
           disabled={!canNext}
@@ -1350,6 +1570,28 @@
   .branch-item:disabled { opacity: 0.45; cursor: not-allowed; }
   .branch-item:disabled:hover { background: none; color: var(--fg-2); }
   .branch-name { flex: 1; }
+
+  /* Adopted worktrees: the path matters as much as the branch, so the row
+     carries both, the branch reading as the title. */
+  .wt-item { align-items: flex-start; }
+  .wt-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .wt-path {
+    font-size: 10.5px;
+    color: var(--fg-4);
+    overflow-wrap: anywhere;
+  }
+  .wt-count {
+    flex: 1;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--fg-4);
+  }
 
   /* Loading overlay */
   :global(.modal-body.loading) { position: relative; }
