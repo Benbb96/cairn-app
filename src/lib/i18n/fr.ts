@@ -159,6 +159,10 @@ export const fr = {
 		tabIntegrations: "Intégrations",
 		projectName: "Nom du projet",
 		color: "Couleur",
+		location: "Emplacement",
+		changeLocation: "Modifier...",
+		locationHint:
+			"Rattache le projet à son dépôt après avoir déplacé ou renommé le dossier. Rien n'est déplacé sur le disque.",
 		saveChanges: "Enregistrer les modifications",
 	},
 
@@ -229,6 +233,11 @@ export const fr = {
 		noInstanceSub:
 			"Une instance est un environnement isolé couplé à une session agent. Chaque tâche dispose de son propre espace.",
 		noInstanceCta: "Nouvelle instance",
+		missingHeadline: "Dossier du projet introuvable",
+		missingSub:
+			"Le dossier ci-dessous n'existe plus. S'il a été déplacé ou renommé, indiquez son nouvel emplacement ; sinon, supprimez le projet.",
+		missingRelocate: "Localiser le dossier...",
+		missingRemove: "Supprimer le projet",
 		noInstanceHasOthersHeadline: "Aucune instance active",
 		noInstanceHasOthersSub:
 			"Vos autres instances sont toujours disponibles. Basculez vers l'une d'elles ou créez-en une nouvelle.",
@@ -2724,6 +2733,18 @@ export const fr = {
 		description:
 			"Le dossier sera supprimé. Les projets qu'il contient ne seront pas effacés.",
 		deleteFolder: "Supprimer le dossier",
+	},
+
+	duplicateProject: {
+		heading: "Dupliquer le projet",
+		title: (name: string) => `Copier "${name}"`,
+		hint: "Tout le dossier est copié sur le disque, historique Git compris, et enregistré comme un nouveau projet. Les instances ne sont pas reprises.",
+		defaultName: (name: string) => `${name} copie`,
+		folderName: "Nom du dossier",
+		destination: "Destination",
+		browse: "Parcourir...",
+		result: "La copie sera créée dans",
+		duplicate: "Dupliquer",
 	},
 
 	deleteProject: {

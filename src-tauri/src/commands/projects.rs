@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use crate::storage::{projects_file, listing_file, worktrees_dir, cairn_dir, write_json_atomic};
+use crate::storage::{projects_file, listing_file, worktrees_dir, cairn_dir, write_json_atomic, copy_dir_all};
 
 /// A repository registered in the app, identified by a frontend-minted id.
 #[derive(Serialize, Deserialize, Clone)]
@@ -50,13 +50,8 @@ pub fn add_project(project: Project) -> Result<Vec<Project>, String> {
     if projects.iter().any(|p| p.id == project.id) {
         return Err(format!("Project with id '{}' already exists", project.id));
     }
-    let canonical = PathBuf::from(&project.path)
-        .canonicalize()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| project.path.clone());
-    if projects.iter().any(|p| {
-        PathBuf::from(&p.path).canonicalize().map(|c| c.to_string_lossy().to_string()).unwrap_or_else(|_| p.path.clone()) == canonical
-    }) {
+    let canonical = canonical_path(&project.path);
+    if projects.iter().any(|p| canonical_path(&p.path) == canonical) {
         return Err(format!("A project for '{}' already exists", canonical));
     }
     fs::create_dir_all(worktrees_dir(&project.id)?).map_err(|e| e.to_string())?;
@@ -79,7 +74,7 @@ pub fn remove_project(id: String) -> Result<Vec<Project>, String> {
     Ok(projects)
 }
 
-/// Renames and recolors only: the path is fixed once registered.
+/// Renames and recolors only: moving the checkout goes through `relocate_project`.
 #[tauri::command]
 pub fn update_project(id: String, name: String, color: String) -> Result<Vec<Project>, String> {
     let mut projects = read_projects()?;
@@ -92,27 +87,113 @@ pub fn update_project(id: String, name: String, color: String) -> Result<Vec<Pro
     Ok(projects)
 }
 
-/// A second entry on the same repository path, with its own data directory and
-/// no instances. This is the one case where two projects may share a path.
+/// Points the project at a new location on disk, for a checkout that was moved
+/// or renamed. The instance worktrees stay in the data directory, but git
+/// links them to the main checkout by absolute path in both directions, so
+/// `git worktree repair` rewrites those links; a repair failure leaves the
+/// relocation in place since the checkout itself is usable.
 #[tauri::command]
-pub fn duplicate_project(id: String, new_id: String) -> Result<Vec<Project>, String> {
-    let mut projects = read_projects()?;
-    let original = projects.iter()
-        .find(|p| p.id == id)
-        .ok_or_else(|| format!("Project '{}' not found", id))?
-        .clone();
-    let duplicate = Project {
-        id: new_id.clone(),
-        name: format!("Copy of {}", original.name),
-        path: original.path,
-        color: original.color,
-        active_instance_id: None,
-        git_profile_id: original.git_profile_id,
-    };
-    fs::create_dir_all(worktrees_dir(&new_id)?).map_err(|e| e.to_string())?;
-    projects.push(duplicate);
-    write_projects(&projects)?;
-    Ok(projects)
+pub async fn relocate_project(id: String, path: String) -> Result<Vec<Project>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let expanded = shellexpand::tilde(&path).into_owned();
+        let target = PathBuf::from(&expanded);
+        if !target.is_dir() {
+            return Err(format!("Path is not a directory: {}", path));
+        }
+        let canonical = target.canonicalize().map_err(|e| e.to_string())?.to_string_lossy().to_string();
+        let mut projects = read_projects()?;
+        if projects.iter().any(|p| p.id != id && canonical_path(&p.path) == canonical) {
+            return Err(format!("A project for '{}' already exists", canonical));
+        }
+        let project = projects.iter_mut()
+            .find(|p| p.id == id)
+            .ok_or_else(|| format!("Project '{}' not found", id))?;
+        project.path = canonical.clone();
+        write_projects(&projects)?;
+        repair_worktrees(&id, &canonical);
+        Ok(projects)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn canonical_path(path: &str) -> String {
+    PathBuf::from(path)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+fn repair_worktrees(project_id: &str, repo: &str) {
+    let worktrees: Vec<String> = crate::commands::instances::read_instances(project_id)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|i| i.worktree_path)
+        .filter(|p| PathBuf::from(p).is_dir())
+        .collect();
+    if worktrees.is_empty() { return; }
+    let _ = std::process::Command::new("git")
+        .current_dir(repo)
+        .args(["worktree", "repair"])
+        .args(&worktrees)
+        .output();
+}
+
+/// Copies the project's checkout on disk into `dest_parent/folder_name`, `.git`
+/// included, and registers the copy as a new project. The source's instances
+/// are not carried over: the copy's `.git/worktrees` is dropped so it does not
+/// claim the source's worktrees as its own. Refuses an existing destination.
+#[tauri::command]
+pub async fn duplicate_project(
+    id: String,
+    new_id: String,
+    name: String,
+    color: String,
+    dest_parent: String,
+    folder_name: String,
+) -> Result<Vec<Project>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut projects = read_projects()?;
+        let original = projects.iter()
+            .find(|p| p.id == id)
+            .ok_or_else(|| format!("Project '{}' not found", id))?
+            .clone();
+        let source = PathBuf::from(shellexpand::tilde(&original.path).into_owned());
+        if !source.is_dir() {
+            return Err(format!("Path does not exist: {}", original.path));
+        }
+        let parent = PathBuf::from(shellexpand::tilde(&dest_parent).into_owned());
+        if !parent.is_dir() {
+            return Err(format!("Path is not a directory: {}", dest_parent));
+        }
+        let dest = parent.join(folder_name.trim());
+        if dest.exists() {
+            return Err(format!("Destination already exists: {}", dest.display()));
+        }
+        fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+        if let Err(e) = copy_dir_all(&source, &dest) {
+            let _ = fs::remove_dir_all(&dest);
+            return Err(e);
+        }
+        let copied_worktrees = dest.join(".git").join("worktrees");
+        if copied_worktrees.is_dir() {
+            let _ = fs::remove_dir_all(&copied_worktrees);
+        }
+        let path = dest.canonicalize().map_err(|e| e.to_string())?.to_string_lossy().to_string();
+        fs::create_dir_all(worktrees_dir(&new_id)?).map_err(|e| e.to_string())?;
+        projects.push(Project {
+            id: new_id,
+            name,
+            path,
+            color,
+            active_instance_id: None,
+            git_profile_id: original.git_profile_id,
+        });
+        write_projects(&projects)?;
+        Ok(projects)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// `None` clears the selection, leaving the project with no instance open.

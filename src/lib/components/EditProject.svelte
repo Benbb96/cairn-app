@@ -10,7 +10,7 @@
   import ProjectColorPicker from '$lib/components/ProjectColorPicker.svelte';
   import { t } from '$lib/i18n';
   import ProjectPreviewPill from '$lib/components/ProjectPreviewPill.svelte';
-  import { editProject } from '$lib/stores/project';
+  import { editProject, relocateProjectInStore } from '$lib/stores/project';
   import { bindingsByProject, EMPTY_BINDINGS, loadProjectIntegrations, saveProjectIntegrations } from '$lib/stores/integrations';
   import { getRemoteUrl } from '$lib/services/git-service';
   import type { Project } from '$lib/types/project';
@@ -27,6 +27,7 @@
 
   let name = project.name;
   let color = project.color;
+  let path = project.path;
   let loading = false;
   let error = '';
   let remoteUrl = '';
@@ -45,13 +46,20 @@
 
   $: hasBindingChanges = JSON.stringify(bindings) !== pristineBindings;
   $: canSave = name.trim().length > 0
-    && (name.trim() !== project.name || color !== project.color || hasBindingChanges);
+    && (name.trim() !== project.name || color !== project.color || path !== project.path || hasBindingChanges);
+
+  async function pickLocation() {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ directory: true, defaultPath: path });
+    if (typeof picked === 'string') path = picked;
+  }
 
   async function save() {
     if (!canSave || loading) return;
     loading = true;
     error = '';
     try {
+      if (path !== project.path) await relocateProjectInStore(project.id, path);
       if (name.trim() !== project.name || color !== project.color) {
         await editProject(project.id, name.trim(), color);
       }
@@ -131,6 +139,17 @@
           <div class="form-section">
             <div class="ep-label">{t('editProject.color')}</div>
             <ProjectColorPicker bind:color idSuffix="edit" />
+          </div>
+
+          <div class="form-section">
+            <div class="ep-label">{t('editProject.location')}</div>
+            <div class="ep-location">
+              <code class="ep-path selectable" title={path}>{path}</code>
+              <button class="btn ghost" on:click={pickLocation} disabled={loading}>
+                <Icon name="folder" size={14}/> {t('editProject.changeLocation')}
+              </button>
+            </div>
+            <p class="ep-hint">{t('editProject.locationHint')}</p>
           </div>
 
           <ProjectPreviewPill name={name || project.name} {color} />
@@ -238,6 +257,31 @@
     box-shadow: 0 0 0 3px var(--accent-weak);
   }
   .ep-input::placeholder { color: var(--fg-4); opacity: 1; }
+
+  .ep-location {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ep-path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 9px 12px;
+    background: var(--bg-0);
+    border: 1px solid var(--stroke-1);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    color: var(--fg-1);
+  }
+  .ep-hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--fg-3);
+    line-height: 1.5;
+  }
 
   .ep-error {
     display: flex;

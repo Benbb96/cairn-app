@@ -2293,6 +2293,7 @@ import { get } from 'svelte/store';
 
   /** Paints a worktree from the cache when there is one, then refreshes it silently. */
   function showWorktree(root: string) {
+    error = '';
     const cached = treeCache.get(root);
     if (cached) {
       // Re-inserted so the cache evicts by last *visit*. Only `cacheTree` used to

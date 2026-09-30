@@ -10,6 +10,7 @@ const addProject = vi.hoisted(() => vi.fn());
 const removeProject = vi.hoisted(() => vi.fn());
 const updateProject = vi.hoisted(() => vi.fn());
 const duplicateProject = vi.hoisted(() => vi.fn());
+const relocateProject = vi.hoisted(() => vi.fn());
 const saveProjectOrder = vi.hoisted(() => vi.fn());
 const setActiveInstance = vi.hoisted(() => vi.fn());
 const getListing = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ vi.mock("$lib/services/project-service", () => ({
 	removeProject,
 	updateProject,
 	duplicateProject,
+	relocateProject,
 	saveProjectOrder,
 	setActiveInstance,
 	getListing,
@@ -45,6 +47,7 @@ import {
 	openTabOrder,
 	projects,
 	registerProject,
+	relocateProjectInStore,
 	reorderProjects,
 	reorderTabs,
 	unregisterProject,
@@ -266,6 +269,23 @@ describe("editProject", () => {
 		updateProject.mockResolvedValue([project("a", { name: "new name" })]);
 		await editProject("a", "new name", "#000");
 		expect(get(projects)[0].name).toBe("new name");
+	});
+});
+
+describe("relocateProjectInStore", () => {
+	it("takes the moved project's new path from the backend", async () => {
+		relocateProject.mockResolvedValue([project("a", { path: "/moved/a" })]);
+		projects.set([project("a")]);
+		await relocateProjectInStore("a", "/moved/a");
+		expect(relocateProject).toHaveBeenCalledWith("a", "/moved/a");
+		expect(get(projects)[0].path).toBe("/moved/a");
+	});
+
+	it("leaves the store alone when the new location is refused", async () => {
+		relocateProject.mockRejectedValue(new Error("Path is not a directory"));
+		projects.set([project("a")]);
+		await expect(relocateProjectInStore("a", "/nowhere")).rejects.toThrow();
+		expect(get(projects)[0].path).toBe(project("a").path);
 	});
 });
 

@@ -156,6 +156,10 @@ export const en = {
 		tabIntegrations: "Integrations",
 		projectName: "Project name",
 		color: "Color",
+		location: "Location",
+		changeLocation: "Change...",
+		locationHint:
+			"Point the project at its checkout after moving or renaming the folder. Nothing is moved on disk.",
 		saveChanges: "Save changes",
 	},
 
@@ -226,6 +230,11 @@ export const en = {
 		noInstanceSub:
 			"An instance is an isolated environment paired with an agent session. Each task gets its own space.",
 		noInstanceCta: "New instance",
+		missingHeadline: "Project folder not found",
+		missingSub:
+			"The folder below no longer exists. If it was moved or renamed, point the project at its new location; otherwise remove the project.",
+		missingRelocate: "Locate folder...",
+		missingRemove: "Remove project",
 		noInstanceHasOthersHeadline: "No active instance",
 		noInstanceHasOthersSub:
 			"Your other instances are still available. Switch to one or create a new one.",
@@ -2676,6 +2685,18 @@ export const en = {
 		description:
 			"The folder will be removed. Projects inside will not be deleted.",
 		deleteFolder: "Delete folder",
+	},
+
+	duplicateProject: {
+		heading: "Duplicate project",
+		title: (name: string) => `Copy "${name}"`,
+		hint: "The whole folder is copied on disk, Git history included, and registered as a new project. Instances are not carried over.",
+		defaultName: (name: string) => `${name} copy`,
+		folderName: "Folder name",
+		destination: "Destination",
+		browse: "Browse...",
+		result: "The copy will be created at",
+		duplicate: "Duplicate",
 	},
 
 	deleteProject: {

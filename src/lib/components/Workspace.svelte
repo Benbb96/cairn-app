@@ -39,7 +39,10 @@
 
   import type { Instance } from '$lib/types/instance';
   import { instances, baseInstance, isBaseInstance, isArchivedInstance, BASE_INSTANCE_ID } from '$lib/stores/instance';
-  import { activateInstance, activeProject } from '$lib/stores/project';
+  import { activateInstance, activeProject, relocateProjectInStore, unregisterProject } from '$lib/stores/project';
+  import { validateDirectory } from '$lib/services/project-service';
+  import DeleteProjectModal from '$lib/components/home/DeleteProjectModal.svelte';
+  import type { Project } from '$lib/types/project';
   import { settings } from '$lib/stores/settings';
   import { git, gitFileCounts, gitHasConflicts, startGitPolling, getRemoteUrl } from '$lib/stores/git';
   import { activeCiBusy, activeCiFailing, retryLatestPipeline } from '$lib/stores/pipelines';
@@ -232,6 +235,32 @@
     createInstance: { branch?: string };
     reorderTabs: string[];
   }>();
+
+  let isProjectMissing = false;
+  let isRemovingMissing = false;
+  let pathCheckToken = 0;
+
+  async function checkProjectPath(project: Project | null) {
+    const token = ++pathCheckToken;
+    const exists = project ? await validateDirectory(project.path).then(() => true, () => false) : true;
+    if (token === pathCheckToken) isProjectMissing = !exists;
+  }
+
+  $: void checkProjectPath($activeProject);
+
+  async function locateMissingProject() {
+    if (!$activeProject) return;
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ directory: true });
+    if (typeof picked === 'string') await relocateProjectInStore($activeProject.id, picked);
+  }
+
+  async function removeMissingProject() {
+    const id = activeProjectId;
+    isRemovingMissing = false;
+    dispatch('closeProject', id);
+    await unregisterProject(id);
+  }
 
   let dragSrcIndex: number | null = null;
   let insertIndex: number | null = null;
@@ -456,7 +485,7 @@
     : instanceGroups;
 </script>
 
-<svelte:window on:keydown={handleAppKey}/>
+<svelte:window on:keydown={handleAppKey} on:focus={() => checkProjectPath($activeProject)}/>
 
 <div class="workspace">
   <!-- Project tabs - padding-left clears native macOS traffic lights -->
@@ -739,6 +768,28 @@
           </div>
         </div>
       {/if}
+      {#if isProjectMissing && $activeProject}
+        <div class="no-instance project-missing" role="alert">
+          <div class="no-instance-inner">
+            <div class="no-instance-icon">
+              <Icon name="folder" size={48}/>
+            </div>
+            <h2 class="no-instance-headline">{t('workspace.missingHeadline')}</h2>
+            <p class="no-instance-sub">{t('workspace.missingSub')}</p>
+            <code class="missing-path selectable">{$activeProject.path}</code>
+            <div class="no-instance-actions">
+              <button class="btn danger no-instance-cta" on:click={() => isRemovingMissing = true}>
+                <Icon name="trash" size={14}/>
+                {t('workspace.missingRemove')}
+              </button>
+              <button class="btn primary no-instance-cta" on:click={locateMissingProject}>
+                <Icon name="folder" size={14}/>
+                {t('workspace.missingRelocate')}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
     </main>
 
     {#if activeInstance && $settings.showPinnedCommandsSidebar}
@@ -780,6 +831,14 @@
     project={$activeProject}
     initialTab="integrations"
     on:close={() => showProjectIntegrations = false}
+  />
+{/if}
+
+{#if isRemovingMissing && $activeProject}
+  <DeleteProjectModal
+    project={$activeProject}
+    on:close={() => isRemovingMissing = false}
+    on:confirm={removeMissingProject}
   />
 {/if}
 
@@ -995,6 +1054,18 @@
     gap: 10px;
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .project-missing { z-index: 100; }
+  .missing-path {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    margin: -12px 0 28px;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    color: var(--fg-1);
   }
 
   .sidebar-wrap { display: contents; }

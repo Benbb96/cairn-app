@@ -28,7 +28,7 @@ export async function removeProject(id: string): Promise<Project[]> {
 	return invoke<Project[]>("remove_project", { id });
 }
 
-/** Only the name and colour are editable; the path is fixed at registration. */
+/** Only the name and colour; the path changes through relocateProject. */
 export async function updateProject(
 	id: string,
 	name: string,
@@ -37,12 +37,36 @@ export async function updateProject(
 	return invoke<Project[]>("update_project", { id, name, color });
 }
 
-/** Registers a second project over the same checkout, named "Copy of ..." and with no instances. */
+/** Points the project at a moved checkout and repairs its instance worktrees; throws on a missing or taken path. */
+export async function relocateProject(
+	id: string,
+	path: string,
+): Promise<Project[]> {
+	return invoke<Project[]>("relocate_project", { id, path });
+}
+
+/** Where and under which identity a project is copied. */
+export type ProjectCopy = {
+	name: string;
+	color: string;
+	destParent: string;
+	folderName: string;
+};
+
+/** Copies the checkout into `destParent/folderName` and registers it, with no instances. Slow. */
 export async function duplicateProject(
 	id: string,
 	newId: string,
+	copy: ProjectCopy,
 ): Promise<Project[]> {
-	return invoke<Project[]>("duplicate_project", { id, newId });
+	return invoke<Project[]>("duplicate_project", {
+		id,
+		newId,
+		name: copy.name,
+		color: copy.color,
+		destParent: copy.destParent,
+		folderName: copy.folderName,
+	});
 }
 
 /** Opens the OS file manager on the path (Finder on macOS). */

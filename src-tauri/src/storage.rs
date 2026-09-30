@@ -268,10 +268,19 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), Str
 /// permission bits. `.git` is skipped: a copied worktree must not inherit the
 /// source repository's metadata.
 pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    copy_dir(src, dst, true)
+}
+
+/// Like `copy_dir_recursive`, `.git` included: a full copy of a repository.
+pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
+    copy_dir(src, dst, false)
+}
+
+fn copy_dir(src: &Path, dst: &Path, skip_git: bool) -> Result<(), String> {
     for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let name = entry.file_name();
-        if name == ".git" {
+        if skip_git && name == ".git" {
             continue;
         }
         let src_path = entry.path();
@@ -281,7 +290,7 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
             copy_symlink(&src_path, &dst_path)?;
         } else if file_type.is_dir() {
             fs::create_dir_all(&dst_path).map_err(|e| e.to_string())?;
-            copy_dir_recursive(&src_path, &dst_path)?;
+            copy_dir(&src_path, &dst_path, skip_git)?;
         } else {
             // fs::copy preserves the source's permission bits (including +x).
             fs::copy(&src_path, &dst_path).map(|_| ()).map_err(|e| e.to_string())?;
@@ -425,6 +434,20 @@ mod tests {
 
         assert!(dst.join("keep.txt").exists());
         assert!(!dst.join(".git").exists(), ".git must not be copied");
+    }
+
+    #[test]
+    fn copy_dir_all_keeps_nested_git_dirs() {
+        let tmp = TempDir::new();
+        let src = tmp.path.join("src");
+        let dst = tmp.path.join("dst");
+        fs::create_dir_all(src.join(".git/refs")).unwrap();
+        fs::write(src.join(".git/refs/HEAD"), "x").unwrap();
+        fs::create_dir_all(&dst).unwrap();
+
+        copy_dir_all(&src, &dst).unwrap();
+
+        assert_eq!(fs::read_to_string(dst.join(".git/refs/HEAD")).unwrap(), "x");
     }
 
     #[cfg(unix)]

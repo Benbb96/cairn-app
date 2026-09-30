@@ -324,7 +324,7 @@ describe("ProjectsSection", () => {
 			);
 		});
 
-		it("duplicates the project the menu belongs to", async () => {
+		it("opens the copy dialog for the project the menu belongs to", async () => {
 			mount();
 			await settle();
 			await userEvent.click(
@@ -333,7 +333,10 @@ describe("ProjectsSection", () => {
 			await settle();
 			await userEvent.click(menuItem(/duplicate|dupliquer/i));
 			await settle();
-			expect(duplicateProjectInStore).toHaveBeenCalledWith("p1");
+			expect(document.body.textContent).toMatch(
+				/Duplicate project|Dupliquer le projet/,
+			);
+			expect(duplicateProjectInStore).not.toHaveBeenCalled();
 		});
 
 		it("copies the project path", async () => {

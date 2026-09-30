@@ -12,11 +12,12 @@
   import Icon from '$lib/components/Icon.svelte';
   import { t } from '$lib/i18n';
   import { pickGreeting, pickTagline } from '$lib/utils/home/greeting';
-  import { projects, unregisterProject, duplicateProjectInStore, openProjects, activeProjectId, lastOpenedProjectId } from '$lib/stores/project';
+  import { projects, unregisterProject, openProjects, activeProjectId, lastOpenedProjectId } from '$lib/stores/project';
   import { projectFolders } from '$lib/stores/project-folders';
   import { revealInFileManager } from '$lib/services/project-service';
   import type { Project, ProjectFolder } from '$lib/types/project';
   import DeleteProjectModal from './DeleteProjectModal.svelte';
+  import DuplicateProjectModal from './DuplicateProjectModal.svelte';
   import DeleteFolderModal from './DeleteFolderModal.svelte';
   import { matchesSearch } from '$lib/utils/files/files-search';
   import ProjectMenu from './ProjectMenu.svelte';
@@ -52,6 +53,7 @@
   let menuProjectId: string | null = null;
   let menuFolderId: string | null = null;
   let deletingProject: Project | null = null;
+  let duplicatingProject: Project | null = null;
   let deletingFolder: ProjectFolder | null = null;
 
   let editingFolderNameId: string | null = null;
@@ -217,9 +219,9 @@
   }
 
   // -- project actions -------------------------------------------------------
-  async function handleDuplicate(id: string) {
+  function handleDuplicate(project: Project) {
     closeMenu();
-    await duplicateProjectInStore(id);
+    duplicatingProject = project;
   }
 
   async function handleCopyPath(path: string) {
@@ -585,7 +587,7 @@
           {#if menuProjectId === p.id}
             <ProjectMenu folders={$projectFolders} currentFolderId={null}
               on:edit={() => { closeMenu(); dispatch('editProject', p); }}
-              on:duplicate={() => handleDuplicate(p.id)}
+              on:duplicate={() => handleDuplicate(p)}
               on:copyPath={() => handleCopyPath(p.path)}
               on:reveal={() => handleReveal(p.path)}
               on:moveToFolder={(e) => moveToFolder(p.id, e.detail)}
@@ -712,7 +714,7 @@
                       {#if menuProjectId === p.id}
                         <ProjectMenu folders={$projectFolders} currentFolderId={folder.id}
                           on:edit={() => { closeMenu(); dispatch('editProject', p); }}
-                          on:duplicate={() => handleDuplicate(p.id)}
+                          on:duplicate={() => handleDuplicate(p)}
                           on:copyPath={() => handleCopyPath(p.path)}
                           on:reveal={() => handleReveal(p.path)}
                           on:moveToFolder={(e) => moveToFolder(p.id, e.detail)}
@@ -776,7 +778,7 @@
               {#if menuProjectId === p.id}
                 <ProjectMenu folders={$projectFolders} currentFolderId={null}
                   on:edit={() => { closeMenu(); dispatch('editProject', p); }}
-                  on:duplicate={() => handleDuplicate(p.id)}
+                  on:duplicate={() => handleDuplicate(p)}
                   on:copyPath={() => handleCopyPath(p.path)}
                   on:reveal={() => handleReveal(p.path)}
                   on:moveToFolder={(e) => moveToFolder(p.id, e.detail)}
@@ -789,6 +791,13 @@
       {/if}
     </div>
   {/if}
+{/if}
+
+{#if duplicatingProject}
+  <DuplicateProjectModal
+    project={duplicatingProject}
+    on:close={() => duplicatingProject = null}
+  />
 {/if}
 
 {#if deletingProject}

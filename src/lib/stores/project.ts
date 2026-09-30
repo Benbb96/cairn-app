@@ -9,6 +9,8 @@ import {
 	duplicateProject,
 	getListing,
 	listProjects,
+	type ProjectCopy,
+	relocateProject,
 	removeProject,
 	saveProjectOrder,
 	setActiveInstance,
@@ -126,11 +128,26 @@ export async function editProject(
 	projects.set(updated);
 }
 
-/** Copies a project under a fresh id, keeping its settings but not its instances. */
-export async function duplicateProjectInStore(id: string): Promise<void> {
-	const newId = crypto.randomUUID();
-	const updated = await duplicateProject(id, newId);
+/** Moves a project to a new checkout location, dropping the git roots cached under the old one. */
+export async function relocateProjectInStore(
+	id: string,
+	path: string,
+): Promise<void> {
+	const previousPath = get(projects).find((p) => p.id === id)?.path ?? "";
+	const updated = await relocateProject(id, path);
 	projects.set(updated);
+	await forgetRepoRoots(id, previousPath);
+}
+
+/** Copies a project's checkout on disk and registers the copy under a fresh id; returns that id. */
+export async function duplicateProjectInStore(
+	id: string,
+	copy: ProjectCopy,
+): Promise<string> {
+	const newId = crypto.randomUUID();
+	const updated = await duplicateProject(id, newId, copy);
+	projects.set(updated);
+	return newId;
 }
 
 /** Reorders the list optimistically; `ids` may cover only part of it, the rest keeps its order. */

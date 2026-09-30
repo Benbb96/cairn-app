@@ -8,6 +8,34 @@
 		},
 		"changes": [
 			{
+				"kind": "changed",
+				"text": {
+					"en": "Duplicating a project now copies its folder on disk, with a chosen name, color, folder name and destination, instead of registering the same folder twice.",
+					"fr": "Dupliquer un projet copie désormais son dossier sur le disque, avec le nom, la couleur, le nom de dossier et la destination choisis, au lieu d'enregistrer deux fois le même dossier."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "A file tree error no longer stays on screen after switching to another project.",
+					"fr": "Une erreur de l'arborescence de fichiers ne reste plus affichée après être passé à un autre projet."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A project's location on disk can be changed from its settings, after moving or renaming its folder.",
+					"fr": "L'emplacement d'un projet sur le disque se modifie depuis ses réglages, après avoir déplacé ou renommé son dossier."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Opening a project whose folder no longer exists offers to locate it again or to remove the project.",
+					"fr": "Ouvrir un projet dont le dossier n'existe plus propose de le localiser à nouveau ou de supprimer le projet."
+				}
+			},
+			{
 				"kind": "added",
 				"text": {
 					"en": "A project folder that is not a Git repository can be initialized from the Git step.",

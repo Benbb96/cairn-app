@@ -153,6 +153,7 @@ pub fn run() {
             add_project,
             remove_project,
             update_project,
+            relocate_project,
             duplicate_project,
             reveal_in_file_manager,
             copy_path,
