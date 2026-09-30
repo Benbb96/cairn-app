@@ -1037,6 +1037,8 @@ export const en = {
 		},
 		bindings: {
 			title: "Integrations",
+			empty:
+				"No integration is configured yet. You can connect GitLab, GitHub or Jira later from the Integrations section of the home screen, then link them to this project.",
 			desc: "Which connection this project uses for tickets, merge requests and CI.",
 			tracker: "Tickets",
 			forge: "Merge requests",

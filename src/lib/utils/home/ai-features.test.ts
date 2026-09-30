@@ -116,7 +116,10 @@ describe("the assist CLI list", () => {
 
 describe("the feature schemas", () => {
 	it("asks the commit message for its two fields", () => {
-		expect(FEATURE_SCHEMAS.commitMessage.required).toEqual(["subject", "body"]);
+		expect(FEATURE_SCHEMAS.commitMessage.required).toEqual([
+			"commitTitle",
+			"commitDescription",
+		]);
 	});
 
 	it("asks the merge request for its two fields", () => {

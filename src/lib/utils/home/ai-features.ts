@@ -28,12 +28,11 @@ interface AiFeatureDef {
 
 const DEFAULT_COMMIT_TEMPLATE = `Read the staged changes of this repository (git diff --staged) and write the commit message for them.
 
-Answer with the message itself and nothing else: no preamble, no reasoning, no restating of these rules, no code fence, no quotes.
-The very first character of your answer is the first character of the subject line.
-Then one blank line, then the body.
+The answer has two fields, and they hold the commit message itself - never a summary of what you did, a status or a placeholder:
+- "commitTitle": the subject line alone. Conventional Commits, \`type(scope): description\`, 80 characters maximum, imperative mood, no trailing period.{{ticket}}
+- "commitDescription": what changed and why, wrapped at 72 characters, without repeating the subject. An empty string when the subject says everything.
 
-Subject: Conventional Commits, \`type(scope): description\`, 80 characters maximum, imperative mood, no trailing period.{{ticket}}
-Body: what changed and why, wrapped at 72 characters. Omit it entirely when the subject says everything.`;
+No preamble, no reasoning, no code fence, no quotes in either field.`;
 
 const DEFAULT_MR_DESCRIPTION_TEMPLATE = `Read the commits of this branch (git log {{base}}..HEAD) and its diff (git diff {{base}}...HEAD), then write the merge request for them.
 
@@ -163,11 +162,19 @@ export const AI_FEATURES: AiFeatureDef[] = [
 export const FEATURE_SCHEMAS: Record<string, Record<string, unknown>> = {
 	commitMessage: {
 		type: "object",
-		required: ["subject", "body"],
+		required: ["commitTitle", "commitDescription"],
 		additionalProperties: false,
 		properties: {
-			subject: { type: "string" },
-			body: { type: "string" },
+			commitTitle: {
+				type: "string",
+				description:
+					"The commit subject line itself, never a note about the generation.",
+			},
+			commitDescription: {
+				type: "string",
+				description:
+					"The commit body without the subject line, empty when not needed.",
+			},
 		},
 	},
 	mrDescription: {

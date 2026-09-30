@@ -7,8 +7,8 @@
    * Binding block shared by the project modals: which connection serves the
    * tracker, the forge and the CI, the project key or repository path of each,
    * and the two opt-in ticket transitions. Edits `bindings` in place through
-   * `bind:`; the parent decides when to persist. Renders nothing without any
-   * connection.
+   * `bind:`; the parent decides when to persist. Without any connection it only
+   * says where to create one, without leaving the modal.
    */
   import { onDestroy, onMount } from 'svelte';
   import { t } from '$lib/i18n';
@@ -35,9 +35,14 @@
   let isPickerLoading = false;
   let pickerTimer: ReturnType<typeof setTimeout> | null = null;
   let suggestedFor = '';
+  let isLoaded = false;
 
   onMount(async () => {
-    await Promise.all([loadKinds(), loadConnections()]);
+    try {
+      await Promise.all([loadKinds(), loadConnections()]);
+    } finally {
+      isLoaded = true;
+    }
   });
 
   onDestroy(() => {
@@ -362,6 +367,14 @@
       </div>
     {/if}
   </div>
+{:else if isLoaded}
+  <div class="pi-block">
+    <div class="pi-title">{t('integrations.bindings.title')}</div>
+    <div class="pi-empty">
+      <Icon name="link" size={16}/>
+      <p>{t('integrations.bindings.empty')}</p>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -374,6 +387,16 @@
     text-transform: uppercase;
     margin-bottom: 6px;
   }
+  .pi-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px dashed var(--stroke-1);
+    border-radius: 8px;
+    color: var(--fg-3);
+  }
+  .pi-empty p { margin: 0; font-size: 12px; line-height: 1.5; }
   .pi-desc { margin: 0 0 16px; font-size: 12px; color: var(--fg-3); line-height: 1.5; }
 
   .pi-suggest {

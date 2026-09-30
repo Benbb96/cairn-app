@@ -182,9 +182,10 @@
   }
 
   /**
-   * Reset targets HEAD: it is the "undo my local commits / my local changes"
-   * gesture of the bar, not a way to travel to an arbitrary commit - that one
-   * lives in the graph context menu, which knows which commit is meant.
+   * Reset targets the parent of HEAD: it is the "undo my last commit" gesture of
+   * the bar, not a way to travel to an arbitrary commit - that one lives in the
+   * graph context menu, which knows which commit is meant. Resetting to HEAD
+   * itself would be a no-op in soft mode and a mere unstage in mixed mode.
    */
   let isResetMenuOpen = false;
   let resetting = false;
@@ -208,7 +209,7 @@
     if (busy) return;
     resetting = true;
     try {
-      await resetToCommit('HEAD', mode);
+      await resetToCommit('HEAD~1', mode);
       dispatch('filesChanged');
     } finally {
       resetting = false;

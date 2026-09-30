@@ -62,6 +62,34 @@
 					"en": "Items of the context menus in the git graph highlight across the full width of the menu on hover.",
 					"fr": "Les entrées des menus contextuels du graphe git sont surlignées sur toute la largeur du menu au survol."
 				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "When no integration is configured, the integrations step of adding a project explains where to create one instead of staying empty.",
+					"fr": "Quand aucune intégration n'est configurée, l'étape intégrations de l'ajout d'un projet indique où en créer une au lieu de rester vide."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The git view of a folder that is not a git repository no longer shows a red error banner above the explanation.",
+					"fr": "La vue git d'un dossier qui n'est pas un dépôt git n'affiche plus de bandeau d'erreur rouge au-dessus de l'explication."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The Reset button of the branch bar undoes the last commit (soft, mixed or hard) instead of resetting to the current commit, which did nothing.",
+					"fr": "Le bouton Reset de la barre de branche annule le dernier commit (soft, mixed ou hard) au lieu de revenir sur le commit courant, ce qui ne faisait rien."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "A generated commit message no longer puts a placeholder such as \"Commit title generated\" in the title and the whole message in the description.",
+					"fr": "Un message de commit généré ne met plus un texte générique comme \"Commit title generated\" dans le titre et tout le message dans la description."
+				}
 			}
 		]
 	},

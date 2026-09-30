@@ -285,7 +285,9 @@ beforeEach(() => {
 		fn.mockReset().mockResolvedValue(undefined);
 	setCommitMessage.mockReset();
 	setCommitBody.mockReset();
-	runOneShot.mockReset().mockResolvedValue({ subject: "", body: "" });
+	runOneShot
+		.mockReset()
+		.mockResolvedValue({ commitTitle: "", commitDescription: "" });
 	settingsState.set({ gitProfiles: [], aiFeatures: {} });
 	activeInstance.set({
 		id: "i1",
@@ -649,13 +651,13 @@ describe("GitView", () => {
 			document.querySelector(".ai-suggest") as HTMLButtonElement;
 
 		/**
-		 * The CLI is held to `{ subject, body }` by its schema flag, so both
+		 * The CLI is held to `{ commitTitle, commitDescription }` by its schema flag, so both
 		 * fields arrive as fields - nothing is hunted for in a block of text.
 		 */
 		it("fills both fields from the answer's own fields", async () => {
 			runOneShot.mockResolvedValue({
-				subject: "feat(auth): add login",
-				body: "Why it matters.",
+				commitTitle: "feat(auth): add login",
+				commitDescription: "Why it matters.",
 			});
 			setGit({ stagedDiffs: [diff("src/a.ts")] });
 			mount();
@@ -669,8 +671,8 @@ describe("GitView", () => {
 		/** A body that itself looks like a subject line stays the body. */
 		it("never re-reads the subject out of the body", async () => {
 			runOneShot.mockResolvedValue({
-				subject: "chore: bump",
-				body: "feat: this line only describes the change",
+				commitTitle: "chore: bump",
+				commitDescription: "feat: this line only describes the change",
 			});
 			setGit({ stagedDiffs: [diff("src/a.ts")] });
 			mount();
@@ -681,14 +683,17 @@ describe("GitView", () => {
 		});
 
 		it("asks the CLI for the commit shape", async () => {
-			runOneShot.mockResolvedValue({ subject: "chore: bump", body: "" });
+			runOneShot.mockResolvedValue({
+				commitTitle: "chore: bump",
+				commitDescription: "",
+			});
 			setGit({ stagedDiffs: [diff("src/a.ts")] });
 			mount();
 			await settle();
 			await userEvent.click(aiButton());
 			await settle();
 			const schema = runOneShot.mock.calls[0][3] as { required: string[] };
-			expect(schema.required).toEqual(["subject", "body"]);
+			expect(schema.required).toEqual(["commitTitle", "commitDescription"]);
 		});
 
 		/**
@@ -697,7 +702,10 @@ describe("GitView", () => {
 		 * matters is that the answer adds nothing on top of it.
 		 */
 		it("leaves the fields alone when the subject is empty", async () => {
-			runOneShot.mockResolvedValue({ subject: "   ", body: "unwanted" });
+			runOneShot.mockResolvedValue({
+				commitTitle: "   ",
+				commitDescription: "unwanted",
+			});
 			setGit({ stagedDiffs: [diff("src/a.ts")] });
 			mount();
 			await settle();

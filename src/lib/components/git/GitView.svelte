@@ -84,7 +84,7 @@
   import { AiAssistError, runOneShotShaped } from '$lib/services/ai-assist-service';
   import { FEATURE_SCHEMAS, resolveAiFeature } from '$lib/utils/home/ai-features';
   import { isAssistCliInstalled, loadCliProviders } from '$lib/stores/cli-providers';
-  import { renderCommitPrompt } from '$lib/utils/git/commit-message';
+  import { normalizeCommitAnswer, renderCommitPrompt } from '$lib/utils/git/commit-message';
   import { SEARCH_DEBOUNCE_MS } from '$lib/utils/timing';
   import { errorMessage } from '$lib/utils/error-message';
 
@@ -1154,23 +1154,23 @@
     });
 
     try {
-      const answer = await runOneShotShaped<{ subject: string; body: string }>(
+      const answer = await runOneShotShaped<{ commitTitle: string; commitDescription: string }>(
         renderCommitPrompt(feature.promptTemplate, appendTicketId ? (instance.ticket?.id ?? '') : '', instance.ticket ?? {}),
         instance.worktreePath,
         feature.providerId,
         FEATURE_SCHEMAS.commitMessage,
         { model: feature.model || undefined, signal: abort.signal },
       );
-      const subject = (answer.subject ?? '').trim();
+      const { subject, body } = normalizeCommitAnswer(answer);
       // A failed generation never clobbers what the user already typed.
       if (subject) {
         // The run belongs to the worktree that started it: writing the answer
         // into whatever is on screen now would drop it in the wrong instance.
         if (worktree === instance?.worktreePath) {
           setCommitMessage(subject);
-          setCommitBody((answer.body ?? '').trim());
+          setCommitBody(body);
         } else {
-          draftByWorktree[worktree] = { title: subject, body: (answer.body ?? '').trim() };
+          draftByWorktree[worktree] = { title: subject, body };
         }
         setFlight(worktree, { aiStatusMessage: t('git.aiGenerated') as string });
       } else {
@@ -1481,7 +1481,7 @@
 }}/>
 
 <div class="git-root">
-{#if state.error}
+{#if state.error && state.isGitRepo}
   {@const described = describeGitError(state.error)}
   <div class="git-error-banner" role="alert">
     <Icon name="alert" size={13}/>
