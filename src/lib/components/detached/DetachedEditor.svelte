@@ -294,6 +294,28 @@
     statusByRoot = statusByRoot;
   }
 
+  /**
+   * Git events come in bursts, and on Linux every write to `.git/index` is one
+   * of them - including the ones git makes itself while answering a status or a
+   * blame. Reloading on each would feed the loop, so the status is refreshed at
+   * most once a second per worktree, and the gutter only when the active file's
+   * status actually moved: the same rule the main editor follows.
+   */
+  const GIT_REFRESH_MIN_INTERVAL_MS = 1000;
+  const gitRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function scheduleGitRefresh(root: string) {
+    if (gitRefreshTimers.has(root)) return;
+    gitRefreshTimers.set(root, setTimeout(async () => {
+      gitRefreshTimers.delete(root);
+      const path = tabs[activeIdx]?.path;
+      const before = path ? statusByRoot.get(root)?.[path] : undefined;
+      await refreshStatus(root);
+      if (activeRoot !== root || !path || tabs[activeIdx]?.path !== path) return;
+      if (statusByRoot.get(root)?.[path] !== before) void refreshDiff();
+    }, GIT_REFRESH_MIN_INTERVAL_MS));
+  }
+
   let diffRequest = 0;
   /** Loads the gutter base and the blame of the active tab, dropping the answer if the tab moved on. */
   async function refreshDiff() {
@@ -881,7 +903,7 @@
     keep(onFsChanged(({ worktree, gitOnly }) => {
       if (!watchedRoots.has(worktree)) return;
       if (!gitOnly) void reloadFromDisk(worktree);
-      void refreshStatus(worktree).then(() => { if (activeRoot === worktree) void refreshDiff(); });
+      scheduleGitRefresh(worktree);
     }));
     keep(getCurrentWebview().onDragDropEvent(async ({ payload }) => {
       if (payload.type !== 'drop') return;
@@ -908,6 +930,7 @@
     window.removeEventListener('keydown', handleKey, { capture: true });
     for (const unlisten of unlisteners) unlisten();
     if (invalidation) cancelAnimationFrame(invalidation);
+    for (const timer of gitRefreshTimers.values()) clearTimeout(timer);
     lsp.closeAll();
   });
 </script>

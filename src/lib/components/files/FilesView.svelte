@@ -460,6 +460,8 @@ import { get } from 'svelte/store';
   }
 
   async function refreshDiff(i: number, tab: { path: string } | null) {
+    // TEMP-DEBUG gutter refresh loop on Linux
+    if (import.meta.env.DEV) console.debug('[gutter] refreshDiff', i, tab?.path, new Error().stack?.split('\n').slice(2, 6).join(' <- '));
     panes[i].activeChunk = null;
     panes[i].baseContent = null;
     panes = panes;
@@ -2365,6 +2367,8 @@ import { get } from 'svelte/store';
 
   let unlistenFsChanged: (() => void) | null = null;
   void onFsChanged(({ worktree, gitOnly }) => {
+    // TEMP-DEBUG gutter refresh loop on Linux
+    if (import.meta.env.DEV) console.debug('[gutter] fs-changed', worktree, gitOnly ? 'git' : 'tree');
     if (worktree === worktreePath) {
       if (!gitOnly) { scheduleWalk(worktree); scheduleOpenFileReload(); }
       scheduleGitRefresh();
@@ -2595,6 +2599,8 @@ import { get } from 'svelte/store';
    * is what decides a refresh alongside the status itself.
    */
   function adoptStoreStatus(statusWorktree: string | null, status: GitStatusMap, indexVersion: number) {
+    // TEMP-DEBUG gutter refresh loop on Linux
+    if (import.meta.env.DEV) console.debug('[gutter] git store', statusWorktree, indexVersion);
     if (!statusWorktree || statusWorktree !== worktreePath) return;
     const previous = gitStatusMap;
     const indexMoved = lastIndexVersion !== -1 && indexVersion !== lastIndexVersion;

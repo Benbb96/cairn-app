@@ -264,6 +264,9 @@ pub async fn watch_dirs(
             let Ok(event) = res else { return };
             let mut verdict: Option<bool> = None;
             for p in &event.paths {
+                // TEMP-DEBUG gutter refresh loop on Linux
+                #[cfg(debug_assertions)]
+                eprintln!("[fs-watch] {:?} {:?} -> {:?}", event.kind, p, classify(p, &cb_root, &cb_gitdir));
                 if let Some(tree) = classify(p, &cb_root, &cb_gitdir) {
                     verdict = Some(verdict.unwrap_or(false) | tree);
                 }
