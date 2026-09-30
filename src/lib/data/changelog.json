@@ -8,6 +8,13 @@
 		},
 		"changes": [
 			{
+				"kind": "fixed",
+				"text": {
+					"en": "Scrolling to the end of a panel, such as a diff in the Git view, no longer scrolls the view around it, and the elastic bounce at the edges on macOS is gone.",
+					"fr": "Arriver au bout d'un panneau en le faisant défiler, comme un diff dans la vue Git, ne fait plus défiler la vue qui le contient, et le rebond élastique aux extrémités sur macOS a disparu."
+				}
+			},
+			{
 				"kind": "changed",
 				"text": {
 					"en": "Duplicating a project now copies its folder on disk, with a chosen name, color, folder name and destination, instead of registering the same folder twice.",
