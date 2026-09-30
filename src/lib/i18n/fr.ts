@@ -1752,6 +1752,8 @@ export const fr = {
 			"Ajouter une description plus longue (facultatif)...",
 		commitBodyLabel: "Description du commit",
 		noDiffPreview: "Pas d'aperçu disponible (fichier binaire ou vide).",
+		diffTooLarge: "Ce fichier est trop volumineux pour afficher son diff ici.",
+		openInEditor: "Ouvrir dans l'éditeur",
 		diffTruncated:
 			"Diff tronqué : ce fichier a trop changé pour être affiché en entier.",
 		stage: "Indexer",
@@ -1812,6 +1814,9 @@ export const fr = {
 		graphLoadFailed: "Les commits suivants n'ont pas pu être chargés.",
 		graphLoadRetry: "Réessayer",
 		branchList: {
+			create: "Créer une branche",
+			createFrom: "Créer depuis",
+			createAction: "Créer et extraire",
 			local: "Locales",
 			remote: "Distantes",
 			none: "Aucune branche",
@@ -3034,6 +3039,12 @@ export const fr = {
 		git: {
 			groupTitle: "Profils Git",
 			groupDesc: "Identités utilisées dans les commits",
+			diffGroupTitle: "Diffs",
+			maxDiffLines: "Seuil des gros diffs",
+			maxDiffLinesDesc:
+				"Au-delà de ce nombre de lignes, le diff d'un fichier n'est pas affiché et s'ouvre dans l'éditeur",
+			maxDiffLinesUnit: "lignes",
+			maxDiffLinesResetTitle: "Revenir à 2000",
 			noProfiles:
 				"Aucun profil pour l'instant. Créez-en un pour changer rapidement d'identité git.",
 			addProfile: "Nouveau profil",

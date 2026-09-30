@@ -12,10 +12,17 @@
   import { langFromPath } from '$lib/services/file-service';
   import type { EditorLanguage } from '$lib/utils/editor/editor-theme';
   import { cachedLineHtml, highlightLineToHtml } from '$lib/utils/git/diff-syntax-highlight';
-  import { activeSyntaxTokens } from '$lib/stores/settings';
+  import { activeSyntaxTokens, settings } from '$lib/stores/settings';
+  import { createEventDispatcher } from 'svelte';
+  import { isDiffTooLarge } from '$lib/utils/git/diff-size';
+  import Icon from '$lib/components/Icon.svelte';
 
   export let hunks: GitDiffHunk[] = [];
   export let filePath = '';
+
+  const dispatch = createEventDispatcher<{ openFile: string }>();
+
+  $: isTooLarge = isDiffTooLarge(hunks, $settings.gitMaxDiffLines);
 
   $: lang = (filePath ? langFromPath(filePath) : 'text') as EditorLanguage;
 
@@ -108,6 +115,15 @@
   $: hidden = Math.max(0, totalRows - shown);
 </script>
 
+{#if isTooLarge}
+<div class="diff-too-large">
+  <span>{t('git.diffTooLarge')}</span>
+  <button class="diff-open" on:click={() => dispatch('openFile', filePath)}>
+    <Icon name="external" size={12}/>
+    {t('git.openInEditor')}
+  </button>
+</div>
+{:else}
 <div class="git-diff">
   {#each rows as row}
     {#if row.kind === 'sep'}
@@ -127,8 +143,37 @@
     </button>
   {/if}
 </div>
+{/if}
 
 <style>
+  .diff-too-large {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--fg-2);
+    background: var(--bg-0);
+  }
+
+  .diff-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--stroke-1);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fg-1);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .diff-open:hover {
+    background: var(--bg-2);
+  }
+
   .git-diff {
     max-height: 320px;
     overflow: auto;

@@ -26,6 +26,7 @@ const DEFAULTS: CairnSettings = {
 	splitMode: false,
 	splitLeftWidth: 0,
 	gitSplitRatio: 0.5,
+	gitMaxDiffLines: 2000,
 	shortcuts: [],
 	theme: "default",
 	accentColor: DEFAULT_ACCENT,

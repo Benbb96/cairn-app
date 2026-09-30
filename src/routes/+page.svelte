@@ -28,6 +28,7 @@
   import { getUiState, saveUiState, saveUiStateNow } from '$lib/services/ui-state-service';
   import { initViewStates, snapshotCurrentProject, applyProjectState, getAllProjectStates, viewStates } from '$lib/stores/view-state';
   import { installCopySelectionHandler } from '$lib/utils/clipboard/copy-selection';
+  import { installFieldUndoHandler } from '$lib/utils/clipboard/field-undo';
   import Home from '$lib/components/Home.svelte';
   import WelcomeTour from '$lib/components/WelcomeTour.svelte';
   import type Workspace from '$lib/components/Workspace.svelte';
@@ -81,6 +82,7 @@
   let lastProjectId: string | null = null;
 
   let removeCopyHandler: (() => void) | null = null;
+  let removeFieldUndoHandler: (() => void) | null = null;
   let stopUpdateChecks: (() => void) | null = null;
   let unlistenCliOpen: (() => void) | null = null;
   let unlistenClose: (() => void) | null = null;
@@ -91,6 +93,7 @@
     closeHookDisposed = true;
     unlistenClose?.();
     removeCopyHandler?.();
+    removeFieldUndoHandler?.();
     stopUpdateChecks?.();
     unlistenCliOpen?.();
     disposeLanguageServers();
@@ -227,6 +230,7 @@
 
   onMount(async () => {
     removeCopyHandler = installCopySelectionHandler();
+    removeFieldUndoHandler = installFieldUndoHandler();
     import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
       getCurrentWindow().onCloseRequested(async () => { await flushBeforeClose(); }),
     ).then((off) => {

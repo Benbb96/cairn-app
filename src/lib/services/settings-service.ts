@@ -79,6 +79,7 @@ export interface CairnSettings {
 	splitLeftWidth: number;
 	/** Share of the git view taken by its left column, between 0 and 1. */
 	gitSplitRatio: number;
+	gitMaxDiffLines: number;
 	shortcuts: ShortcutConfig[];
 	theme: ThemeName;
 	accentColor: string;

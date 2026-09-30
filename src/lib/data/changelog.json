@@ -1,5 +1,57 @@
 [
 	{
+		"version": "1.1.0",
+		"date": "",
+		"summary": {
+			"en": "Branches can be created from the Local section, very large diffs open in the editor instead of inline, and the Git profile is remembered per project. Undo works in every text field, and the line history panel stays open.",
+			"fr": "Les branches se créent depuis la section Locales, les très gros diffs s'ouvrent dans l'éditeur au lieu d'être affichés, et le profil Git est mémorisé par projet. L'annulation fonctionne dans tous les champs de texte, et le panneau d'historique de ligne reste ouvert."
+		},
+		"changes": [
+			{
+				"kind": "added",
+				"text": {
+					"en": "The Local section of the Branches tab has a Create branch button, which branches off a base branch picked from the local and remote branches (the current one by default) and checks the new one out.",
+					"fr": "La section Locales de l'onglet Branches a un bouton Créer une branche, qui crée une branche depuis une branche de base choisie parmi les branches locales et distantes (la branche courante par défaut) et l'extrait."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The git view no longer renders the diff of a very large file; a button opens the file in the editor instead. The threshold (2000 lines by default) is set in Settings > Git.",
+					"fr": "La vue git n'affiche plus le diff d'un fichier très volumineux ; un bouton propose de l'ouvrir dans l'éditeur. Le seuil (2000 lignes par défaut) se règle dans Réglages > Git."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The Git profile picked in the commit form is remembered per project instead of being shared.",
+					"fr": "Le profil Git choisi dans le formulaire de commit est mémorisé par projet au lieu d'être partagé."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo in every text field of the app.",
+					"fr": "Ctrl/Cmd+Z et Ctrl/Cmd+Maj+Z annulent et rétablissent la saisie dans tous les champs de texte de l'application."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The line history panel in the editor no longer closes by itself after a few seconds.",
+					"fr": "Le panneau d'historique de ligne de l'éditeur ne se ferme plus tout seul au bout de quelques secondes."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Items of the context menus in the git graph highlight across the full width of the menu on hover.",
+					"fr": "Les entrées des menus contextuels du graphe git sont surlignées sur toute la largeur du menu au survol."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.0.3",
 		"date": "2026-09-28",
 		"summary": {

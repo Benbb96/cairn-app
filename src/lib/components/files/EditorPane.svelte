@@ -79,9 +79,13 @@
   let svgPreview = true;
   let showLineHistory = false;
 
-  $: closeLineHistory(activeTab?.path);
+  let lineHistoryPath: string | undefined;
+  $: closeLineHistoryOnTabSwitch(activeTab?.path);
 
-  function closeLineHistory(_path: string | undefined) {
+  // Keyed on the path value: activeTab is replaced on every tab update (content, etag), which must not close the panel.
+  function closeLineHistoryOnTabSwitch(path: string | undefined) {
+    if (path === lineHistoryPath) return;
+    lineHistoryPath = path;
     showLineHistory = false;
   }
 

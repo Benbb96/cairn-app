@@ -151,6 +151,34 @@
   </button>
 </div>
 
+<div class="settings-group">
+  <div class="settings-group-title">{t('settings.git.diffGroupTitle')}</div>
+  <div class="settings-row">
+    <div class="settings-row-info">
+      <span class="settings-row-label">{t('settings.git.maxDiffLines')}</span>
+      <span class="settings-row-desc">{t('settings.git.maxDiffLinesDesc')}</span>
+    </div>
+    <div class="settings-row-control">
+      <input
+        class="settings-number-input"
+        type="number"
+        min="100"
+        max="100000"
+        step="100"
+        value={$settings.gitMaxDiffLines}
+        on:change={(e) => {
+          const v = parseInt((e.target as HTMLInputElement).value, 10);
+          if (!isNaN(v)) settings.save({ gitMaxDiffLines: Math.max(100, Math.min(100000, v)) });
+        }}
+      />
+      <span class="settings-row-unit">{t('settings.git.maxDiffLinesUnit')}</span>
+      <button class="settings-reset-btn" title={t('settings.git.maxDiffLinesResetTitle') as string} on:click={() => settings.save({ gitMaxDiffLines: 2000 })}>
+        <Icon name="undo" size={12}/>
+      </button>
+    </div>
+  </div>
+</div>
+
 {#if modalOpen}
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
   <div

@@ -58,6 +58,27 @@ export async function setActiveInstance(
 	return invoke<void>("set_active_instance", { projectId, instanceId });
 }
 
+/** The git profile the project commits with; null when never picked, "" when none was chosen. */
+export async function getProjectGitProfile(
+	projectId: string,
+): Promise<string | null> {
+	try {
+		return await invoke<string | null>("get_project_git_profile", {
+			projectId,
+		});
+	} catch {
+		return null;
+	}
+}
+
+/** Fire and forget, like the other sticky commit options. */
+export function setProjectGitProfile(
+	projectId: string,
+	profileId: string,
+): void {
+	invoke("set_project_git_profile", { projectId, profileId }).catch(() => {});
+}
+
 /** Expands `~`, then returns the canonical path; throws when it is missing or not a directory. */
 export async function validateDirectory(path: string): Promise<string> {
 	return invoke<string>("validate_directory", { path });

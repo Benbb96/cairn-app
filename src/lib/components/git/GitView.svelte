@@ -80,6 +80,7 @@
   import { currentProjectViewState, updateProjectViewState } from '$lib/stores/view-state';
   import { getGitCollapseState, saveGitCollapseState } from '$lib/services/git-collapse-state-service';
   import { getCommitState, saveCommitState } from '$lib/services/commit-state-service';
+  import { getProjectGitProfile, setProjectGitProfile } from '$lib/services/project-service';
   import { AiAssistError, runOneShotShaped } from '$lib/services/ai-assist-service';
   import { FEATURE_SCHEMAS, resolveAiFeature } from '$lib/utils/home/ai-features';
   import { isAssistCliInstalled, loadCliProviders } from '$lib/stores/cli-providers';
@@ -1239,6 +1240,7 @@
   function pickProfile(id: string) {
     selectedProfileId = id;
     profileDropdownOpen = false;
+    if (instance) setProjectGitProfile(instance.projectId, id);
   }
 
   let forgeRemoteUrl = '';
@@ -1303,7 +1305,7 @@
       prevInstanceId = iid;
       commitStateLoaded = false;
       collapseStateLoaded = false;
-      getCommitState(instance!.projectId, iid).then((s) => {
+      Promise.all([getCommitState(instance!.projectId, iid), getProjectGitProfile(instance!.projectId)]).then(([s, projectProfileId]) => {
         if (s) {
           noVerify = s.noVerify;
           signOff = s.signOff;
@@ -1317,6 +1319,7 @@
           selectedProfileId = '';
           appendTicketId = false;
         }
+        if (projectProfileId !== null) selectedProfileId = projectProfileId;
         savedCommitState = `${iid}|${JSON.stringify({ noVerify, signOff, allowEmpty, selectedProfileId, appendTicketId })}`;
         commitStateLoaded = true;
       });
@@ -1683,7 +1686,7 @@
               {#if h.hasDiff}
                 {#if !collapsedUnstaged.has(h.filePath)}
                   <div class="card-diff">
-                    <GitDiff hunks={h.hunks} filePath={h.filePath} />
+                    <GitDiff hunks={h.hunks} filePath={h.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
                     {#if h.truncated}
                       <div class="hunk-truncated">{t('git.diffTruncated')}</div>
                     {/if}
@@ -1890,7 +1893,7 @@
               </div>
               {#if card.hasDiff}
                 <div class="card-diff">
-                  <GitDiff hunks={card.hunks} filePath={card.filePath} />
+                  <GitDiff hunks={card.hunks} filePath={card.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
                 </div>
               {:else}
                 <div class="hunk-no-preview">{t('git.noDiffPreview')}</div>
@@ -2024,7 +2027,7 @@
               </div>
               {#if card.hasDiff}
                 <div class="card-diff">
-                  <GitDiff hunks={card.hunks} filePath={card.filePath} />
+                  <GitDiff hunks={card.hunks} filePath={card.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
                 </div>
               {:else}
                 <div class="hunk-no-preview">{t('git.noDiffPreview')}</div>
@@ -2119,7 +2122,7 @@
               {#if h.hasDiff}
                 {#if expandedStaged.has(h.filePath)}
                   <div class="card-diff">
-                    <GitDiff hunks={h.hunks} filePath={h.filePath} />
+                    <GitDiff hunks={h.hunks} filePath={h.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
                     {#if h.truncated}
                       <div class="hunk-truncated">{t('git.diffTruncated')}</div>
                     {/if}

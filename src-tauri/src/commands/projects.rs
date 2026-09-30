@@ -18,6 +18,8 @@ pub struct Project {
     pub color: String,
     #[serde(rename = "activeInstanceId")]
     pub active_instance_id: Option<String>,
+    #[serde(rename = "gitProfileId", default, skip_serializing_if = "Option::is_none")]
+    pub git_profile_id: Option<String>,
 }
 
 /// Empty on a first launch; shared with the other command modules.
@@ -105,6 +107,7 @@ pub fn duplicate_project(id: String, new_id: String) -> Result<Vec<Project>, Str
         path: original.path,
         color: original.color,
         active_instance_id: None,
+        git_profile_id: original.git_profile_id,
     };
     fs::create_dir_all(worktrees_dir(&new_id)?).map_err(|e| e.to_string())?;
     projects.push(duplicate);
@@ -120,6 +123,23 @@ pub async fn set_active_instance(project_id: String, instance_id: Option<String>
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Project '{}' not found", project_id))?;
     project.active_instance_id = instance_id;
+    write_projects(&projects)
+}
+
+/// The git profile the commit form of this project authors with; `None` when never picked.
+#[tauri::command]
+pub fn get_project_git_profile(project_id: String) -> Result<Option<String>, String> {
+    Ok(read_projects()?.into_iter().find(|p| p.id == project_id).and_then(|p| p.git_profile_id))
+}
+
+/// An empty id stores the explicit "no profile" choice, distinct from never having picked.
+#[tauri::command]
+pub async fn set_project_git_profile(project_id: String, profile_id: String) -> Result<(), String> {
+    let mut projects = read_projects()?;
+    let project = projects.iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project '{}' not found", project_id))?;
+    project.git_profile_id = Some(profile_id);
     write_projects(&projects)
 }
 
@@ -199,6 +219,7 @@ mod tests {
             path: "/repos/mon été".to_string(),
             color: "#ff0000".to_string(),
             active_instance_id: Some("i1".to_string()),
+            git_profile_id: Some("work".to_string()),
         };
         let json = serde_json::to_string(&original).expect("should serialize");
         let back = project_from_json(&json).expect("should parse");
@@ -206,6 +227,14 @@ mod tests {
         assert_eq!(back.name, "Mon projet");
         assert_eq!(back.path, "/repos/mon été");
         assert_eq!(back.active_instance_id.as_deref(), Some("i1"));
+        assert_eq!(back.git_profile_id.as_deref(), Some("work"));
+    }
+
+    #[test]
+    fn a_project_predating_the_git_profile_has_none() {
+        let project = project_from_json(r##"{"id": "p1", "name": "n", "path": "/p", "color": "#fff", "activeInstanceId": null}"##)
+            .expect("should parse");
+        assert!(project.git_profile_id.is_none());
     }
 
     #[test]
@@ -216,6 +245,7 @@ mod tests {
             path: "/repos/p1".to_string(),
             color: "#fff".to_string(),
             active_instance_id: None,
+            git_profile_id: None,
         };
         let json = serde_json::to_string(&original).expect("should serialize");
         assert!(project_from_json(&json)
@@ -242,6 +272,7 @@ mod tests {
             path: "/repos/p1".to_string(),
             color: "#fff".to_string(),
             active_instance_id: None,
+            git_profile_id: None,
         })
         .expect("should serialize");
         let object = json.as_object().expect("project should be an object");

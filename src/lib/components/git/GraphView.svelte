@@ -860,6 +860,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
+    width: 100%;
     padding: 5px 7px;
     border: 0;
     border-radius: 4px;

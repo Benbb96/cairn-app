@@ -1723,6 +1723,8 @@ export const en = {
 		commitBodyPlaceholder: "Add an optional longer description...",
 		commitBodyLabel: "Commit description",
 		noDiffPreview: "No preview available (binary or empty file).",
+		diffTooLarge: "This file is too large to show its diff here.",
+		openInEditor: "Open in editor",
 		diffTruncated:
 			"Diff truncated: this file changed too much to show in full.",
 		stage: "Stage",
@@ -1781,6 +1783,9 @@ export const en = {
 		graphLoadFailed: "The next commits could not be loaded.",
 		graphLoadRetry: "Retry",
 		branchList: {
+			create: "Create branch",
+			createFrom: "Create from",
+			createAction: "Create and check out",
 			local: "Local",
 			remote: "Remote",
 			none: "No branch",
@@ -2976,6 +2981,12 @@ export const en = {
 		git: {
 			groupTitle: "Git Profiles",
 			groupDesc: "Author identities used in commits",
+			diffGroupTitle: "Diffs",
+			maxDiffLines: "Large diff threshold",
+			maxDiffLinesDesc:
+				"Beyond this many lines, a file diff is not shown and opens in the editor instead",
+			maxDiffLinesUnit: "lines",
+			maxDiffLinesResetTitle: "Reset to 2000",
 			noProfiles:
 				"No profiles yet. Create one to quickly switch git author identity.",
 			addProfile: "New profile",
