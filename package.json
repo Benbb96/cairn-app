@@ -90,6 +90,8 @@
   },
   "resolutions": {
     "cookie": "^0.7.0",
+    "dompurify": "^3.4.16",
+    "undici": "^7.29.1",
     "@codemirror/view": "6.43.9",
     "@codemirror/language": "6.12.4",
     "@codemirror/state": "6.7.1"
