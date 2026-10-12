@@ -58,6 +58,12 @@ beforeEach(async () => {
 	closeUpdateModal();
 });
 
+afterEach(async () => {
+	if (phase() !== "installing") return;
+	restartApp.mockRejectedValue(new Error("reset"));
+	await installUpdate();
+});
+
 describe("checkForUpdates", () => {
 	it("stays idle when there is no release", async () => {
 		await checkForUpdates();

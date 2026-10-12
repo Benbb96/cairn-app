@@ -227,8 +227,7 @@ describe("matchesShortcut", () => {
 		expect(matchesShortcut(keyEvent(), binding())).toBe(true);
 	});
 
-	it("treats mod and ctrl as one physical key off macOS", () => {
-		if (IS_MAC) return;
+	it.skipIf(IS_MAC)("treats mod and ctrl as one physical key off macOS", () => {
 		expect(
 			matchesShortcut(keyEvent({ ctrlKey: true }), binding({ ctrl: true })),
 		).toBe(true);
@@ -237,8 +236,7 @@ describe("matchesShortcut", () => {
 		).toBe(true);
 	});
 
-	it("keeps command and control apart on macOS", () => {
-		if (!IS_MAC) return;
+	it.runIf(IS_MAC)("keeps command and control apart on macOS", () => {
 		expect(
 			matchesShortcut(keyEvent({ ctrlKey: true }), binding({ mod: true })),
 		).toBe(false);
@@ -385,9 +383,7 @@ describe("bindingKey", () => {
 	});
 
 	it("ignores the case of the key, since matching does too", () => {
-		expect(bindingKey(binding({ key: "S" }))).toBe(
-			bindingKey(binding({ key: "s" })),
-		);
+		expect(bindingKey(binding({ key: "S", mod: true }))).toBe("1000:s");
 	});
 
 	it("separates bindings that differ by a modifier", () => {

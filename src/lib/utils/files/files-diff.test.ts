@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as fileService from "../../../lib/services/file-service";
 import * as gitService from "../../../lib/services/git-service";
 import { emptyDiffState, loadPaneBase } from "./files-diff";
@@ -15,6 +15,10 @@ vi.mock("$lib/services/git-service", () => ({
 	getFileInIndex: vi.fn().mockResolvedValue(null),
 	checkIgnore: vi.fn().mockResolvedValue([]),
 }));
+
+beforeEach(() => {
+	vi.clearAllMocks();
+});
 
 describe("emptyDiffState", () => {
 	it("returns empty base content and blame", () => {

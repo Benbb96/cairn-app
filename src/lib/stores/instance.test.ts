@@ -8,6 +8,7 @@ import { instance, project } from "../../test/fixtures";
 import {
 	activeInstance,
 	BASE_INSTANCE_ID,
+	forgetProject,
 	instances,
 	loadInstances,
 	removeInstance,
@@ -36,6 +37,8 @@ vi.mock("$lib/services/fs-watch-service", () => ({ unwatchWorktree }));
 describe("activeInstance across a project switch", () => {
 	beforeEach(() => {
 		listInstances.mockReset();
+		forgetProject("a");
+		forgetProject("b");
 		projects.set([
 			project("a", { activeInstanceId: "a1" }),
 			project("b", { activeInstanceId: "b1" }),

@@ -81,17 +81,16 @@ describe("Icon", () => {
 		expect(svg(container).innerHTML.length).toBeGreaterThan(0);
 	});
 
-	it("strokes an outline icon and fills a solid one", () => {
-		if (STROKED) {
-			const { container } = render(Icon, { name: STROKED });
-			expect(svg(container).getAttribute("stroke")).toBe("currentColor");
-			expect(svg(container).getAttribute("fill")).toBe("none");
-		}
-		if (SOLID) {
-			const { container } = render(Icon, { name: SOLID });
-			expect(svg(container).getAttribute("fill")).toBe("currentColor");
-			expect(svg(container).getAttribute("stroke")).toBe("none");
-		}
+	it.runIf(STROKED)("strokes an outline icon", () => {
+		const { container } = render(Icon, { name: STROKED as string });
+		expect(svg(container).getAttribute("stroke")).toBe("currentColor");
+		expect(svg(container).getAttribute("fill")).toBe("none");
+	});
+
+	it.runIf(SOLID)("fills a solid icon", () => {
+		const { container } = render(Icon, { name: SOLID as string });
+		expect(svg(container).getAttribute("fill")).toBe("currentColor");
+		expect(svg(container).getAttribute("stroke")).toBe("none");
 	});
 
 	it("takes the stroke width it is given on an outline icon", () => {

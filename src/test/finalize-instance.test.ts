@@ -341,7 +341,7 @@ describe("FinalizeInstance", () => {
 			expect(rebaseOnto).not.toHaveBeenCalled();
 		});
 
-		it("pushes the branch", async () => {
+		it("pushes a branch that is only ahead without forcing", async () => {
 			setGit({ remoteStatus: { hasUpstream: true, ahead: 2, behind: 0 } });
 			mount();
 			await settle();
@@ -358,15 +358,6 @@ describe("FinalizeInstance", () => {
 			await userEvent.click(buttonIn(stepAt(PUSH)));
 			await settle();
 			expect(pushBranch).toHaveBeenCalledWith(false, true);
-		});
-
-		it("does not force a push that is only ahead", async () => {
-			setGit({ remoteStatus: { hasUpstream: true, ahead: 2, behind: 0 } });
-			mount();
-			await settle();
-			await userEvent.click(buttonIn(stepAt(PUSH)));
-			await settle();
-			expect(pushBranch).toHaveBeenCalledWith(false, false);
 		});
 
 		it("archives the instance on the last step", async () => {

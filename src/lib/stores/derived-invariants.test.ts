@@ -35,7 +35,12 @@ import {
 	instanceConversations,
 	projectConversations,
 } from "./conversation";
-import { activeInstance, instances, loadInstances } from "./instance";
+import {
+	activeInstance,
+	forgetProject,
+	instances,
+	loadInstances,
+} from "./instance";
 import {
 	activeProject,
 	activeProjectId,
@@ -73,6 +78,8 @@ beforeEach(async () => {
 	updateSettings.mockImplementation(async (s) => s);
 	getSettings.mockResolvedValue({ shortcuts: [] });
 	listInstances.mockResolvedValue([]);
+	forgetProject("a");
+	forgetProject("b");
 	await settings.load();
 	projects.set([]);
 	activeProjectId.set(null);

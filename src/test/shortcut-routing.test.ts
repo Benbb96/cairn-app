@@ -122,7 +122,9 @@ describe("shortcut routing", () => {
 	it("gives every shortcut a group, and a key when it ships bound", () => {
 		for (const def of SHORTCUT_DEFS) {
 			expect(def.group, def.id).toBeTruthy();
-			if (def.default !== null) expect(def.default.key, def.id).toBeTruthy();
+		}
+		for (const def of SHORTCUT_DEFS.filter((d) => d.default !== null)) {
+			expect(def.default?.key, def.id).toBeTruthy();
 		}
 	});
 
