@@ -13,6 +13,7 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
   import CopyButton from '$lib/components/CopyButton.svelte';
+  import { horizontalWheel } from '$lib/utils/tab-bar-scroll';
   import { t } from '$lib/i18n';
   import CodeEditor from './CodeEditor.svelte';
   import type { LspDiagnostic, LspDocRef } from '$lib/services/lsp-service';
@@ -165,7 +166,7 @@
     <div class="pane-drop-overlay pane-drop-{dropHint}"></div>
   {/if}
   {#if tabs.length > 0}
-    <div class="tabs-bar" role="tablist" bind:this={tabsBarEl}>
+    <div class="tabs-bar" role="tablist" bind:this={tabsBarEl} use:horizontalWheel>
       {#each tabs as tab, i (tabKey(tab))}
         {#if dragActive && dragSrcIndex !== null && insertIndex === i && !(insertIndex === dragSrcIndex || insertIndex === dragSrcIndex + 1)}
           <div class="drop-indicator"></div>
@@ -180,9 +181,11 @@
           role="tab"
           aria-selected={i === activeTabIdx}
           tabindex="0"
-          on:pointerdown={(e) => onTabPointerDown(e, i)}
+          on:pointerdown={(e) => { if (e.button !== 1) onTabPointerDown(e, i); }}
           on:pointermove={onTabPointerMove}
           on:pointerup={onTabPointerUp}
+          on:mousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+          on:auxclick={(e) => { if (e.button === 1) { e.preventDefault(); onTabClose(i, e); } }}
           on:click={() => { if (!didDrag) onTabClick(i); }}
           on:keydown={(e) => e.key === 'Enter' && onTabClick(i)}
           on:contextmenu={(e) => onTabContextMenu(e, i)}

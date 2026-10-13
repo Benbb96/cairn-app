@@ -139,6 +139,27 @@
 					"en": "In the Git Changes tab, two modified files with the same name in different folders no longer swap places at regular intervals.",
 					"fr": "Dans l'onglet Changes de Git, deux fichiers modifiés de même nom dans des dossiers différents n'échangent plus leur position à intervalles réguliers."
 				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A middle click on an editor tab closes it, in the main window and in detached windows. Pinned tabs stay open.",
+					"fr": "Un clic molette sur un onglet de l'éditeur le ferme, dans la fenêtre principale comme dans les fenêtres détachées. Les onglets épinglés restent ouverts."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A middle click on a project tab closes it.",
+					"fr": "Un clic molette sur un onglet de projet le ferme."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "With more files open than the editor's tab bar can show, the mouse wheel now scrolls it to reach the hidden tabs.",
+					"fr": "Quand la barre d'onglets de l'éditeur ne peut pas afficher tous les fichiers ouverts, la molette la fait maintenant défiler jusqu'aux onglets cachés."
+				}
 			}
 		]
 	},
