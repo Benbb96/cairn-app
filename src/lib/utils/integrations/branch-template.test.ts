@@ -161,7 +161,7 @@ describe("slugSegment", () => {
 	});
 
 	it("stays bounded without leaving a trailing separator", () => {
-		const slug = slugSegment("a".repeat(40) + "-" + "b".repeat(40));
+		const slug = slugSegment(`${"a".repeat(40)}-${"b".repeat(40)}`);
 		expect(slug.length).toBeLessThanOrEqual(52);
 		expect(slug.endsWith("-")).toBe(false);
 	});

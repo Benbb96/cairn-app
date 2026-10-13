@@ -20,11 +20,7 @@ const textOf = (html: string) => {
 
 describe("highlightLineInline", () => {
 	it("wraps the tokens of a line in colour spans", async () => {
-		const html = await highlightLineInline(
-			"const x = 1;",
-			"ts",
-			TOKENS,
-		);
+		const html = await highlightLineInline("const x = 1;", "ts", TOKENS);
 		expect(html).toContain("<span");
 		expect(textOf(html)).toBe("const x = 1;");
 	});
@@ -36,11 +32,7 @@ describe("highlightLineInline", () => {
 			"a && b || c",
 			'const s = "quoted";',
 		]) {
-			const html = await highlightLineInline(
-				line,
-				"ts",
-				TOKENS,
-			);
+			const html = await highlightLineInline(line, "ts", TOKENS);
 			expect(textOf(html), line).toBe(line);
 		}
 	});
@@ -55,9 +47,7 @@ describe("highlightLineInline", () => {
 	});
 
 	it("returns an empty line unchanged", async () => {
-		expect(await highlightLineInline("", "ts", TOKENS)).toBe(
-			"",
-		);
+		expect(await highlightLineInline("", "ts", TOKENS)).toBe("");
 	});
 
 	it("escapes markup rather than injecting it", async () => {
@@ -90,11 +80,7 @@ describe("highlightLineInline", () => {
 			...TOKENS,
 			kw: { color: "#ff0000" },
 		};
-		const html = await highlightLineInline(
-			"const x = 1;",
-			"ts",
-			custom,
-		);
+		const html = await highlightLineInline("const x = 1;", "ts", custom);
 		expect(html).toContain("#ff0000");
 	});
 
@@ -103,11 +89,7 @@ describe("highlightLineInline", () => {
 			...TOKENS,
 			cmt: { color: "#888888", italic: true, bold: true },
 		};
-		const html = await highlightLineInline(
-			"// a comment",
-			"ts",
-			custom,
-		);
+		const html = await highlightLineInline("// a comment", "ts", custom);
 		expect(html).toContain("font-style:italic");
 		expect(html).toContain("font-weight:600");
 	});
@@ -118,11 +100,7 @@ describe("highlightLineInline", () => {
 			'const s = "日本語";',
 			'const s = "مرحبا";',
 		]) {
-			const html = await highlightLineInline(
-				line,
-				"ts",
-				TOKENS,
-			);
+			const html = await highlightLineInline(line, "ts", TOKENS);
 			expect(textOf(html), line).toBe(line);
 		}
 	});
@@ -186,8 +164,6 @@ describe("highlightLineToHtml", () => {
 	});
 
 	it("returns an empty line unchanged", async () => {
-		expect(await highlightLineToHtml("", "ts", TOKENS)).toBe(
-			"",
-		);
+		expect(await highlightLineToHtml("", "ts", TOKENS)).toBe("");
 	});
 });
