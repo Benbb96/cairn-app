@@ -22,7 +22,7 @@ describe("highlightLineInline", () => {
 	it("wraps the tokens of a line in colour spans", async () => {
 		const html = await highlightLineInline(
 			"const x = 1;",
-			"typescript" as never,
+			"ts",
 			TOKENS,
 		);
 		expect(html).toContain("<span");
@@ -38,7 +38,7 @@ describe("highlightLineInline", () => {
 		]) {
 			const html = await highlightLineInline(
 				line,
-				"typescript" as never,
+				"ts",
 				TOKENS,
 			);
 			expect(textOf(html), line).toBe(line);
@@ -55,7 +55,7 @@ describe("highlightLineInline", () => {
 	});
 
 	it("returns an empty line unchanged", async () => {
-		expect(await highlightLineInline("", "typescript" as never, TOKENS)).toBe(
+		expect(await highlightLineInline("", "ts", TOKENS)).toBe(
 			"",
 		);
 	});
@@ -73,7 +73,7 @@ describe("highlightLineInline", () => {
 	it("escapes markup inside a highlighted language too", async () => {
 		const html = await highlightLineInline(
 			'const s = "<img onerror=x>";',
-			"typescript" as never,
+			"ts",
 			TOKENS,
 		);
 		expect(html).not.toContain("<img");
@@ -92,7 +92,7 @@ describe("highlightLineInline", () => {
 		};
 		const html = await highlightLineInline(
 			"const x = 1;",
-			"typescript" as never,
+			"ts",
 			custom,
 		);
 		expect(html).toContain("#ff0000");
@@ -105,7 +105,7 @@ describe("highlightLineInline", () => {
 		};
 		const html = await highlightLineInline(
 			"// a comment",
-			"typescript" as never,
+			"ts",
 			custom,
 		);
 		expect(html).toContain("font-style:italic");
@@ -120,7 +120,7 @@ describe("highlightLineInline", () => {
 		]) {
 			const html = await highlightLineInline(
 				line,
-				"typescript" as never,
+				"ts",
 				TOKENS,
 			);
 			expect(textOf(html), line).toBe(line);
@@ -129,19 +129,19 @@ describe("highlightLineInline", () => {
 
 	it("keeps a tab and a run of spaces", async () => {
 		const line = "\tif (x)   return;";
-		const html = await highlightLineInline(line, "typescript" as never, TOKENS);
+		const html = await highlightLineInline(line, "ts", TOKENS);
 		expect(textOf(html)).toBe(line);
 	});
 
 	it("survives a line that is not valid source", async () => {
 		const line = "const const const {{{";
-		const html = await highlightLineInline(line, "typescript" as never, TOKENS);
+		const html = await highlightLineInline(line, "ts", TOKENS);
 		expect(textOf(html)).toBe(line);
 	});
 
 	it("handles a very long line without truncating it", async () => {
 		const line = `const x = "${"a".repeat(20_000)}";`;
-		const html = await highlightLineInline(line, "typescript" as never, TOKENS);
+		const html = await highlightLineInline(line, "ts", TOKENS);
 		expect(textOf(html)).toHaveLength(line.length);
 	});
 
@@ -162,15 +162,15 @@ describe("highlightLineToHtml", () => {
 	 */
 	it("answers the same as the inline path it falls back to", async () => {
 		const line = "const x = 1;";
-		expect(await highlightLineToHtml(line, "typescript" as never, TOKENS)).toBe(
-			await highlightLineInline(line, "typescript" as never, TOKENS),
+		expect(await highlightLineToHtml(line, "ts", TOKENS)).toBe(
+			await highlightLineInline(line, "ts", TOKENS),
 		);
 	});
 
 	it("renders several lines independently", async () => {
 		const [a, b] = await Promise.all([
-			highlightLineToHtml("const a = 1;", "typescript" as never, TOKENS),
-			highlightLineToHtml("const b = 2;", "typescript" as never, TOKENS),
+			highlightLineToHtml("const a = 1;", "ts", TOKENS),
+			highlightLineToHtml("const b = 2;", "ts", TOKENS),
 		]);
 		expect(textOf(a)).toBe("const a = 1;");
 		expect(textOf(b)).toBe("const b = 2;");
@@ -186,7 +186,7 @@ describe("highlightLineToHtml", () => {
 	});
 
 	it("returns an empty line unchanged", async () => {
-		expect(await highlightLineToHtml("", "typescript" as never, TOKENS)).toBe(
+		expect(await highlightLineToHtml("", "ts", TOKENS)).toBe(
 			"",
 		);
 	});

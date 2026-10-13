@@ -618,7 +618,7 @@ describe("ConversationHistoryPanel dragging between scopes", () => {
 		const row = rowNamed("mine");
 		drag(row, INSTANCE_Y, PROJECT_Y);
 		row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		expect(onMoveScope).toHaveBeenCalled();
+		expect(onMoveScope).toHaveBeenCalledWith("instance", "mine");
 		expect(onSelect).not.toHaveBeenCalled();
 	});
 

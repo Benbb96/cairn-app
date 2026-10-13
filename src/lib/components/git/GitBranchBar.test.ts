@@ -344,7 +344,7 @@ describe("GitBranchBar", () => {
 		it("pulls and tells the parent the worktree may have changed", async () => {
 			const { onFilesChanged } = mount();
 			await userEvent.click(pullBtn());
-			expect(pullBranch).toHaveBeenCalled();
+			expect(pullBranch).toHaveBeenCalledWith("rebase");
 			expect(onFilesChanged).toHaveBeenCalled();
 		});
 
