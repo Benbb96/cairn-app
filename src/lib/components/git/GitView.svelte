@@ -277,6 +277,9 @@
 
   /* A diff the store hands back unchanged keeps its card: the store only
      replaces the arrays when the diffs moved, so identity is the whole check. */
+  const compareCards = (a: FileCard, b: FileCard) =>
+    a.basename.localeCompare(b.basename) || a.filePath.localeCompare(b.filePath);
+
   const cardByHunks = new WeakMap<GitDiffHunk[], FileCard>();
   function cardFor(f: GitFileDiff, status: string | null): FileCard {
     let card = cardByHunks.get(f.hunks);
@@ -308,7 +311,7 @@
       cards.push(card);
     }
     for (const key of untrackedCardByText.keys()) if (!live.has(key)) untrackedCardByText.delete(key);
-    return cards.sort((a, b) => a.basename.localeCompare(b.basename));
+    return cards.sort(compareCards);
   })();
 
   $: filteredUnstagedCards = $currentProjectViewState.gitChangesSearch.trim()
@@ -317,7 +320,7 @@
 
   $: stagedCards = state.stagedDiffs
     .map(f => cardFor(f, diffStatus(f.hunks)))
-    .sort((a, b) => a.basename.localeCompare(b.basename));
+    .sort(compareCards);
 
   $: filteredStagedCards = $currentProjectViewState.gitStagedSearch.trim()
     ? stagedCards.filter(h => h.filePath.toLowerCase().includes($currentProjectViewState.gitStagedSearch.toLowerCase()))

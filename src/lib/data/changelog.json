@@ -1,5 +1,22 @@
 [
 	{
+		"version": "1.1.1",
+		"date": "",
+		"summary": {
+			"en": "The Changes list no longer shuffles files that share a name.",
+			"fr": "La liste des changements ne mélange plus les fichiers de même nom."
+		},
+		"changes": [
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "In the Git Changes tab, two modified files with the same name in different folders no longer swap places at regular intervals.",
+					"fr": "Dans l'onglet Changes de Git, deux fichiers modifiés de même nom dans des dossiers différents n'échangent plus leur position à intervalles réguliers."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.1.0",
 		"date": "2026-10-01",
 		"summary": {
