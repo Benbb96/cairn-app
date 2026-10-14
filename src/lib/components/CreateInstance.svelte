@@ -82,6 +82,7 @@
   let remoteBranches: string[] = [];
   let branchSearch = '';
   let isGitRepo = false;
+  let hasCheckedRepo = false;
   let creating = false;
   let error = '';
   let prevSlug = '';
@@ -189,28 +190,35 @@
     } else if (next === 'ticket' && $ticketSearch.results.length === 0) runTicketSearch();
   }
 
-  /** Loads local and remote branches, and picks a sensible base branch if the current one is gone. */
+  async function readBranches(path: string) {
+    const { local, remote } = await listBranchesDetailed(path);
+    availableBranches = local;
+    remoteBranches = remote;
+    isGitRepo = true;
+    const all = [...local, ...remote];
+    if (!all.includes(baseBranch)) {
+      if (local.includes('main')) baseBranch = 'main';
+      else if (local.includes('master')) baseBranch = 'master';
+      else if (local.length > 0) baseBranch = local[0];
+      else if (remote.length > 0) baseBranch = remote[0];
+    }
+  }
+
+  /** Shows the local branches at once, then refreshes them once the remote fetch has landed. */
   async function loadBranchList() {
     if (!$activeProject) return;
+    const path = $activeProject.path;
     refreshingBranches = true;
     try {
-      await gitFetch($activeProject.path).catch(() => {});
-      const { local, remote } = await listBranchesDetailed($activeProject.path);
-      availableBranches = local;
-      remoteBranches = remote;
-      isGitRepo = true;
-      const all = [...local, ...remote];
-      if (!all.includes(baseBranch)) {
-        if (local.includes('main')) baseBranch = 'main';
-        else if (local.includes('master')) baseBranch = 'master';
-        else if (local.length > 0) baseBranch = local[0];
-        else if (remote.length > 0) baseBranch = remote[0];
-      }
+      await readBranches(path);
+      await gitFetch(path).catch(() => {});
+      await readBranches(path);
     } catch {
       availableBranches = [];
       remoteBranches = [];
       isGitRepo = false;
     } finally {
+      hasCheckedRepo = true;
       refreshingBranches = false;
     }
   }
@@ -815,7 +823,7 @@
               <span class="mode-desc">{t('createInstance.adoptWorktreeDesc')}</span>
             </button>
           </div>
-        {:else}
+        {:else if hasCheckedRepo}
           <div class="info-box">
             <div class="info-icon"><Icon name="info" size={14}/></div>
             <div>{t('createInstance.notGitRepo')}</div>

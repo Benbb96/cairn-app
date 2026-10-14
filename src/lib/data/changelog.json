@@ -17,6 +17,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Opening the new instance dialog no longer flashes \"This project is not a git repository\" for a second or two before the cards appear.",
+					"fr": "L'ouverture de la fenêtre de création d'instance n'affiche plus brièvement « Ce projet n'est pas un dépôt git » avant l'apparition des cartes."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "With many projects open, the mouse wheel now scrolls the project tab bar, and the active project's tab is brought into view.",
 					"fr": "Avec beaucoup de projets ouverts, la molette de la souris fait maintenant défiler la barre d'onglets des projets, et l'onglet du projet actif est ramené dans la vue."
 				}
