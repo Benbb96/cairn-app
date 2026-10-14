@@ -609,7 +609,7 @@ pub fn kill_process_group(pid: u32) -> bool {
         return false;
     }
     let _ = child_env::command("kill")
-        .args(["-TERM", &format!("-{pid}")])
+        .args(["-TERM", "--", &format!("-{pid}")])
         .output();
     true
 }

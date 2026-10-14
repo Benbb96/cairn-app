@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "On Linux, stopping an agent, a test run or a one-shot AI call no longer risks sending the stop signal to Cairn itself.",
+					"fr": "Sous Linux, arrêter un agent, une exécution de tests ou un appel IA ponctuel ne risque plus d'envoyer le signal d'arrêt à Cairn lui-même."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "With many projects open, the mouse wheel now scrolls the project tab bar, and the active project's tab is brought into view.",
 					"fr": "Avec beaucoup de projets ouverts, la molette de la souris fait maintenant défiler la barre d'onglets des projets, et l'onglet du projet actif est ramené dans la vue."
 				}
