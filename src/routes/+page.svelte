@@ -31,6 +31,8 @@
   import { installFieldUndoHandler } from '$lib/utils/clipboard/field-undo';
   import Home from '$lib/components/Home.svelte';
   import WelcomeTour from '$lib/components/WelcomeTour.svelte';
+  import AddProject from '$lib/components/AddProject.svelte';
+  import AddProjectChooser from '$lib/components/AddProjectChooser.svelte';
   import type Workspace from '$lib/components/Workspace.svelte';
   import CreateInstance from '$lib/components/CreateInstance.svelte';
   import type { Ticket } from '$lib/types/integrations';
@@ -54,6 +56,8 @@
   let homeOpenSection: HomeSection | null = null;
   let homeOpenSettingsTab: string | null = null;
   let homeOpenAddProjectMode: 'new' | 'open' | 'clone' | null = null;
+  let isAddProjectChooserOpen = false;
+  let workspaceAddProjectMode: 'new' | 'open' | 'clone' | null = null;
   let homeOpenAddProjectPath = '';
   let homeOpenAddProjectCloneUrl = '';
   let homeSection: string = 'projects';
@@ -553,6 +557,21 @@
   <LoadingScreen/>
 {/if}
 
+{#if isAddProjectChooserOpen}
+  <AddProjectChooser
+    on:close={() => isAddProjectChooserOpen = false}
+    on:choose={(e) => { workspaceAddProjectMode = e.detail; isAddProjectChooserOpen = false; }}
+  />
+{/if}
+
+{#if workspaceAddProjectMode}
+  <AddProject
+    mode={workspaceAddProjectMode}
+    on:close={() => workspaceAddProjectMode = null}
+    on:created={(e) => { workspaceAddProjectMode = null; void handleProjectCreated(e.detail.id); }}
+  />
+{/if}
+
 {#if $showWelcomeTour}
   <WelcomeTour on:close={() => { showWelcomeTour.set(false); void settings.save({ onboardingSeen: true }); }}/>
 {/if}
@@ -584,7 +603,7 @@
       on:projectChange={(e) => handleProjectChange(e.detail)}
       on:closeProject={(e) => handleCloseProject(e.detail)}
       on:reorderTabs={(e) => reorderTabs(e.detail)}
-      on:addProject={() => { homeOpenSection = null; goScreen('home'); }}
+      on:addProject={() => { isAddProjectChooserOpen = true; }}
       on:goHome={() => { homeOpenSection = null; goScreen('home'); }}
       on:goSettings={() => { homeOpenSection = 'settings'; goScreen('home'); }}
       on:goProviders={() => { homeOpenSection = 'providers'; goScreen('home'); }}

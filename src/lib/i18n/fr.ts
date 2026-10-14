@@ -38,6 +38,7 @@ export const fr = {
 	},
 
 	addProject: {
+		chooserTitle: "Ajouter un projet",
 		stepLabels: {
 			identity: "Identité",
 			location: "Emplacement",

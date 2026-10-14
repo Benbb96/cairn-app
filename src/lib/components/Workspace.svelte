@@ -272,6 +272,43 @@
   let dragStartX = 0;
   let dragStartY = 0;
   let tabsRowEl: HTMLElement | null = null;
+  let tabsScrollEl: HTMLElement | null = null;
+
+  function onTabsWheel(e: WheelEvent) {
+    if (!tabsScrollEl || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    tabsScrollEl.scrollLeft += e.deltaY;
+  }
+
+  async function revealActiveTab(id: string) {
+    await tick();
+    const index = openProjects.findIndex((p) => p.id === id);
+    const tab = tabsScrollEl?.querySelectorAll<HTMLElement>('.project-tab')[index];
+    if (!tabsScrollEl || !tab) return;
+    const left = tab.offsetLeft - tabsScrollEl.offsetLeft;
+    const right = left + tab.offsetWidth;
+    if (left < tabsScrollEl.scrollLeft) tabsScrollEl.scrollLeft = left;
+    else if (right > tabsScrollEl.scrollLeft + tabsScrollEl.clientWidth) tabsScrollEl.scrollLeft = right - tabsScrollEl.clientWidth;
+  }
+
+  let hasHiddenTabsStart = false;
+  let hasHiddenTabsEnd = false;
+
+  function updateTabsOverflow() {
+    if (!tabsScrollEl) return;
+    hasHiddenTabsStart = tabsScrollEl.scrollLeft > 1;
+    hasHiddenTabsEnd = tabsScrollEl.scrollLeft + tabsScrollEl.clientWidth < tabsScrollEl.scrollWidth - 1;
+  }
+
+  $: if (tabsScrollEl) {
+    const observer = new ResizeObserver(updateTabsOverflow);
+    observer.observe(tabsScrollEl);
+    onDestroy(() => observer.disconnect());
+  }
+
+  $: if (openProjects) void tick().then(updateTabsOverflow);
+
+  $: if (activeProjectId) void revealActiveTab(activeProjectId);
 
   const DRAG_THRESHOLD = 6;
 
@@ -504,7 +541,7 @@
       <span>Cairn Foundry<sup class="tm">TM</sup></span>
     </button>
     <div class="tab-divider"></div>
-    <div class="tabs-scroll">
+    <div class="tabs-scroll" class:fade-start={hasHiddenTabsStart} class:fade-end={hasHiddenTabsEnd} bind:this={tabsScrollEl} on:wheel={onTabsWheel} on:scroll={updateTabsOverflow}>
     {#each openProjects as p, i (p.id)}
       {#if dragActive && dragSrcIndex !== null && insertIndex === i && !(insertIndex === dragSrcIndex || insertIndex === dragSrcIndex + 1)}
         <div class="drop-indicator"></div>

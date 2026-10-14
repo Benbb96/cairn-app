@@ -10,6 +10,20 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "With many projects open, the mouse wheel now scrolls the project tab bar, and the active project's tab is brought into view.",
+					"fr": "Avec beaucoup de projets ouverts, la molette de la souris fait maintenant défiler la barre d'onglets des projets, et l'onglet du projet actif est ramené dans la vue."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The + Project button in the tab bar now opens a dialog to create, open or clone a project, instead of landing on the last Home section.",
+					"fr": "Le bouton + Projet de la barre d'onglets ouvre maintenant une fenêtre pour créer, ouvrir ou cloner un projet, au lieu d'atterrir sur la dernière section de l'accueil."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "In the Git Changes tab, two modified files with the same name in different folders no longer swap places at regular intervals.",
 					"fr": "Dans l'onglet Changes de Git, deux fichiers modifiés de même nom dans des dossiers différents n'échangent plus leur position à intervalles réguliers."
 				}

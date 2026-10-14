@@ -214,6 +214,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); curso
   scrollbar-width: none;
 }
 .tabs-scroll::-webkit-scrollbar { height: 0; display: none; }
+.tabs-scroll.fade-start { mask-image: linear-gradient(to right, transparent, #000 28px); }
+.tabs-scroll.fade-end { mask-image: linear-gradient(to left, transparent, #000 28px); }
+.tabs-scroll.fade-start.fade-end { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 
 .project-tab {
   display: flex; align-items: center; gap: 8px;
