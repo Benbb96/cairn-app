@@ -104,4 +104,4 @@ jobs:
       - name: Build
         run: bun run tauri build --no-bundle
 
-      - run: bun run test:rust
+      - run: cd src-tauri && cargo test -- --test-threads=1 --nocapture

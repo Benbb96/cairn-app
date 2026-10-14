@@ -62,3 +62,13 @@ globalThis.ResizeObserver ??= class {
 	unobserve() {}
 	disconnect() {}
 } as unknown as typeof ResizeObserver;
+
+// CodeMirror measures text through Range.getClientRects on an animation frame,
+// which can fire after a test ended; jsdom has no layout and omits both.
+Range.prototype.getClientRects ??= () =>
+	({
+		length: 0,
+		item: () => null,
+		[Symbol.iterator]: [][Symbol.iterator],
+	}) as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
