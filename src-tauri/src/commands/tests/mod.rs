@@ -427,9 +427,13 @@ mod kill_tests {
         // A pid that does not exist: it has no group, so no signal.
         assert!(!kill_process_group(u32::MAX - 1));
 
-        // The test runner itself: launched by cargo, it is not the leader of
-        // its own process group, so pgrp != pid and the signal is withheld.
-        assert!(!kill_process_group(std::process::id()));
+        // A child that shares our group is not the leader of its own, so
+        // pgrp != pid and the signal is withheld. The test binary itself cannot
+        // stand in: when cargo execs it, it leads the group of the whole CI step.
+        let mut follower = spawn_shell_full("sleep 5", None, false).expect("spawn");
+        assert!(!kill_process_group(follower.id()));
+        let _ = follower.kill();
+        let _ = follower.wait();
 
         // A child spawned with process_group(0) IS its own group leader, so the
         // guard lets the signal through. `sleep` keeps it alive while it is checked.
