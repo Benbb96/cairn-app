@@ -23,6 +23,7 @@ use registry::{
     catalog, detect_version, find_def, manager_options, owning_manager, resolve_command,
     resolve_root, shares_removal_with, BinaryCache, LanguageServerDef, ManagerCommands,
 };
+use crate::toolchain::{resolve_binary, spawn_shell_leading};
 use server::{emit_status, path_to_uri, uri_to_path, OpenDoc, ServerHandle, ServerStatus};
 
 /// A server that failed to start three times in a row stays down: retrying
@@ -650,7 +651,10 @@ async fn run_manager_command(
         .ok_or_else(|| format!("{} has no {manager} command", def.name))?;
 
     let key = CommandKey { server_id: server_id.clone(), kind };
-    blocking(move || run_shell(app, server_id, key, command)).await
+    let lead = resolve_binary(&def.binary, None)
+        .filter(|binary| owning_manager(binary) == Some(manager.as_str()))
+        .and_then(|binary| binary.parent().map(Path::to_path_buf));
+    blocking(move || run_shell(app, server_id, key, command, lead)).await
 }
 
 /// The manager a removal should go through: the one whose fingerprint the
@@ -695,8 +699,9 @@ fn run_shell(
     server_id: String,
     key: CommandKey,
     command: &str,
+    lead: Option<PathBuf>,
 ) -> Result<String, String> {
-    let mut child = registry::spawn_shell(command)
+    let mut child = spawn_shell_leading(command, lead.as_deref())
         .map_err(|e| format!("failed to run the command: {e}"))?;
 
     let stdout = child.stdout.take();
@@ -847,6 +852,7 @@ pub async fn start_language_server(
                 let mut attempts = lsp.attempts.lock().map_err(|e| e.to_string())?;
                 *attempts.entry(server_id.clone()).or_insert(0) += 1;
                 drop(attempts);
+                eprintln!("[lsp] {server_id} failed to start: {e}");
                 emit_status(&app, &server_id, &root, ServerStatus::Failed, Some(e.clone()));
                 Err(e)
             }

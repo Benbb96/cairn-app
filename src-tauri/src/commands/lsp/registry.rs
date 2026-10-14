@@ -66,7 +66,7 @@ pub const BUILTIN: &[BuiltinDef] = &[
         extensions:   &[".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"],
         root_markers: &["tsconfig.json", "jsconfig.json", "package.json"],
         install: ManagerCommands {
-            npm: Some("npm install -g typescript typescript-language-server"),
+            npm: Some("npm install -g typescript@6 typescript-language-server"),
             ..EMPTY
         },
         uninstall: ManagerCommands {
@@ -74,7 +74,7 @@ pub const BUILTIN: &[BuiltinDef] = &[
             ..EMPTY
         },
         update: ManagerCommands {
-            npm: Some("npm install -g typescript@latest typescript-language-server@latest"),
+            npm: Some("npm install -g typescript@6 typescript-language-server@latest"),
             ..EMPTY
         },
         check: ManagerCommands {

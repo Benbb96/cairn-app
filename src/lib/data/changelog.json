@@ -10,6 +10,41 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Installing or updating a language server now runs through the package manager that already owns it (for example the npm of your nvm node) instead of the system one, which failed with permission or engine errors.",
+					"fr": "Installer ou mettre à jour un serveur de langage passe maintenant par le gestionnaire de paquets qui le possède déjà (par exemple le npm de votre node nvm) plutôt que par celui du système, qui échouait avec des erreurs de permission ou de version de moteur."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "rust-analyzer is no longer shown as installed when rustup only provides an empty stand-in for it: the Install button now appears and adds the component.",
+					"fr": "rust-analyzer n'apparaît plus comme installé quand rustup n'en fournit qu'une coquille vide : le bouton Installer s'affiche et ajoute le composant."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "TypeScript now starts again: it is installed with TypeScript 6, and a project without its own TypeScript falls back to the global copy.",
+					"fr": "TypeScript redémarre : il s'installe avec TypeScript 6, et un projet sans TypeScript propre utilise la copie globale."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Language servers written in JavaScript or Python now find their runtime when Cairn is launched from the Dock or Finder.",
+					"fr": "Les serveurs de langage écrits en JavaScript ou en Python retrouvent leur environnement d'exécution quand Cairn est lancé depuis le Dock ou le Finder."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The error shown when a language server install or update fails can be selected and copied, and long lines wrap instead of scrolling sideways.",
+					"fr": "L'erreur affichée quand l'installation ou la mise à jour d'un serveur de langage échoue peut être sélectionnée et copiée, et les longues lignes passent à la ligne au lieu de défiler horizontalement."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "On Linux, stopping an agent, a test run or a one-shot AI call no longer risks sending the stop signal to Cairn itself.",
 					"fr": "Sous Linux, arrêter un agent, une exécution de tests ou un appel IA ponctuel ne risque plus d'envoyer le signal d'arrêt à Cairn lui-même."
 				}

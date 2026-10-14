@@ -433,8 +433,11 @@
       <!-- The command only shows up when clicking is not an option any more. -->
       {#if !server.custom && (error || (server.binaryPath === null && option === null))}
         <div class="ls-fallback">
-          <div class="ls-fallback-text" class:danger={!!error}>
-            {error || t('languageServers.noManagerAvailable')}
+          <div class="ls-fallback-head">
+            <div class="ls-fallback-text selectable" class:danger={!!error}>
+              {error || t('languageServers.noManagerAvailable')}
+            </div>
+            {#if error}<CopyButton value={error}/>{/if}
           </div>
           {#each server.installOptions as { manager, command }}
             <div class="ls-fallback-cmd">
@@ -715,13 +718,16 @@
     border-bottom-left-radius: var(--r-md);
     border-bottom-right-radius: var(--r-md);
   }
-  .ls-fallback-text { font-size: 11.5px; color: var(--fg-2); }
+  .ls-fallback-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+  .ls-fallback-text { flex: 1; min-width: 0; font-size: 11.5px; color: var(--fg-2); }
   .ls-fallback-text.danger {
     color: var(--danger);
     font-family: var(--font-mono);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     max-height: 96px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   .ls-fallback-cmd { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .ls-manager {

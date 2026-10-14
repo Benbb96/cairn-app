@@ -147,6 +147,17 @@ pub fn spawn_shell_in(
     spawn_shell_full(command, cwd, false)
 }
 
+/// `spawn_shell`, with `lead` at the front of PATH: the directory of an
+/// already installed tool, so its package manager runs under the same runtime
+/// that owns it. The login shell's own `npm` may belong to another node, or to
+/// a root-owned prefix the user cannot write to.
+pub fn spawn_shell_leading(
+    command: &str,
+    lead: Option<&Path>,
+) -> std::io::Result<std::process::Child> {
+    spawn_shell_with(command, None, false, lead.map(Path::to_path_buf))
+}
+
 /// The directory of the tool a command starts with, when resolution finds it
 /// somewhere the login shell's own PATH does not reach.
 ///
@@ -180,6 +191,17 @@ pub fn spawn_shell_full(
     cwd: Option<&Path>,
     group: bool,
 ) -> std::io::Result<std::process::Child> {
+    spawn_shell_with(command, cwd, group, None)
+}
+
+fn spawn_shell_with(
+    command: &str,
+    cwd: Option<&Path>,
+    group: bool,
+    lead: Option<PathBuf>,
+) -> std::io::Result<std::process::Child> {
+    let lead = lead.or_else(|| resolved_tool_dir(command));
+
     #[cfg(windows)]
     let mut process = child_env::command("cmd");
     #[cfg(windows)]
@@ -189,8 +211,20 @@ pub fn spawn_shell_full(
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
         child_env::command(shell)
     };
+    // The PATH goes through the command, not the environment: a login shell
+    // rebuilds PATH from /etc/paths (macOS `path_helper`), which puts
+    // /usr/local/bin ahead of whatever the app set.
     #[cfg(not(windows))]
-    process.args(["-lc", command]);
+    {
+        let script = match &lead {
+            Some(dir) => {
+                let quoted = dir.to_string_lossy().replace('\'', "'\\''");
+                format!("PATH='{quoted}':\"$PATH\"; export PATH; {command}")
+            }
+            None => command.to_string(),
+        };
+        process.args(["-lc", &script]);
+    }
 
     if let Some(dir) = cwd
         && dir.is_dir()
@@ -198,15 +232,9 @@ pub fn spawn_shell_full(
         process.current_dir(dir);
     }
 
-    if let Some(dir) = resolved_tool_dir(command) {
-        let existing = process
-            .get_envs()
-            .find(|(key, _)| *key == "PATH")
-            .map_or_else(
-                || std::env::var_os("PATH"),
-                |(_, value)| value.map(ToOwned::to_owned),
-            )
-            .unwrap_or_default();
+    #[cfg(windows)]
+    if let Some(dir) = lead {
+        let existing = std::env::var_os("PATH").unwrap_or_default();
         let dirs = std::iter::once(dir).chain(std::env::split_paths(&existing));
         if let Ok(path) = std::env::join_paths(dirs) {
             process.env("PATH", path);
@@ -403,6 +431,62 @@ pub fn resolve_binary(binary: &str, root: Option<&Path>) -> Option<PathBuf> {
             .find(|candidate| is_executable(candidate));
     }
 
+    search_dirs(root)
+        .into_iter()
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .find(|candidate| is_executable(candidate) && !is_empty_rustup_proxy(candidate) && !is_empty_xcode_shim(candidate))
+}
+
+/// `~/.cargo/bin` holds a rustup proxy for every component name, installed or
+/// not: `rust-analyzer` is there on any machine with rustup, and running it
+/// without the component only prints "Unknown binary" and exits. Such a proxy
+/// is not the tool, so it must not read as installed.
+#[cfg(not(windows))]
+fn is_empty_rustup_proxy(candidate: &Path) -> bool {
+    let Some(name) = candidate.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if matches!(name, "rustup" | "cargo" | "rustc") {
+        return false;
+    }
+    let is_proxy = std::fs::canonicalize(candidate)
+        .is_ok_and(|real| real.file_name().is_some_and(|n| n == "rustup"));
+    is_proxy
+        && !child_env::command("rustup")
+            .args(["which", name])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+}
+
+/// `/usr/bin/clangd` on macOS is a stub that forwards to the Command Line Tools.
+/// Without them it is still there, and running it opens an install dialog
+/// instead of a language server.
+#[cfg(target_os = "macos")]
+fn is_empty_xcode_shim(candidate: &Path) -> bool {
+    candidate == Path::new("/usr/bin/clangd")
+        && !child_env::command("xcrun")
+            .args(["--find", "clangd"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_empty_xcode_shim(_candidate: &Path) -> bool {
+    false
+}
+
+#[cfg(windows)]
+fn is_empty_rustup_proxy(_candidate: &Path) -> bool {
+    false
+}
+
+fn search_dirs(root: Option<&Path>) -> Vec<PathBuf> {
     let path_dirs = std::env::var("PATH")
         .map(|path| std::env::split_paths(&path).collect::<Vec<PathBuf>>())
         .unwrap_or_default();
@@ -412,8 +496,16 @@ pub fn resolve_binary(binary: &str, root: Option<&Path>) -> Option<PathBuf> {
         .cloned()
         .chain(path_dirs)
         .chain(extra_lookup_dirs(root))
-        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
-        .find(|candidate| is_executable(candidate))
+        .collect()
+}
+
+/// The PATH a tool resolved by `resolve_binary` should run with. A Finder-launched
+/// app has a bare PATH, so a `#!/usr/bin/env node` script found through the login
+/// shell or a version manager would start and then fail to find its interpreter;
+/// the tool's own directory leads, as it carries the sibling `node` or `python`.
+pub fn tool_path(resolved: &Path, root: Option<&Path>) -> Option<std::ffi::OsString> {
+    let own_dir = resolved.parent()?.to_path_buf();
+    std::env::join_paths(std::iter::once(own_dir).chain(search_dirs(root))).ok()
 }
 
 /// Versions already read, one entry per binary, holding the moment the file was

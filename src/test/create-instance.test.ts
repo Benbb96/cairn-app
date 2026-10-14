@@ -456,7 +456,7 @@ describe("CreateInstance", () => {
 			expect(document.querySelector(".branch-empty")).not.toBeNull();
 		});
 
-		it("reloads the branches on request", async () => {
+		it("reloads the branches on request, before and after the fetch", async () => {
 			mount();
 			await settle();
 			await toBranchStep();
@@ -465,7 +465,7 @@ describe("CreateInstance", () => {
 				document.querySelector(".branch-refresh") as HTMLElement,
 			);
 			await settle();
-			expect(listBranchesDetailed).toHaveBeenCalledTimes(1);
+			expect(listBranchesDetailed).toHaveBeenCalledTimes(2);
 		});
 	});
 

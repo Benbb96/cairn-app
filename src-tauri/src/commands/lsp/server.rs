@@ -24,6 +24,7 @@ use tauri::Emitter;
 use super::client::{LspClient, REQUEST_TIMEOUT};
 use super::registry::{resolve_binary, LanguageServerDef};
 use crate::child_env;
+use crate::toolchain::tool_path;
 
 /// A cold `initialize` on a large repository takes seconds - rust-analyzer
 /// indexes the whole workspace before answering.
@@ -145,10 +146,33 @@ fn workspace_folder(root: &Path) -> Value {
     })
 }
 
+/// typescript-language-server no longer bundles TypeScript: it looks in the
+/// workspace and fails with "Could not find a valid TypeScript installation"
+/// when the project has none. The copy installed beside the server (the global
+/// install the registry performs) is handed over then, never in place of a
+/// workspace one.
+fn global_tsserver(root: &Path, server: &Path) -> Option<String> {
+    let has_workspace_copy = root
+        .ancestors()
+        .any(|dir| dir.join("node_modules").join("typescript").join("lib").join("tsserver.js").is_file());
+    if has_workspace_copy {
+        return None;
+    }
+    let package = server.canonicalize().ok()?.ancestors().find(|dir| {
+        dir.file_name().is_some_and(|name| name == "typescript-language-server")
+    })?.to_path_buf();
+    let tsserver = package.parent()?.join("typescript").join("lib").join("tsserver.js");
+    tsserver.is_file().then(|| tsserver.to_string_lossy().to_string())
+}
+
 /// Declares the capabilities the editor actually implements. A server trims
 /// what it sends to match, so overstating this produces responses we drop.
 #[allow(deprecated)]
-fn initialize_params(def: &LanguageServerDef, root: &Path) -> Result<InitializeParams, String> {
+fn initialize_params(
+    def: &LanguageServerDef,
+    root: &Path,
+    resolved: &Path,
+) -> Result<InitializeParams, String> {
     let uri = Uri::from_str(&path_to_uri(root)).map_err(|e| e.to_string())?;
     let name = root
         .file_name()
@@ -215,8 +239,13 @@ fn initialize_params(def: &LanguageServerDef, root: &Path) -> Result<InitializeP
         }),
         // typescript-language-server otherwise forks a second tsserver for
         // syntax-only requests: one extra node process per worktree.
-        initialization_options: (def.id == "typescript")
-            .then(|| json!({ "tsserver": { "useSyntaxServer": "never" } })),
+        initialization_options: (def.id == "typescript").then(|| {
+            let mut tsserver = json!({ "useSyntaxServer": "never" });
+            if let Some(path) = global_tsserver(root, resolved) {
+                tsserver["path"] = json!(path);
+            }
+            json!({ "tsserver": tsserver })
+        }),
         ..Default::default()
     })
 }
@@ -240,7 +269,11 @@ pub fn start(
         args_override.to_vec()
     };
 
-    let mut child = child_env::command(&resolved)
+    let mut command = child_env::command(&resolved);
+    if let Some(path) = tool_path(&resolved, Some(root)) {
+        command.env("PATH", path);
+    }
+    let mut child = command
         .args(&args)
         .current_dir(root)
         .stdin(Stdio::piped())
@@ -298,7 +331,7 @@ pub fn start(
     // would otherwise leave the process running with nobody holding a handle
     // to it, and rust-analyzer indexing a repository is not a quiet orphan.
     let handshake = (|| {
-        let params = serde_json::to_value(initialize_params(def, root)?).map_err(|e| e.to_string())?;
+        let params = serde_json::to_value(initialize_params(def, root, &resolved)?).map_err(|e| e.to_string())?;
         let result = client.request("initialize", params, INITIALIZE_TIMEOUT)?;
         client.notify("initialized", json!({}))?;
         Ok::<Value, String>(result)
