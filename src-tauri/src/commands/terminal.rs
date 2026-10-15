@@ -131,14 +131,49 @@ fn default_shell() -> String {
     }
 }
 
+/// An argv run inside an interactive login shell, so the child sees the profile's
+/// environment and PATH. The argv travels as the shell's positional parameters and
+/// `exec` replaces the shell: nothing is quoted, nothing stays between the PTY and
+/// the CLI. Shells with another syntax (and Windows) get the binary directly.
+fn agent_command(binary: &std::path::Path, rest: &[String]) -> CommandBuilder {
+    #[cfg(not(windows))]
+    {
+        let shell = default_shell();
+        let name = std::path::Path::new(&shell)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let script = match name.as_str() {
+            "fish" => Some("exec $argv"),
+            "csh" | "tcsh" | "nu" | "pwsh" | "elvish" | "xonsh" => None,
+            _ => Some("exec \"$@\""),
+        };
+        if let Some(script) = script {
+            let mut cmd = CommandBuilder::new(shell);
+            cmd.args(["-lic", script]);
+            if name != "fish" {
+                cmd.arg("cairn-agent");
+            }
+            cmd.arg(binary);
+            cmd.args(rest);
+            return cmd;
+        }
+    }
+    let mut cmd = CommandBuilder::new(binary);
+    cmd.args(rest);
+    cmd
+}
+
 /// How the PTY's process is spelled out: a script handed to the login shell, an
 /// argv run directly, or nothing at all for an interactive shell.
 ///
 /// `args` exists because an agent CLI is launched as `claude --resume <uuid>`
 /// in a worktree whose path Cairn does not control: composing that into a
-/// `$SHELL -lc` string would mean quoting an id and a path correctly on every
-/// platform. Running the resolved binary with its argv skips the shell, and
-/// with it the only injection surface of this module.
+/// `$SHELL -lic` string would mean quoting an id and a path correctly on every
+/// platform. The argv is handed to the login shell as positional parameters
+/// instead, which skips the quoting and with it the only injection surface of
+/// this module.
 pub fn build_command(
     command: Option<&str>,
     args: Option<&[String]>,
@@ -146,11 +181,7 @@ pub fn build_command(
     if let Some(argv) = args {
         let (program, rest) = argv.split_first().ok_or("Empty args")?;
         let binary = resolve_binary(program, None).ok_or_else(|| format!("{program} not found"))?;
-        let mut cmd = CommandBuilder::new(binary);
-        for arg in rest {
-            cmd.arg(arg);
-        }
-        return Ok(cmd);
+        return Ok(agent_command(&binary, rest));
     }
 
     let mut cmd = CommandBuilder::new(default_shell());
@@ -162,9 +193,12 @@ pub fn build_command(
         }
         #[cfg(not(windows))]
         {
-            cmd.arg("-lc");
+            cmd.arg("-lic");
             cmd.arg(script);
         }
+    } else {
+        #[cfg(not(windows))]
+        cmd.arg("-l");
     }
     Ok(cmd)
 }
@@ -618,7 +652,9 @@ mod tests {
     fn no_command_leaves_an_interactive_shell() {
         let cmd = build_command(None, None).unwrap();
         let argv = rendered(&cmd);
-        assert!(!argv.contains("-lc"), "{argv}");
+        assert!(!argv.contains("-lic"), "{argv}");
+        #[cfg(not(windows))]
+        assert!(argv.contains("\"-l\""), "{argv}");
     }
 
     #[test]
@@ -627,17 +663,18 @@ mod tests {
         let argv = rendered(&cmd);
         assert!(argv.contains("echo hi"), "{argv}");
         #[cfg(not(windows))]
-        assert!(argv.contains("-lc"), "{argv}");
+        assert!(argv.contains("-lic"), "{argv}");
     }
 
     #[test]
-    fn argv_runs_the_binary_without_a_shell() {
+    fn argv_travels_as_positional_parameters_of_the_login_shell() {
         // `sh` is the one binary guaranteed to resolve on every unix runner.
         let cmd = build_command(None, Some(&["sh".into(), "--resume".into(), "a b".into()])).unwrap();
         let argv = rendered(&cmd);
-        assert!(!argv.contains("-lc"), "{argv}");
         // The id is one argument, never re-split or re-quoted by a shell.
         assert!(argv.contains("a b"), "{argv}");
+        #[cfg(not(windows))]
+        assert!(argv.contains("exec"), "{argv}");
     }
 
     #[test]

@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Terminals and agent CLIs now load your shell profile (.zprofile, .zshrc...), so the environment variables and PATH entries you set there are available.",
+					"fr": "Les terminaux et les CLI d'agent chargent maintenant le profil de votre shell (.zprofile, .zshrc...) : les variables d'environnement et les entrées du PATH qui y sont définies sont disponibles."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "A folder whose content is entirely ignored by a .gitignore no longer shows in the file tree as an empty folder.",
 					"fr": "Un dossier dont tout le contenu est ignoré par un .gitignore n'apparaît plus dans l'arborescence comme un dossier vide."
 				}

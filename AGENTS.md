@@ -244,7 +244,7 @@ it. There is no message sending, no model selection, no transcript storage.
   antigravity, vibe, cursor, amp, goose, qwen, droid. Each carries its binary name, its resume
   argv shape, and `installed`/`configured` flags; `installed` gates the picker cards.
 - **A run is a terminal.** The frontend mints the terminal id and calls `terminal_create` with
-  `args` (the resolved binary launched directly, never through a shell). Output arrives as
+  `args` (the resolved binary, handed to the interactive login shell as positional parameters and `exec`ed, so it sees the profile environment; never composed into a command string). Output arrives as
   `terminal-output` / `terminal-exit` events like any terminal. Stopping means killing the
   terminal; because a CLI spawns children, the UI first asks `terminal_has_children` and confirms.
 - **Conversations are metadata only** (`commands/conversations.rs`): an `index.json` per scope
@@ -305,8 +305,8 @@ with code N" banner with Restart / Archive. There is no persisted busy/done stat
 `TerminalState`.
 
 - `terminal_create(id, cwd, cols, rows, command, args, env)`: with `args`, a resolved binary is
-  launched directly (this is how agent CLIs are started - no shell quoting); with `command`, a
-  script runs through the login shell (`$SHELL -lc`). `TERM=xterm-256color` and a UTF-8 locale
+  run through the login shell as `exec "$@"` (this is how agent CLIs are started - no shell quoting; fish, csh-family and Windows launch the binary directly or with their own syntax); with `command`, a
+  script runs through the login shell (`$SHELL -lic`). `TERM=xterm-256color` and a UTF-8 locale
   are forced.
 - Output is read on a thread, decoded UTF-8-safely, batched (16 KB or 16 ms) and emitted as
   `terminal-output` `{id, data}`; `terminal-exit` `{id, exitCode}` on exit.
