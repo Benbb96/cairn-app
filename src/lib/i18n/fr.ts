@@ -84,6 +84,8 @@ export const fr = {
 		cloneAndOpen: "Cloner & ouvrir",
 		addProject: "Ajouter le projet",
 		previewFallback: "Nom du projet",
+		gitNotInstalled:
+			"Git n'est pas installé sur cet appareil. Installez git, puis relancez le clonage.",
 		duplicateError: (name: string) =>
 			`"${name}" utilise déjà ce dossier. Ouvrez-le depuis la liste des projets.`,
 	},

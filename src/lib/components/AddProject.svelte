@@ -168,7 +168,7 @@
       if (hasBindings) await saveProjectIntegrations(id, bindings).catch(() => undefined);
       dispatch('created', { id });
     } catch (err) {
-      error = String(err);
+      error = String(err) === 'git_not_installed' ? (t('addProject.gitNotInstalled') as string) : String(err);
     } finally {
       loading = false;
     }

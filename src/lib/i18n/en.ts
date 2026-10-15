@@ -83,6 +83,8 @@ export const en = {
 		cloneAndOpen: "Clone & open",
 		addProject: "Add project",
 		previewFallback: "Project name",
+		gitNotInstalled:
+			"Git is not installed on this device. Install git, then try cloning again.",
 		duplicateError: (name: string) =>
 			`"${name}" already uses this folder. Open it from the projects list.`,
 	},

@@ -200,7 +200,7 @@ pub async fn ensure_env_ignored(worktree_path: String, file_name: String) -> Res
         .current_dir(&dir)
         .args(["check-ignore", "-q", "--", &file_name])
         .output()
-        .map_err(|e| e.to_string())?
+        .map_err(crate::commands::git_error::spawn_message)?
         .status
         .success();
     if already { return Ok(false); }

@@ -67,6 +67,18 @@ impl From<git2::Error> for GitError {
     }
 }
 
+/// Error string the frontend translates into "git is not installed".
+pub const GIT_NOT_INSTALLED: &str = "git_not_installed";
+
+/// Message for a `git` process that could not be spawned, for the commands that
+/// report plain strings rather than a `GitError`.
+pub fn spawn_message(e: std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => GIT_NOT_INSTALLED.to_string(),
+        _ => format!("Failed to run git: {e}"),
+    }
+}
+
 /// True when every needle is present.
 fn contains_all(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().all(|n| haystack.contains(n))

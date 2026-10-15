@@ -7,6 +7,7 @@
 use std::io::Write;
 use std::process::Stdio;
 use crate::child_env;
+use crate::commands::git_error;
 use crate::storage::{CommandOutput, copy_dir_recursive};
 
 /// Runs a program to completion and captures its output. A spawn failure comes
@@ -60,8 +61,100 @@ pub async fn run_shell_command_with_stdin(program: String, args: Vec<String>, cw
     }
 }
 
+/// True when the emulator started and did not fail straight away. A launcher
+/// that spawns fine and then exits non-zero (a wrapper whose target is missing,
+/// a display it cannot reach) used to count as launched and left the user with
+/// nothing, so a short grace period lets the next candidate take over.
+#[cfg(target_os = "linux")]
+fn spawn_stays_up(mut cmd: std::process::Command) -> bool {
+    let Ok(mut child) = cmd.spawn() else { return false };
+    for _ in 0..10 {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(_) => return false,
+        }
+    }
+    true
+}
+
+#[cfg(any(target_os = "linux", test))]
+const LINUX_TERMINALS: [&str; 8] = [
+    "x-terminal-emulator",
+    "gnome-terminal",
+    "konsole",
+    "xfce4-terminal",
+    "tilix",
+    "kitty",
+    "alacritty",
+    "xterm",
+];
+
+/// The terminal that last opened, so the search is paid once per run of the app.
+#[cfg(target_os = "linux")]
+static WORKING_TERMINAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Emulators to try, in order: the one that worked last, then `$TERMINAL`, then
+/// the known list. Duplicates are dropped.
+#[cfg(any(target_os = "linux", test))]
+fn terminal_candidates(remembered: Option<&str>, from_env: Option<&str>) -> Vec<String> {
+    let mut ordered: Vec<String> = Vec::new();
+    for name in remembered
+        .into_iter()
+        .chain(from_env.filter(|v| !v.trim().is_empty()))
+        .chain(LINUX_TERMINALS)
+    {
+        if !ordered.iter().any(|seen| seen == name) {
+            ordered.push(name.to_string());
+        }
+    }
+    ordered
+}
+
+/// How each emulator is told which directory to open in; the rest inherit the
+/// working directory of the spawned process.
+#[cfg(any(target_os = "linux", test))]
+fn terminal_args(program: &str, dir: &str) -> Vec<String> {
+    let name = std::path::Path::new(program)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match name.as_str() {
+        "gnome-terminal" | "xfce4-terminal" | "tilix" | "alacritty" => {
+            vec![format!("--working-directory={dir}")]
+        }
+        "konsole" => vec!["--workdir".to_string(), dir.to_string()],
+        "kitty" => vec!["--directory".to_string(), dir.to_string()],
+        _ => Vec::new(),
+    }
+}
+
+/// Opens `dir` in the first emulator that works and remembers it. A remembered
+/// emulator that no longer starts is forgotten and the search starts over.
+#[cfg(target_os = "linux")]
+fn launch_linux_terminal(dir: &str) -> bool {
+    let remembered = WORKING_TERMINAL.lock().ok().and_then(|g| g.clone());
+    let from_env = std::env::var("TERMINAL").ok();
+    for program in terminal_candidates(remembered.as_deref(), from_env.as_deref()) {
+        let mut cmd = child_env::command(&program);
+        cmd.args(terminal_args(&program, dir)).current_dir(dir);
+        let worked = spawn_stays_up(cmd);
+        if let Ok(mut slot) = WORKING_TERMINAL.lock() {
+            if worked {
+                *slot = Some(program);
+            } else if slot.as_deref() == Some(program.as_str()) {
+                *slot = None;
+            }
+        }
+        if worked {
+            return true;
+        }
+    }
+    false
+}
+
 /// Opens the system terminal in `path`, or in its parent when it is a file.
-/// Linux has no single terminal, so the known emulators are tried in turn.
+/// Linux has no single terminal: `$TERMINAL` first, then the known emulators.
 #[tauri::command]
 pub async fn open_in_terminal(path: String) -> Result<(), String> {
     let expanded = shellexpand::tilde(&path).into_owned();
@@ -75,14 +168,9 @@ pub async fn open_in_terminal(path: String) -> Result<(), String> {
     child_env::command("cmd").args(["/c", "start", "cmd", "/k", &format!("cd /d {}", dir)]).spawn().map_err(|e| e.to_string())?;
     #[cfg(target_os = "linux")]
     {
-        let launched =
-            child_env::command("x-terminal-emulator").current_dir(&dir).spawn().is_ok() ||
-            child_env::command("gnome-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
-            child_env::command("xfce4-terminal").arg(format!("--working-directory={}", dir)).spawn().is_ok() ||
-            child_env::command("konsole").args(["--workdir", &dir]).spawn().is_ok() ||
-            child_env::command("xterm").current_dir(&dir).spawn().is_ok();
+        let launched = launch_linux_terminal(&dir);
         if !launched {
-            return Err("No supported terminal emulator found. Install gnome-terminal, xfce4-terminal, konsole, or x-terminal-emulator.".to_string());
+            return Err("No supported terminal emulator found. Set the TERMINAL environment variable, or install gnome-terminal, xfce4-terminal, konsole or x-terminal-emulator.".to_string());
         }
     }
     Ok(())
@@ -198,7 +286,7 @@ pub async fn clone_repository(url: String, dest_parent: String, name: String) ->
         let output = child_env::command("git")
             .args(["clone", "--", &url, dest.to_str().unwrap_or(&name)])
             .output()
-            .map_err(|e| format!("Failed to run git: {}", e))?;
+            .map_err(git_error::spawn_message)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(stderr);
@@ -214,6 +302,26 @@ pub async fn clone_repository(url: String, dest_parent: String, name: String) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_search_starts_with_the_remembered_then_the_env_one() {
+        let order = terminal_candidates(Some("kitty"), Some("foot"));
+        assert_eq!(&order[..3], ["kitty", "foot", "x-terminal-emulator"]);
+        assert_eq!(order.iter().filter(|n| *n == "kitty").count(), 1);
+    }
+
+    #[test]
+    fn terminal_search_ignores_an_empty_env_value() {
+        let order = terminal_candidates(None, Some("  "));
+        assert_eq!(order, LINUX_TERMINALS);
+    }
+
+    #[test]
+    fn terminals_get_their_own_directory_flag() {
+        assert_eq!(terminal_args("konsole", "/p"), ["--workdir", "/p"]);
+        assert_eq!(terminal_args("/usr/bin/gnome-terminal", "/p"), ["--working-directory=/p"]);
+        assert!(terminal_args("xterm", "/p").is_empty());
+    }
 
     #[test]
     fn opens_the_web_and_mail_links() {
