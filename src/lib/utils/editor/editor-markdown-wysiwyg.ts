@@ -1148,6 +1148,7 @@ export function buildMarkdownWysiwyg(
 		markdownDocPath,
 		blockField,
 		wysiwygPlugin,
+		EditorView.lineWrapping,
 		buildLinkClickHandler(options),
 		linkArmedOnShift,
 		wysiwygTheme,

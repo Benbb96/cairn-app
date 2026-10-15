@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Long lines of a rendered Markdown file now wrap instead of adding a horizontal scrollbar that only appears after scrolling down.",
+					"fr": "Les longues lignes d'un fichier Markdown rendu passent à la ligne au lieu d'ajouter une barre de défilement horizontale qui n'apparaît qu'après avoir défilé vers le bas."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Scrolling over a table or a diagram in a rendered Markdown file no longer gets stuck.",
 					"fr": "Le défilement au-dessus d'un tableau ou d'un diagramme dans un fichier Markdown rendu ne reste plus bloqué."
 				}
