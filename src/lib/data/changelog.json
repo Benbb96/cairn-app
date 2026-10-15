@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "The file tree keeps its scroll position when it refreshes after a file changes, instead of jumping to the open file.",
+					"fr": "L'arbre de fichiers conserve sa position de défilement quand il se rafraîchit après la modification d'un fichier, au lieu de sauter au fichier ouvert."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Cloning a project on a device without git now says that git is not installed instead of showing a raw error.",
 					"fr": "Cloner un projet sur un appareil sans git indique désormais que git n'est pas installé, au lieu d'afficher une erreur brute."
 				}

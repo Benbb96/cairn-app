@@ -201,18 +201,17 @@
     el: HTMLElement | null,
     _viewportHeight: number,
   ) {
-    if (!path || !el) return;
+    if (!path) { revealedPath = null; return; }
+    if (!el || revealedPath === path) return;
     const index = nodes.findIndex((n) => n.node.path === path);
     if (index < 0) return;
     const top = index * ROW_HEIGHT;
     const bottom = top + ROW_HEIGHT;
     const viewTop = el.scrollTop;
     const viewBottom = viewTop + el.clientHeight;
-    if (top >= viewTop && bottom <= viewBottom) { revealedPath = path; return; }
-    if (revealedPath !== path) el.scrollTop = Math.max(0, top - (el.clientHeight - ROW_HEIGHT) / 2);
-    else if (top < viewTop) el.scrollTop = top;
-    else el.scrollTop = bottom - el.clientHeight;
     revealedPath = path;
+    if (top >= viewTop && bottom <= viewBottom) return;
+    el.scrollTop = Math.max(0, top - (el.clientHeight - ROW_HEIGHT) / 2);
   }
 
   function handleEditKey(e: KeyboardEvent) {
