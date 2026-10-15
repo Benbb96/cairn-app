@@ -8,6 +8,13 @@
 		},
 		"changes": [
 			{
+				"kind": "fixed",
+				"text": {
+					"en": "Switching the Tickets scope between assigned to me and all now shows a loading skeleton, and the plan Generate button uses the AI button style and disappears when AI is disabled.",
+					"fr": "Changer la portée des tickets entre assignés à moi et tous affiche maintenant un squelette de chargement, et le bouton Générer du plan reprend le style des boutons IA et disparaît quand l'IA est désactivée."
+				}
+			},
+			{
 				"kind": "changed",
 				"text": {
 					"en": "The home screen keeps only its greeting: the random subtitle line under it is gone.",

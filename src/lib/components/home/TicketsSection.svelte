@@ -20,7 +20,7 @@
   import { createEventDispatcher } from 'svelte';
   import { getLocale, t } from '$lib/i18n';
   import { projects } from '$lib/stores/project';
-  import { settings } from '$lib/stores/settings';
+  import { aiEnabled, settings } from '$lib/stores/settings';
   import { isAssistCliInstalled, loadCliProviders } from '$lib/stores/cli-providers';
   import {
     collapsedTicketProjects,
@@ -76,6 +76,7 @@
   function setScope(scope: TicketScope) {
     if ($ticketsScope === scope) return;
     ticketsScope.set(scope);
+    ticketsByProject.set({});
     void loadTicketsOverview(scope, true);
   }
 
@@ -153,30 +154,48 @@
     {t('tickets.total')}: {totalTickets}{anyMore ? '+' : ''}
   </div>
 
-  <section class="plan">
-    <header>
-      <Icon name="wand" size={14} />
-      <span class="plan-title">{t('tickets.planTitle')}</span>
-      <div style="flex: 1"></div>
-      {#if isPlanning}
-        <Spinner size={12} />
-        <button class="chip" on:click={cancelPlan}>{t('tickets.planCancel')}</button>
+  {#if $aiEnabled}
+    <section class="plan">
+      <header>
+        <Icon name="wand" size={14} />
+        <span class="plan-title">{t('tickets.planTitle')}</span>
+        <div style="flex: 1"></div>
+        {#if isPlanning}
+          <button class="chip ai-btn is-busy" on:click={cancelPlan}>{t('git.aiCancel')}</button>
+        {:else}
+          <button
+            class="chip ai-btn"
+            on:click={generatePlan}
+            disabled={!canPlan}
+            title={resolvedFeature.unavailable ? (t('git.aiUnavailable') as string) : undefined}
+          >
+            <Icon name="sparkles" size={12} />
+            {plan ? t('tickets.planRegenerate') : t('tickets.planGenerate')}
+          </button>
+        {/if}
+      </header>
+      <span class="sr-only" role="status" aria-live="polite">{isPlanning ? t('tickets.planTitle') : ''}</span>
+      {#if resolvedFeature.unavailable}
+        <div class="hint">{t('tickets.planUnavailable')}</div>
+      {:else if planError}
+        <div class="hint error">{planError}</div>
+      {:else if plan || isPlanning}
+        <div class="ai-field" class:is-generating={isPlanning} aria-busy={isPlanning}>
+          {#if plan}
+            <div class="plan-body selectable">{@html renderRemoteMarkdown(plan)}</div>
+          {/if}
+          {#if isPlanning}
+            <span class="ai-sweep" aria-hidden="true"></span>
+            {#if !plan}
+              <span class="ai-ghost" aria-hidden="true"><i style="width: 88%"></i><i style="width: 74%"></i><i style="width: 46%"></i></span>
+            {/if}
+          {/if}
+        </div>
       {:else}
-        <button class="chip" on:click={generatePlan} disabled={!canPlan}>
-          {plan ? t('tickets.planRegenerate') : t('tickets.planGenerate')}
-        </button>
+        <div class="hint">{t('tickets.planEmpty')}</div>
       {/if}
-    </header>
-    {#if resolvedFeature.unavailable}
-      <div class="hint">{t('tickets.planUnavailable')}</div>
-    {:else if planError}
-      <div class="hint error">{planError}</div>
-    {:else if plan}
-      <div class="plan-body selectable">{@html renderRemoteMarkdown(plan)}</div>
-    {:else if !isPlanning}
-      <div class="hint">{t('tickets.planEmpty')}</div>
-    {/if}
-  </section>
+    </section>
+  {/if}
 
   {#each filteredGroups as group (group.project.id)}
     {@const collapsed = $collapsedTicketProjects.includes(group.project.id)}
@@ -279,4 +298,12 @@
   .status { font-size: 11px; color: var(--fg-2); flex-shrink: 0; }
   .status.s-in_progress { color: var(--accent); }
   .row .start { flex-shrink: 0; }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 </style>
