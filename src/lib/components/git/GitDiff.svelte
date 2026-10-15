@@ -7,11 +7,11 @@
    * Renders diff hunks as numbered rows, paginated so a large diff does not build every row at once.
    * Read-only: no staging, no selection.
    */
-  import type { GitDiffHunk } from '$lib/services/git-service';
+  import { getFileAtHead, getFileInIndex, type GitDiffHunk } from '$lib/services/git-service';
   import { t } from '$lib/i18n';
-  import { langFromPath } from '$lib/services/file-service';
+  import { langFromPath, readFile } from '$lib/services/file-service';
   import type { EditorLanguage } from '$lib/utils/editor/editor-theme';
-  import { cachedLineHtml, highlightLineToHtml } from '$lib/utils/git/diff-syntax-highlight';
+  import { cachedLineHtml, highlightDocumentToLines, highlightLineToHtml } from '$lib/utils/git/diff-syntax-highlight';
   import { activeSyntaxTokens, settings } from '$lib/stores/settings';
   import { createEventDispatcher } from 'svelte';
   import { isDiffTooLarge } from '$lib/utils/git/diff-size';
@@ -19,12 +19,61 @@
 
   export let hunks: GitDiffHunk[] = [];
   export let filePath = '';
+  export let worktreePath = '';
+  export let isStaged = false;
 
   const dispatch = createEventDispatcher<{ openFile: string }>();
 
   $: isTooLarge = isDiffTooLarge(hunks, $settings.gitMaxDiffLines);
 
   $: lang = (filePath ? langFromPath(filePath) : 'text') as EditorLanguage;
+
+  const NESTED_LANGUAGES = new Set(['svelte', 'vue', 'html', 'php']);
+
+  type HighlightedSide = { raw: string[]; html: string[] };
+  let oldSide: HighlightedSide | null = null;
+  let newSide: HighlightedSide | null = null;
+
+  async function highlightSide(text: string | null, tokens: typeof $activeSyntaxTokens): Promise<HighlightedSide | null> {
+    if (text === null) return null;
+    return { raw: text.split('\n'), html: await highlightDocumentToLines(text, lang, tokens) };
+  }
+
+  let sidesRun = 0;
+  /**
+   * A nested language (a style or script block in a svelte file) is only known from the lines
+   * around a diff line, so those files are highlighted whole and the diff picks its lines out.
+   */
+  async function loadSides(path: string, wt: string, staged: boolean, tokens: typeof $activeSyntaxTokens): Promise<void> {
+    const run = ++sidesRun;
+    const [oldText, newText] = await Promise.all([
+      (staged ? getFileAtHead(wt, path) : getFileInIndex(wt, path)).catch(() => null),
+      (staged ? getFileInIndex(wt, path) : readFile(`${wt}/${path}`)).catch(() => null),
+    ]);
+    const [oldHighlighted, newHighlighted] = await Promise.all([
+      highlightSide(oldText, tokens),
+      highlightSide(newText, tokens),
+    ]);
+    if (run !== sidesRun) return;
+    oldSide = oldHighlighted;
+    newSide = newHighlighted;
+    highlightTick++;
+  }
+
+  $: if (worktreePath && filePath && NESTED_LANGUAGES.has(lang)) {
+    void loadSides(filePath, worktreePath, isStaged, $activeSyntaxTokens);
+  } else {
+    sidesRun++;
+    oldSide = null;
+    newSide = null;
+  }
+
+  function wholeFileLine(row: { kind: string; oldNo: number | null; newNo: number | null; content: string }, _tick: number): string | undefined {
+    const side = row.kind === 'remove' ? oldSide : newSide;
+    const index = (row.kind === 'remove' ? row.oldNo : row.newNo) ?? 0;
+    if (!side || side.raw[index - 1]?.replace(/\r$/, '') !== row.content) return undefined;
+    return side.html[index - 1];
+  }
 
   let highlightCache = new Map<string, string>();
   $: if ($activeSyntaxTokens) highlightCache = new Map();
@@ -133,7 +182,7 @@
         <span class="gutter">{row.oldNo ?? ''}</span>
         <span class="gutter">{row.newNo ?? ''}</span>
         <span class="sign">{row.kind === 'add' ? '+' : row.kind === 'remove' ? '-' : ''}</span>
-        <span class="content selectable">{@html row.content ? highlightedLine(row.content, highlightTick) : ' '}</span>
+        <span class="content selectable">{@html row.content ? (wholeFileLine(row, highlightTick) ?? highlightedLine(row.content, highlightTick)) : ' '}</span>
       </div>
     {/if}
   {/each}

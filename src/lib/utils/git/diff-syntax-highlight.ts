@@ -3,7 +3,10 @@
 
 import type { EditorLanguage } from "$lib/utils/editor/editor-theme";
 import type { SyntaxTokens } from "$lib/utils/editor/syntax-tokens";
-import { highlightLineInline } from "./diff-highlight-core";
+import {
+	highlightDocumentInline,
+	highlightLineInline,
+} from "./diff-highlight-core";
 import type {
 	HighlightRequest,
 	HighlightResponse,
@@ -99,6 +102,32 @@ function highlightUncached(
 				: resolve(html),
 		);
 		const request: HighlightRequest = { id, code, lang, tokens: syntaxTokens };
+		w.postMessage(request);
+	});
+}
+
+/** Renders a whole file as HTML, one entry per line, parsed in one go so nested languages resolve. */
+export function highlightDocumentToLines(
+	code: string,
+	lang: EditorLanguage,
+	syntaxTokens: SyntaxTokens,
+): Promise<string[]> {
+	const w = getWorker();
+	if (!w) return highlightDocumentInline(code, lang, syntaxTokens);
+	return new Promise((resolve) => {
+		const id = ++nextId;
+		pending.set(id, (html) =>
+			html === ""
+				? highlightDocumentInline(code, lang, syntaxTokens).then(resolve)
+				: resolve(html.split("\n")),
+		);
+		const request: HighlightRequest = {
+			id,
+			code,
+			lang,
+			tokens: syntaxTokens,
+			isDocument: true,
+		};
 		w.postMessage(request);
 	});
 }

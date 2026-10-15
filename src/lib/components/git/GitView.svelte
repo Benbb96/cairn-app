@@ -1713,7 +1713,7 @@
               {#if h.hasDiff}
                 {#if !collapsedUnstaged.has(h.filePath)}
                   <div class="card-diff">
-                    <GitDiff hunks={h.hunks} filePath={h.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
+                    <GitDiff hunks={h.hunks} filePath={h.filePath} worktreePath={instance?.worktreePath ?? ""} on:openFile={(e) => dispatch('openFile', e.detail)} />
                     {#if h.truncated}
                       <div class="hunk-truncated">{t('git.diffTruncated')}</div>
                     {/if}
@@ -2149,7 +2149,7 @@
               {#if h.hasDiff}
                 {#if expandedStaged.has(h.filePath)}
                   <div class="card-diff">
-                    <GitDiff hunks={h.hunks} filePath={h.filePath} on:openFile={(e) => dispatch('openFile', e.detail)} />
+                    <GitDiff hunks={h.hunks} filePath={h.filePath} worktreePath={instance?.worktreePath ?? ""} isStaged on:openFile={(e) => dispatch('openFile', e.detail)} />
                     {#if h.truncated}
                       <div class="hunk-truncated">{t('git.diffTruncated')}</div>
                     {/if}

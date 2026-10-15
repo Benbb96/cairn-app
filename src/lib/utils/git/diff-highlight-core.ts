@@ -88,13 +88,11 @@ function escapeHtml(s: string): string {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Renders one line of source as HTML, its tokens wrapped in colour spans. */
-export async function highlightLineInline(
+async function renderHighlighted(
 	code: string,
 	lang: EditorLanguage,
 	syntaxTokens: SyntaxTokens,
 ): Promise<string> {
-	if (!code || lang === "text") return escapeHtml(code);
 	const support = await loadLanguage(lang);
 	if (!support) return escapeHtml(code);
 
@@ -121,4 +119,27 @@ export async function highlightLineInline(
 		},
 	);
 	return out;
+}
+
+/** Renders one line of source as HTML, its tokens wrapped in colour spans. */
+export async function highlightLineInline(
+	code: string,
+	lang: EditorLanguage,
+	syntaxTokens: SyntaxTokens,
+): Promise<string> {
+	if (!code || lang === "text") return escapeHtml(code);
+	return renderHighlighted(code, lang, syntaxTokens);
+}
+
+/**
+ * Renders a whole file as HTML, one entry per line. Parsing the file in one go is what lets a
+ * mixed language (svelte, vue, html, php) know which lines sit inside a style or script block.
+ */
+export async function highlightDocumentInline(
+	code: string,
+	lang: EditorLanguage,
+	syntaxTokens: SyntaxTokens,
+): Promise<string[]> {
+	if (!code || lang === "text") return code.split("\n").map(escapeHtml);
+	return (await renderHighlighted(code, lang, syntaxTokens)).split("\n");
 }

@@ -8,6 +8,13 @@
 		},
 		"changes": [
 			{
+				"kind": "fixed",
+				"text": {
+					"en": "Git view: Svelte, Vue, HTML and PHP diffs now get the same syntax colours as the editor, including the CSS and script blocks.",
+					"fr": "Vue Git : les diffs Svelte, Vue, HTML et PHP ont désormais la même coloration que l'éditeur, y compris dans les blocs CSS et script."
+				}
+			},
+			{
 				"kind": "added",
 				"text": {
 					"en": "Mermaid viewer: a diagram can be opened full screen over the whole editor, from the button on a rendered diagram in a Markdown file. A .mmd file now opens directly in the same viewer, with zoom, fit to view, actual size, an overview of the whole graph to jump around, copy of the source and export to SVG.",

@@ -7,7 +7,10 @@ import {
 	defaultSyntaxTokens,
 	type SyntaxTokens,
 } from "$lib/utils/editor/syntax-tokens";
-import { highlightLineInline } from "./diff-highlight-core";
+import {
+	highlightDocumentInline,
+	highlightLineInline,
+} from "./diff-highlight-core";
 import { cachedLineHtml, highlightLineToHtml } from "./diff-syntax-highlight";
 
 vi.mock("$lib/utils/editor/editor-theme", async (importOriginal) => {
@@ -368,5 +371,26 @@ describe("the language cache of highlightLineInline", () => {
 	it("does not resolve a language for plain text", async () => {
 		await highlightLineInline("plain", "text" as never, TOKENS);
 		expect(resolveLanguageExtension).not.toHaveBeenCalled();
+	});
+});
+
+describe("highlightDocumentInline", () => {
+	const SOURCE = "<style>\n  a { color: red; }\n</style>";
+
+	it("returns one entry per line, text intact", async () => {
+		const lines = await highlightDocumentInline(SOURCE, "svelte", TOKENS);
+		expect(lines.map(textOf)).toEqual(SOURCE.split("\n"));
+	});
+
+	it("colours a css line from the style block it sits in", async () => {
+		const [, cssLine] = await highlightDocumentInline(SOURCE, "svelte", TOKENS);
+		const alone = await highlightLineInline(
+			"  a { color: red; }",
+			"svelte",
+			TOKENS,
+		);
+		expect(cssLine.match(/<span/g)?.length ?? 0).toBeGreaterThan(
+			alone.match(/<span/g)?.length ?? 0,
+		);
 	});
 });

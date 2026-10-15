@@ -9,6 +9,7 @@ export interface HighlightRequest {
 	code: string;
 	lang: EditorLanguage;
 	tokens: SyntaxTokens;
+	isDocument?: boolean;
 }
 
 export interface HighlightResponse {
