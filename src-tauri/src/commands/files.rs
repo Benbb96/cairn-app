@@ -4,6 +4,7 @@
 //! Filesystem access for the editor: directory trees honouring `.gitignore`,
 //! fuzzy path search, content search, and the read/write/rename primitives.
 
+use crate::child_env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -554,6 +555,12 @@ pub async fn delete_path(path: String) -> Result<(), String> {
     }
 }
 
+/// True when both paths resolve to the same entry, as a case-only rename does on a
+/// case-insensitive filesystem (macOS, Windows).
+fn is_same_entry(a: &Path, b: &Path) -> bool {
+    matches!((fs::canonicalize(a), fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
+}
+
 #[tauri::command]
 /// Renames, refusing to overwrite an existing destination.
 pub async fn rename_path(from: String, to: String) -> Result<(), String> {
@@ -562,8 +569,33 @@ pub async fn rename_path(from: String, to: String) -> Result<(), String> {
     let from_p = PathBuf::from(&from_expanded);
     let to_p = PathBuf::from(&to_expanded);
     if !from_p.exists() { return Err(format!("Path does not exist: {}", from)); }
-    if to_p.exists() { return Err(format!("Destination already exists: {}", to)); }
+    if to_p.exists() && !is_same_entry(&from_p, &to_p) {
+        return Err(format!("Destination already exists: {}", to));
+    }
+    if git_mv(&from_p, &to_p) {
+        return Ok(());
+    }
     fs::rename(&from_p, &to_p).map_err(|e| e.to_string())
+}
+
+/// Renames through `git mv` when `from` is tracked, so the index follows the new
+/// name even where git ignores case. False means nothing was moved.
+fn git_mv(from: &Path, to: &Path) -> bool {
+    let Some(parent) = from.parent().filter(|p| p.is_dir()) else { return false };
+    let is_tracked = child_env::command("git")
+        .current_dir(parent)
+        .args(["ls-files", "--error-unmatch", "--"])
+        .arg(from)
+        .output()
+        .is_ok_and(|o| o.status.success());
+    is_tracked
+        && child_env::command("git")
+            .current_dir(parent)
+            .args(["mv", "--"])
+            .arg(from)
+            .arg(to)
+            .output()
+            .is_ok_and(|o| o.status.success())
 }
 
 #[tauri::command]
@@ -1066,5 +1098,51 @@ mod tests {
     fn tree_of_an_empty_directory_is_empty() {
         let tree = TempTree::new();
         assert!(build_gitignore_tree(&tree.path, true).is_empty());
+    }
+
+    #[test]
+    fn rename_accepts_a_case_only_change() {
+        let tree = TempTree::new();
+        tree.write("readme.md", "x");
+        let from = tree.path.join("readme.md").to_string_lossy().into_owned();
+        let to = tree.path.join("README.md").to_string_lossy().into_owned();
+
+        tauri::async_runtime::block_on(rename_path(from, to)).unwrap();
+
+        let entries: Vec<String> = fs::read_dir(&tree.path)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, vec!["README.md"]);
+    }
+
+    #[test]
+    fn rename_of_a_tracked_file_updates_the_index_case() {
+        let tree = TempTree::new();
+        tree.write("readme.md", "x");
+        let git = |args: &[&str]| {
+            let out = child_env::command("git").current_dir(&tree.path).args(args).output().unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8_lossy(&out.stdout).into_owned()
+        };
+        git(&["init", "-q"]);
+        git(&["add", "readme.md"]);
+        let from = tree.path.join("readme.md").to_string_lossy().into_owned();
+        let to = tree.path.join("README.MD").to_string_lossy().into_owned();
+
+        tauri::async_runtime::block_on(rename_path(from, to)).unwrap();
+
+        assert_eq!(git(&["ls-files"]).trim(), "README.MD");
+    }
+
+    #[test]
+    fn rename_still_refuses_a_distinct_destination() {
+        let tree = TempTree::new();
+        tree.write("a.txt", "a");
+        tree.write("b.txt", "b");
+        let from = tree.path.join("a.txt").to_string_lossy().into_owned();
+        let to = tree.path.join("b.txt").to_string_lossy().into_owned();
+
+        assert!(tauri::async_runtime::block_on(rename_path(from, to)).is_err());
     }
 }

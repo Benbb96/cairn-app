@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "Renaming a file or folder to change only its capitalisation no longer fails with a \"destination already exists\" error.",
+					"fr": "Renommer un fichier ou un dossier pour ne changer que sa casse n'échoue plus avec l'erreur « la destination existe déjà »."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Git view: Svelte, Vue, HTML and PHP diffs now get the same syntax colours as the editor, including the CSS and script blocks.",
 					"fr": "Vue Git : les diffs Svelte, Vue, HTML et PHP ont désormais la même coloration que l'éditeur, y compris dans les blocs CSS et script."
 				}
