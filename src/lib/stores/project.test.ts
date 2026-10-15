@@ -27,6 +27,12 @@ vi.mock("$lib/services/project-service", () => ({
 	getListing,
 }));
 
+const forgetRepoRoots = vi.hoisted(() => vi.fn());
+vi.mock("$lib/services/git-service", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	forgetRepoRoots,
+}));
+
 const purgeProject = vi.hoisted(() => vi.fn());
 const init = vi.hoisted(() => vi.fn());
 vi.mock("$lib/stores/project-folders", () => ({
@@ -38,6 +44,7 @@ import {
 	activeProject,
 	activeProjectId,
 	closeProjectTab,
+	duplicateProjectInStore,
 	editProject,
 	lastOpenedProjectId,
 	loadListing,
@@ -58,6 +65,7 @@ const ids = () => get(projects).map((p) => p.id);
 beforeEach(() => {
 	vi.clearAllMocks();
 	saveProjectOrder.mockResolvedValue(undefined);
+	forgetRepoRoots.mockResolvedValue(undefined);
 	projects.set([]);
 	activeProjectId.set(null);
 	openTabOrder.set([]);
@@ -262,6 +270,19 @@ describe("unregisterProject", () => {
 		await unregisterProject("a");
 		expect(purgeProject).toHaveBeenCalledWith("a");
 	});
+
+	it("forgets the git roots cached under the path the project had", async () => {
+		removeProject.mockResolvedValue([]);
+		projects.set([project("a", { path: "/repos/a" })]);
+		await unregisterProject("a");
+		expect(forgetRepoRoots).toHaveBeenCalledWith("a", "/repos/a");
+	});
+
+	it("forgets the git roots of an id that was not registered with no path", async () => {
+		removeProject.mockResolvedValue([]);
+		await unregisterProject("ghost");
+		expect(forgetRepoRoots).toHaveBeenCalledWith("ghost", "");
+	});
 });
 
 describe("editProject", () => {
@@ -272,6 +293,44 @@ describe("editProject", () => {
 	});
 });
 
+describe("duplicateProjectInStore", () => {
+	const copy = {
+		name: "Copy",
+		color: "#000",
+		destParent: "/parent",
+		folderName: "copy",
+	};
+
+	it("registers the copy under a fresh id and returns it", async () => {
+		vi.spyOn(crypto, "randomUUID").mockReturnValue(
+			"22222222-2222-4222-8222-222222222222",
+		);
+		duplicateProject.mockResolvedValue([
+			project("a"),
+			project("22222222-2222-4222-8222-222222222222"),
+		]);
+		projects.set([project("a")]);
+
+		await expect(duplicateProjectInStore("a", copy)).resolves.toBe(
+			"22222222-2222-4222-8222-222222222222",
+		);
+		expect(duplicateProject).toHaveBeenCalledWith(
+			"a",
+			"22222222-2222-4222-8222-222222222222",
+			copy,
+		);
+		expect(ids()).toEqual(["a", "22222222-2222-4222-8222-222222222222"]);
+		vi.restoreAllMocks();
+	});
+
+	it("leaves the store alone when the copy is refused", async () => {
+		duplicateProject.mockRejectedValue(new Error("exists"));
+		projects.set([project("a")]);
+		await expect(duplicateProjectInStore("a", copy)).rejects.toThrow("exists");
+		expect(ids()).toEqual(["a"]);
+	});
+});
+
 describe("relocateProjectInStore", () => {
 	it("takes the moved project's new path from the backend", async () => {
 		relocateProject.mockResolvedValue([project("a", { path: "/moved/a" })]);
@@ -279,6 +338,19 @@ describe("relocateProjectInStore", () => {
 		await relocateProjectInStore("a", "/moved/a");
 		expect(relocateProject).toHaveBeenCalledWith("a", "/moved/a");
 		expect(get(projects)[0].path).toBe("/moved/a");
+	});
+
+	it("forgets the git roots cached under the old path", async () => {
+		relocateProject.mockResolvedValue([project("a", { path: "/moved/a" })]);
+		projects.set([project("a", { path: "/repos/a" })]);
+		await relocateProjectInStore("a", "/moved/a");
+		expect(forgetRepoRoots).toHaveBeenCalledWith("a", "/repos/a");
+	});
+
+	it("forgets the git roots of an id that was not registered with no path", async () => {
+		relocateProject.mockResolvedValue([]);
+		await relocateProjectInStore("ghost", "/moved/ghost");
+		expect(forgetRepoRoots).toHaveBeenCalledWith("ghost", "");
 	});
 
 	it("leaves the store alone when the new location is refused", async () => {
@@ -337,6 +409,21 @@ describe("loadListing", () => {
 		projects.set([project("a"), project("b")]);
 		await loadListing();
 		expect(ids()).toEqual(["a", "b"]);
+	});
+
+	it("does not touch the list when nothing was saved", async () => {
+		getListing.mockResolvedValue({ folders: [], projectOrder: [] });
+		const list = [project("a"), project("b")];
+		projects.set(list);
+		await loadListing();
+		expect(get(projects)).toBe(list);
+	});
+
+	it("applies a saved order of a single project", async () => {
+		getListing.mockResolvedValue({ folders: [], projectOrder: ["b"] });
+		projects.set([project("a"), project("b")]);
+		await loadListing();
+		expect(ids()).toEqual(["b", "a"]);
 	});
 
 	it("ignores an id in the saved order that is no longer registered", async () => {

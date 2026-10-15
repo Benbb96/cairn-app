@@ -154,6 +154,25 @@ describe("inheritedValue", () => {
 		).toBe(2);
 	});
 
+	it("is the catalogue default when no configuration exists yet", () => {
+		expect(
+			inheritedValue(OPTIONS, null, "typescript", "language", "lineWidth"),
+		).toBe(80);
+	});
+
+	it("leaves the style of the other languages out of the answer", () => {
+		const c = config({ lineWidth: 100 }, [
+			{ languageId: "rust", style: { lineWidth: 120 } },
+			{ languageId: "typescript", style: { lineWidth: 110 } },
+		]);
+		expect(
+			inheritedValue(OPTIONS, c, "typescript", "language", "lineWidth"),
+		).toBe(100);
+		expect(inheritedValue(OPTIONS, c, "rust", "language", "lineWidth")).toBe(
+			100,
+		);
+	});
+
 	it("is the catalogue default for the common style itself", () => {
 		const c = config({ lineWidth: 140 });
 		expect(
@@ -171,6 +190,11 @@ describe("withOverride", () => {
 		expect(
 			withOverride({ lineWidth: 120, indentSize: 4 }, "lineWidth", undefined),
 		).toEqual({ indentSize: 4 });
+	});
+
+	it("leaves no key behind for a cleared override", () => {
+		const cleared = withOverride({ lineWidth: 120 }, "lineWidth", undefined);
+		expect(Object.keys(cleared)).toEqual([]);
 	});
 
 	it("does not mutate the set it was given", () => {

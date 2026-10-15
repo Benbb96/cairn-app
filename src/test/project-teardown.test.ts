@@ -27,10 +27,21 @@ vi.mock("$lib/stores/project-folders", () => ({
 }));
 
 const closeTerminal = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const getTerminalState = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+const getProjectTerminalState = vi.hoisted(() =>
+	vi.fn().mockResolvedValue(null),
+);
 vi.mock("$lib/services/terminal-service", async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	closeTerminal,
+	getTerminalState,
+	getProjectTerminalState,
 	closeAllTerminals: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("$lib/services/formatting-service", async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	getProjectFormatting: vi.fn().mockResolvedValue({}),
 }));
 
 const dispose = vi.hoisted(() => vi.fn());
@@ -48,11 +59,20 @@ const { projectEnvs, instanceEnvs, envFileConflicts } = await import(
 const { commandRuns } = await import("$lib/stores/command-run");
 const { instanceConversations, projectConversations, activeConversationId } =
 	await import("$lib/stores/conversation");
-const { terminalSessions, projectTerminals, activeTerminalId } = await import(
-	"$lib/stores/terminal"
-);
+const {
+	terminalSessions,
+	projectTerminals,
+	activeTerminalId,
+	splitTerminalId,
+	splitTerminalRatio,
+	restoreTerminals,
+	restoreProjectTerminals,
+} = await import("$lib/stores/terminal");
 const { projectInbox } = await import("$lib/stores/project-inbox");
 const { viewStates } = await import("$lib/stores/view-state");
+const { applyUpdate, pipelines } = await import("$lib/stores/pipelines");
+const { formatting } = await import("$lib/stores/formatting");
+const { integrationKey } = await import("$lib/utils/integrations/instance-key");
 
 const DOOMED = "p1";
 const KEPT = "p2";
@@ -154,6 +174,37 @@ describe("unregisterProject tears down every per-project cache", () => {
 		expect(keysOf(activeTerminalId)).toEqual([]);
 	});
 
+	it("forgets the split pane and its ratio of the removed project", async () => {
+		seed(splitTerminalId, "t1", ":i1");
+		seed(splitTerminalRatio, 0.4, ":i1");
+
+		await unregisterProject(DOOMED);
+
+		const remainingKeys = [`${KEPT}:i1`, `${LOOKALIKE}:i1`].sort();
+		expect(keysOf(splitTerminalId)).toEqual(remainingKeys);
+		expect(keysOf(splitTerminalRatio)).toEqual(remainingKeys);
+	});
+
+	it("lets the instance terminals of a re-added project be restored again", async () => {
+		await restoreTerminals("p1-readd", "i1", null);
+		await unregisterProject("p1-readd");
+		getTerminalState.mockClear();
+
+		await restoreTerminals("p1-readd", "i1", null);
+
+		expect(getTerminalState).toHaveBeenCalledTimes(1);
+	});
+
+	it("lets the shared terminals of a re-added project be restored again", async () => {
+		await restoreProjectTerminals("p1-readd");
+		await unregisterProject("p1-readd");
+		getProjectTerminalState.mockClear();
+
+		await restoreProjectTerminals("p1-readd");
+
+		expect(getProjectTerminalState).toHaveBeenCalledTimes(1);
+	});
+
 	it("forgets the view state of the removed project", async () => {
 		const { initViewStates } = await import("$lib/stores/view-state");
 		initViewStates({
@@ -164,5 +215,25 @@ describe("unregisterProject tears down every per-project cache", () => {
 		await unregisterProject(DOOMED);
 
 		expect(keysOf(viewStates)).toEqual([KEPT]);
+	});
+
+	it("forgets the pipelines of the removed project", async () => {
+		for (const id of [DOOMED, KEPT, LOOKALIKE])
+			applyUpdate(integrationKey(id, "i1"), { id: "1" } as never);
+
+		await unregisterProject(DOOMED);
+
+		expect(Object.keys(get(pipelines)).sort()).toEqual(
+			[integrationKey(KEPT, "i1"), integrationKey(LOOKALIKE, "i1")].sort(),
+		);
+	});
+
+	it("forgets the formatting config of the removed project", async () => {
+		await formatting.loadProject(DOOMED);
+		await formatting.loadProject(KEPT);
+
+		await unregisterProject(DOOMED);
+
+		expect(keysOf(formatting.projects)).toEqual([KEPT]);
 	});
 });

@@ -16,5 +16,7 @@ describe("slugifySkill", () => {
 	it("never ends on a separator, whatever the name ends with", () => {
 		expect(slugifySkill("commit --amend")).toBe("commit-amend");
 		expect(slugifySkill("---")).toBe("");
+		expect(slugifySkill("deploy!")).toBe("deploy");
+		expect(slugifySkill("a - ")).toBe("a");
 	});
 });

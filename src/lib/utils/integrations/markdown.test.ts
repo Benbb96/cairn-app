@@ -1,10 +1,20 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderRemoteMarkdown, sanitizeHtml } from "./markdown";
 
 describe("sanitizeHtml", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("returns the html as is where no DOM parser exists", () => {
+		vi.stubGlobal("DOMParser", undefined);
+		const html = '<p onclick="x()">hi</p><script>alert(1)</script>';
+		expect(sanitizeHtml(html)).toBe(html);
+	});
+
 	it("drops scripts, event handlers and javascript urls", () => {
 		const html =
 			'<p onclick="x()">hi</p><script>alert(1)</script><a href="javascript:alert(1)">l</a><img src="data:text/html,x">';
@@ -13,6 +23,19 @@ describe("sanitizeHtml", () => {
 		expect(out).not.toContain("onclick");
 		expect(out).not.toContain("javascript:");
 		expect(out).not.toContain("src=");
+	});
+
+	it("drops an unsafe xlink:href inside an svg", () => {
+		const out = sanitizeHtml(
+			'<svg><a xlink:href="javascript:alert(1)"><text>x</text></a></svg>',
+		);
+		expect(out).not.toContain("javascript:");
+	});
+
+	it("drops a srcdoc attribute", () => {
+		const out = sanitizeHtml('<div srcdoc="<b>x</b>">t</div>');
+		expect(out).not.toContain("srcdoc");
+		expect(out).toContain("t</div>");
 	});
 
 	it("keeps ordinary links and images", () => {

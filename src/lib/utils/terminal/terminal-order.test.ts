@@ -23,6 +23,7 @@ describe("moveItem", () => {
 		const list = ["a", "b"];
 		expect(moveItem(list, 5, 0)).toBe(list);
 		expect(moveItem(list, -1, 0)).toBe(list);
+		expect(moveItem(list, 2, 0)).toBe(list);
 	});
 });
 

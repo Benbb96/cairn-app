@@ -297,7 +297,7 @@ describe("FileTreeView", () => {
 				document.querySelector(".tree-edit-input") as HTMLElement,
 				"b",
 			);
-			expect(onEditValueChange).toHaveBeenCalled();
+			expect(onEditValueChange).toHaveBeenLastCalledWith("ab");
 		});
 
 		it("submits on Enter and gives up on Escape", async () => {
@@ -347,7 +347,15 @@ describe("FileTreeView", () => {
 					value: "",
 				},
 			});
-			expect(document.querySelector(".tree-edit-input")).not.toBeNull();
+			const input = document.querySelector(".tree-edit-input") as HTMLElement;
+			expect(input).not.toBeNull();
+			const editRow = input.closest(".file-tree-edit") as HTMLElement;
+			expect(editRow.style.paddingLeft).toBe(
+				rowFor("src/a.ts").style.paddingLeft,
+			);
+			expect(editRow.style.paddingLeft).not.toBe(
+				rowFor("src").style.paddingLeft,
+			);
 		});
 	});
 

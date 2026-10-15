@@ -1,12 +1,13 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	formatBytes,
 	formatClock,
 	formatCount,
 	formatDate,
+	formatDateTimeFull,
 	formatDuration,
 	formatTokens,
 	formatUsd,
@@ -167,6 +168,11 @@ describe("formatCount", () => {
 		expect(formatCount(1234567)).toBe("1 234 567");
 	});
 
+	it("writes zero and a negative rounding to zero without a sign", () => {
+		expect(formatCount(0)).toBe("0");
+		expect(formatCount(-0.4)).toBe("0");
+	});
+
 	it("keeps the sign in front of the groups", () => {
 		expect(formatCount(-12345)).toBe("-12 345");
 	});
@@ -298,6 +304,16 @@ describe("formatTokens", () => {
 describe("relativeTime", () => {
 	const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 	const MIN = 60_000;
+	const DAY = 24 * 60 * MIN;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-06-15T12:00:00Z"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("reads nothing for a missing date", () => {
 		expect(relativeTime("")).toBe("");
@@ -307,10 +323,44 @@ describe("relativeTime", () => {
 		expect(relativeTime(ago(10_000))).toBe("now");
 		expect(relativeTime(ago(12 * MIN))).toBe("12m");
 		expect(relativeTime(ago(5 * 60 * MIN))).toBe("5h");
-		expect(relativeTime(ago(2 * 24 * 60 * MIN))).toBe("2d");
+		expect(relativeTime(ago(2 * DAY))).toBe("2d");
 	});
 
-	it("falls back to a date past a month", () => {
-		expect(relativeTime(ago(40 * 24 * 60 * MIN))).not.toMatch(/^\d+d$/);
+	it("switches unit exactly at each boundary", () => {
+		expect(relativeTime(ago(MIN - 1))).toBe("now");
+		expect(relativeTime(ago(MIN))).toBe("1m");
+		expect(relativeTime(ago(60 * MIN - 1))).toBe("59m");
+		expect(relativeTime(ago(60 * MIN))).toBe("1h");
+		expect(relativeTime(ago(24 * 60 * MIN))).toBe("1d");
+		expect(relativeTime(ago(30 * DAY - 1))).toBe("29d");
+	});
+
+	it("falls back to a month and day within the year", () => {
+		expect(relativeTime(ago(30 * DAY))).toBe("May 16");
+		expect(relativeTime(ago(40 * DAY))).toBe("May 6");
+		expect(relativeTime(ago(364 * DAY))).toBe("Jun 16");
+	});
+
+	it("falls back to a month and year from a year on", () => {
+		expect(relativeTime(ago(365 * DAY))).toBe("Jun 2025");
+		expect(relativeTime(ago(400 * DAY))).toBe("May 2025");
+	});
+});
+
+describe("formatDateTimeFull", () => {
+	it("reads nothing for a date that does not parse", () => {
+		expect(formatDateTimeFull("not a date")).toBe("");
+		expect(formatDateTimeFull("")).toBe("");
+	});
+
+	it("gives the full date and the time with seconds", () => {
+		const iso = "2026-06-15T12:34:56Z";
+		const expected = new Intl.DateTimeFormat("en", {
+			dateStyle: "full",
+			timeStyle: "medium",
+		}).format(new Date(iso));
+		const result = formatDateTimeFull(iso);
+		expect(result).toBe(expected);
+		expect(result).toMatch(/^Monday, June 1[56], 2026 at \d+:34:56/);
 	});
 });

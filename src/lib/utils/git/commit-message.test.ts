@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it } from "vitest";
-import { renderCommitPrompt } from "./commit-message";
+import { normalizeCommitAnswer, renderCommitPrompt } from "./commit-message";
 
 describe("renderCommitPrompt", () => {
 	it("asks for the ticket when the instance carries one", () => {
@@ -39,5 +39,66 @@ describe("renderCommitPrompt", () => {
 				"X-9",
 			),
 		).toBe("X-9||");
+	});
+});
+
+describe("normalizeCommitAnswer", () => {
+	it("keeps a conventional title and trims both fields", () => {
+		expect(
+			normalizeCommitAnswer({
+				commitTitle: "  fix(git): stop the loop  ",
+				commitDescription: "\n  Explains why.  \n",
+			}),
+		).toEqual({ subject: "fix(git): stop the loop", body: "Explains why." });
+	});
+
+	it("keeps a conventional title even when the description opens with another", () => {
+		expect(
+			normalizeCommitAnswer({
+				commitTitle: "feat: add a thing",
+				commitDescription: "fix: something else\nmore",
+			}),
+		).toEqual({
+			subject: "feat: add a thing",
+			body: "fix: something else\nmore",
+		});
+	});
+
+	it("takes the subject from the description when the title is a note", () => {
+		expect(
+			normalizeCommitAnswer({
+				commitTitle: "Here is the commit message",
+				commitDescription:
+					"  feat(ui)!: redesign the panel  \n\nLonger text.\nSecond line.\n",
+			}),
+		).toEqual({
+			subject: "feat(ui)!: redesign the panel",
+			body: "Longer text.\nSecond line.",
+		});
+	});
+
+	it("leaves an empty body when the description is only the subject", () => {
+		expect(
+			normalizeCommitAnswer({
+				commitTitle: "",
+				commitDescription: "chore: bump deps",
+			}),
+		).toEqual({ subject: "chore: bump deps", body: "" });
+	});
+
+	it("keeps both fields when neither is conventional", () => {
+		expect(
+			normalizeCommitAnswer({
+				commitTitle: "A note",
+				commitDescription: "Not conventional either\nbody",
+			}),
+		).toEqual({
+			subject: "A note",
+			body: "Not conventional either\nbody",
+		});
+	});
+
+	it("answers empty strings for missing fields", () => {
+		expect(normalizeCommitAnswer({})).toEqual({ subject: "", body: "" });
 	});
 });

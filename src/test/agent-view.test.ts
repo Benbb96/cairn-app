@@ -5,7 +5,7 @@ import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { tick } from "svelte";
 import { get } from "svelte/store";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /** The history panel has its own suite; here it only needs to mount. */
 vi.mock("$lib/components/agent/ConversationHistoryPanel.svelte", async () => ({
@@ -73,6 +73,7 @@ const {
 } = await import("$lib/stores/conversation");
 const { loadInstances } = await import("$lib/stores/instance");
 const { projects, activeProjectId } = await import("$lib/stores/project");
+const { lastCli } = await import("$lib/stores/ui");
 const { instance, project } = await import("./fixtures");
 
 /** One CLI installed, one not, so both card states are on screen. */
@@ -130,6 +131,8 @@ const cardNamed = (name: string) =>
 
 beforeEach(async () => {
 	vi.clearAllMocks();
+	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.setSystemTime(new Date(2026, 6, 26, 9, 5, 3));
 	listCliProviders.mockResolvedValue(providers());
 	exitHandlers.clear();
 	createTerminal.mockResolvedValue(undefined);
@@ -139,11 +142,16 @@ beforeEach(async () => {
 	projectConversations.set({});
 	activeConversationId.set({});
 	conversationTerminals.set({});
+	lastCli.set("");
 
 	listInstances.mockResolvedValue([instance("i1", "p1")]);
 	projects.set([{ ...project("p1"), activeInstanceId: "i1" }]);
 	activeProjectId.set("p1");
 	await loadInstances("p1");
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 describe("with no conversation open", () => {
@@ -350,7 +358,9 @@ describe("archiving a conversation", () => {
 		expect(conversationsOf(ref)[0].archived).toBe(true);
 		// Leaving a process running behind an archived conversation would be a
 		// surprise; reopening resumes it from where it stopped.
-		expect(closeTerminal).toHaveBeenCalled();
+		expect(closeTerminal).toHaveBeenCalledWith(
+			`conversation:${conversationsOf(ref)[0].id}`,
+		);
 	});
 
 	it("archives from the exited banner without leaving a process behind", async () => {
@@ -373,7 +383,9 @@ describe("archiving a conversation", () => {
 		await tick();
 
 		expect(conversationsOf(ref)[0].archived).toBe(true);
-		expect(closeTerminal).toHaveBeenCalled();
+		expect(closeTerminal).toHaveBeenCalledWith(
+			`conversation:${conversationsOf(ref)[0].id}`,
+		);
 	});
 
 	it("leaves the view on the picker rather than on an archived conversation", async () => {
@@ -487,8 +499,16 @@ describe("when the CLI exits", () => {
 
 		// Killed then spawned again: openConversation returns early while a
 		// terminal is still registered.
-		expect(closeTerminal).toHaveBeenCalled();
-		expect(createTerminal).toHaveBeenCalled();
+		expect(closeTerminal).toHaveBeenCalledWith(tid);
+		expect(createTerminal).toHaveBeenCalledWith(
+			tid,
+			expect.anything(),
+			80,
+			24,
+			null,
+			null,
+			expect.any(Array),
+		);
 		expect(document.querySelector(".conv-exited")).toBeNull();
 	});
 

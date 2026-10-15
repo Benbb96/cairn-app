@@ -578,9 +578,14 @@ describe("McpSection", () => {
 			await userEvent.click(buttonBy(/test|tester/i));
 			await settle();
 			const toggle = document.querySelector(".probe-toggle");
-			if (toggle) await userEvent.click(toggle as HTMLElement);
+			expect(toggle).not.toBeNull();
+			await userEvent.click(toggle as HTMLElement);
 			await settle();
-			expect(document.querySelector(".tool-list")).not.toBeNull();
+			expect(
+				Array.from(document.querySelectorAll(".tool-list .tool code")).map(
+					(c) => c.textContent,
+				),
+			).toEqual(["read"]);
 		});
 	});
 

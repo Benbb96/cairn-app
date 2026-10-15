@@ -83,8 +83,7 @@ describe("root layout", () => {
 			setSettings({ accentColor: "#ffffff" });
 			render(Layout);
 			await settle();
-			expect(cssVar("--accent-fg")).not.toBe("");
-			expect(cssVar("--accent-fg")).not.toBe("#ffffff");
+			expect(cssVar("--accent-fg")).toBe("oklch(0.22 0.01 60)");
 		});
 
 		it("publishes the chosen font to both families", async () => {

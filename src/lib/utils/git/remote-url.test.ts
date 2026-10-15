@@ -45,6 +45,15 @@ describe("parseRemoteUrl", () => {
 	});
 });
 
+describe("parseRemoteUrl without a repository", () => {
+	it("rejects a remote with no host or no repository path", () => {
+		expect(parseRemoteUrl("https://gitlab.com/")).toBeNull();
+		expect(parseRemoteUrl("https://gitlab.com/.git")).toBeNull();
+		expect(parseRemoteUrl("ssh:///group/repo.git")).toBeNull();
+		expect(parseRemoteUrl("https://")).toBeNull();
+	});
+});
+
 describe("buildMergeRequestUrl", () => {
 	it("builds a GitLab merge request link", () => {
 		expect(
@@ -68,6 +77,12 @@ describe("buildMergeRequestUrl", () => {
 		).toBe(
 			"https://github.com/owner/repo/compare/main...feat%2Fmy-branch?expand=1",
 		);
+	});
+
+	it("builds a GitHub compare link of the source branch alone without a target", () => {
+		expect(
+			buildMergeRequestUrl("https://github.com/acme/repo.git", "feat/x", ""),
+		).toBe("https://github.com/acme/repo/compare/feat%2Fx?expand=1");
 	});
 
 	it("returns null without a usable remote or branch", () => {
@@ -107,6 +122,13 @@ describe("deep link fallbacks", () => {
 		);
 	});
 
+	it("refuses a commit or branch link without a usable remote or value", () => {
+		expect(buildCommitUrl("nope", "abc")).toBeNull();
+		expect(buildCommitUrl(gitlab, "")).toBeNull();
+		expect(buildBranchUrl("nope", "main")).toBeNull();
+		expect(buildBranchUrl(gitlab, "")).toBeNull();
+	});
+
 	it("builds compare links", () => {
 		expect(buildCompareUrl(gitlab, "main", "feat/x")).toBe(
 			"https://gitlab.acme.io/group/sub/repo/-/compare/main...feat%2Fx",
@@ -115,5 +137,26 @@ describe("deep link fallbacks", () => {
 			"https://github.com/acme/repo/compare/main...feat%2Fx",
 		);
 		expect(buildCompareUrl("nope", "main", "x")).toBeNull();
+	});
+});
+
+describe("remote url edge cases", () => {
+	it("rejects a protocol that is not http, https, ssh or git", () => {
+		expect(parseRemoteUrl("ftp://gitlab.com/group/repo.git")).toBeNull();
+		expect(parseRemoteUrl("git://gitlab.com/group/repo.git")).not.toBeNull();
+	});
+
+	it("builds a GitLab merge request link without a target branch", () => {
+		expect(
+			buildMergeRequestUrl("git@gitlab.com:group/repo.git", "feat/x", ""),
+		).toBe(
+			"https://gitlab.com/group/repo/-/merge_requests/new?merge_request%5Bsource_branch%5D=feat%2Fx",
+		);
+	});
+
+	it("refuses a compare link missing either ref", () => {
+		const remote = "git@gitlab.com:group/repo.git";
+		expect(buildCompareUrl(remote, "", "feat/x")).toBeNull();
+		expect(buildCompareUrl(remote, "main", "")).toBeNull();
 	});
 });

@@ -281,9 +281,9 @@ describe("EditorPane", () => {
 				activeTabIdx: 0,
 			});
 			const folder = crumbs().find((c) => c.tagName === "BUTTON");
-			if (!folder) return;
-			await userEvent.click(folder);
-			expect(onBreadcrumbClick).toHaveBeenCalled();
+			expect(folder).toBeDefined();
+			await userEvent.click(folder as HTMLElement);
+			expect(onBreadcrumbClick).toHaveBeenCalledWith("src");
 		});
 
 		/** A file outside the worktree has no folders to walk, so it says so. */
@@ -333,12 +333,12 @@ describe("EditorPane", () => {
 				activeTabIdx: -1,
 				activeTab: null,
 			});
-			const button = Array.from(
-				document.querySelectorAll<HTMLElement>("button"),
-			).find((b) => /new|nouveau/i.test(b.textContent ?? ""));
-			if (!button) return;
-			await userEvent.click(button);
-			expect(onNewFile).toHaveBeenCalled();
+			const placeholder = document.querySelector(
+				".editor-placeholder",
+			) as HTMLElement;
+			expect(placeholder).not.toBeNull();
+			await userEvent.dblClick(placeholder);
+			expect(onNewFile).toHaveBeenCalledTimes(1);
 		});
 
 		/** A pointer landing anywhere in the pane makes it the focused one. */

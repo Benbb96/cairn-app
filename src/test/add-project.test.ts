@@ -466,6 +466,10 @@ describe("AddProject", () => {
 			);
 			await settle();
 			expect(registerProject).toHaveBeenCalledTimes(1);
+			expect(registerProject.mock.calls[0][0]).toMatchObject({
+				name: "Cairn",
+				path: "/repos/cairn",
+			});
 		});
 	});
 });

@@ -3,14 +3,30 @@
 
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MergeRequest, Pipeline } from "$lib/types/integrations";
+import {
+	getProjectCapabilities,
+	getProjectIntegrations,
+	integrationKinds,
+	listIntegrationConnections,
+	saveProjectIntegrations as saveProjectIntegrationsService,
+} from "$lib/services/integration-service";
+import type {
+	IntegrationConnection,
+	IntegrationKindDescriptor,
+	MergeRequest,
+	Pipeline,
+	ProjectIntegrations,
+	ResolvedCapabilities,
+} from "$lib/types/integrations";
 import { integrationKey } from "$lib/utils/integrations/instance-key";
 import { instance, project } from "../../test/fixtures";
 import { activeProjectId, projects } from "./project";
+import { runProjectTeardowns } from "./project-teardown";
 
 const listeners = vi.hoisted(() => ({
 	handler: null as null | ((u: unknown) => void),
 	off: vi.fn(),
+	registrations: 0,
 }));
 const ciListPipelines = vi.hoisted(() => vi.fn());
 const forgeFindMergeRequest = vi.hoisted(() => vi.fn());
@@ -32,6 +48,7 @@ vi.mock("./terminal", () => ({
 vi.mock("$lib/services/integration-service", () => ({
 	onIntegrationUpdate: (handler: (u: unknown) => void) => {
 		listeners.handler = handler;
+		listeners.registrations += 1;
 		return Promise.resolve(listeners.off);
 	},
 	integrationKinds: vi.fn(),
@@ -61,7 +78,30 @@ vi.mock("$lib/services/integration-service", () => ({
 }));
 
 import { loadInstances } from "./instance";
-import { dispose, init, reduceIntegrationUpdate } from "./integrations";
+import {
+	bindingsByProject,
+	capabilities,
+	capabilitiesOf,
+	connections,
+	connectionsError,
+	dispose,
+	EMPTY_BINDINGS,
+	forgeIdentity,
+	forgeTerms,
+	forgetProject,
+	hasCi,
+	hasForge,
+	hasTracker,
+	init,
+	kindDescriptors,
+	loadConnections,
+	loadKinds,
+	loadProjectIntegrations,
+	NO_CAPABILITIES,
+	projectBindings,
+	reduceIntegrationUpdate,
+	saveProjectIntegrations,
+} from "./integrations";
 import { mergeRequestStateFor, mergeRequests } from "./merge-request";
 import {
 	activeCiBusy,
@@ -128,6 +168,7 @@ beforeEach(() => {
 	clearPipelines("p1", "i1");
 	clearPipelines("p1", "i2");
 	listeners.handler = null;
+	listeners.registrations = 0;
 	listeners.off.mockClear();
 });
 
@@ -245,6 +286,18 @@ describe("integration-update reduction", () => {
 		expect(mergeRequestStateFor(state, "p1", "i2").mergeRequest?.title).toBe(
 			"second",
 		);
+	});
+
+	it("ignores an update of a kind it does not own", () => {
+		reduceIntegrationUpdate({
+			projectId: "p1",
+			instanceId: "i3",
+			kind: "discussion",
+			data: mergeRequest("14", "stray"),
+		} as never);
+		expect(
+			mergeRequestStateFor(get(mergeRequests), "p1", "i3").mergeRequest,
+		).toBeNull();
 	});
 
 	it("still fetches the full list after the watcher pushed the latest pipeline", async () => {
@@ -387,6 +440,7 @@ describe("integration-update reduction", () => {
 		init();
 		init();
 		await Promise.resolve();
+		expect(listeners.registrations).toBe(1);
 		expect(listeners.handler).not.toBeNull();
 		listeners.handler?.({
 			projectId: "p1",
@@ -401,5 +455,258 @@ describe("integration-update reduction", () => {
 		).toBe(true);
 		dispose();
 		expect(listeners.off).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("loadKinds", () => {
+	const kinds = [{ id: "gitlab" }] as unknown as IntegrationKindDescriptor[];
+
+	beforeEach(() => {
+		kindDescriptors.set([]);
+		vi.mocked(integrationKinds).mockReset();
+	});
+
+	it("stores the descriptors the backend lists", async () => {
+		vi.mocked(integrationKinds).mockResolvedValue(kinds);
+		await loadKinds();
+		expect(get(kindDescriptors)).toEqual(kinds);
+	});
+
+	it("stores an empty list when the backend answers nothing", async () => {
+		vi.mocked(integrationKinds).mockResolvedValue(
+			undefined as unknown as IntegrationKindDescriptor[],
+		);
+		await loadKinds();
+		expect(get(kindDescriptors)).toEqual([]);
+	});
+
+	it("does not ask again once descriptors are loaded", async () => {
+		kindDescriptors.set(kinds);
+		await loadKinds();
+		expect(integrationKinds).not.toHaveBeenCalled();
+		expect(get(kindDescriptors)).toEqual(kinds);
+	});
+});
+
+describe("loadConnections", () => {
+	const list = [{ id: "c1" }] as unknown as IntegrationConnection[];
+
+	beforeEach(() => {
+		connections.set([]);
+		connectionsError.set(null);
+		vi.mocked(listIntegrationConnections).mockReset();
+	});
+
+	it("stores the connections and clears a previous error", async () => {
+		connectionsError.set({
+			code: "provider",
+			message: "old",
+			retryAfterMs: null,
+		});
+		vi.mocked(listIntegrationConnections).mockResolvedValue(list);
+		await loadConnections();
+		expect(get(connections)).toEqual(list);
+		expect(get(connectionsError)).toBeNull();
+	});
+
+	it("stores an empty list when the backend answers nothing", async () => {
+		connections.set(list);
+		vi.mocked(listIntegrationConnections).mockResolvedValue(
+			undefined as unknown as IntegrationConnection[],
+		);
+		await loadConnections();
+		expect(get(connections)).toEqual([]);
+	});
+
+	it("records the failure and keeps the connections it had", async () => {
+		connections.set(list);
+		vi.mocked(listIntegrationConnections).mockRejectedValue(new Error("down"));
+		await expect(loadConnections()).resolves.toBeUndefined();
+		expect(get(connectionsError)).toEqual({
+			code: "provider",
+			message: "Error: down",
+			retryAfterMs: null,
+		});
+		expect(get(connections)).toEqual(list);
+	});
+});
+
+describe("project bindings and capabilities", () => {
+	const bindings = {
+		...EMPTY_BINDINGS,
+		forge: { connectionId: "c1" },
+	} as unknown as ProjectIntegrations;
+	const resolved = {
+		...NO_CAPABILITIES,
+		ci: { kind: "gitlab" },
+	} as unknown as ResolvedCapabilities;
+
+	beforeEach(() => {
+		forgetProject("px");
+		vi.mocked(getProjectIntegrations).mockReset();
+		vi.mocked(getProjectCapabilities).mockReset();
+		vi.mocked(saveProjectIntegrationsService).mockReset();
+	});
+
+	it("answers no capabilities for a project that never loaded", () => {
+		expect(capabilitiesOf("px")).toBe(NO_CAPABILITIES);
+	});
+
+	it("answers the capabilities loaded for the project, not another one", async () => {
+		vi.mocked(getProjectIntegrations).mockResolvedValue(bindings);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(resolved);
+		await loadProjectIntegrations("px");
+		expect(capabilitiesOf("px")).toBe(resolved);
+		expect(capabilitiesOf("py")).toBe(NO_CAPABILITIES);
+		expect(get(bindingsByProject).px).toBe(bindings);
+	});
+
+	it("falls back to empty bindings and capabilities when the backend answers nothing", async () => {
+		vi.mocked(getProjectIntegrations).mockResolvedValue(
+			undefined as unknown as ProjectIntegrations,
+		);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(
+			undefined as unknown as ResolvedCapabilities,
+		);
+		await loadProjectIntegrations("px");
+		expect(get(bindingsByProject).px).toBe(EMPTY_BINDINGS);
+		expect(capabilitiesOf("px")).toBe(NO_CAPABILITIES);
+	});
+
+	it("saves the bindings, keeps them and refreshes the capabilities", async () => {
+		vi.mocked(saveProjectIntegrationsService).mockResolvedValue(bindings);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(resolved);
+		await saveProjectIntegrations("px", bindings);
+		expect(saveProjectIntegrationsService).toHaveBeenCalledWith("px", bindings);
+		expect(getProjectCapabilities).toHaveBeenCalledWith("px");
+		expect(get(bindingsByProject).px).toBe(bindings);
+		expect(capabilitiesOf("px")).toBe(resolved);
+	});
+
+	it("falls back to no capabilities when the refresh answers nothing", async () => {
+		vi.mocked(saveProjectIntegrationsService).mockResolvedValue(bindings);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(
+			undefined as unknown as ResolvedCapabilities,
+		);
+		await saveProjectIntegrations("px", bindings);
+		expect(capabilitiesOf("px")).toBe(NO_CAPABILITIES);
+	});
+
+	it("keeps the old bindings when the save is refused", async () => {
+		vi.mocked(saveProjectIntegrationsService).mockRejectedValue(
+			new Error("403"),
+		);
+		await expect(saveProjectIntegrations("px", bindings)).rejects.toThrow(
+			"403",
+		);
+		expect(get(bindingsByProject).px).toBeUndefined();
+		expect(getProjectCapabilities).not.toHaveBeenCalled();
+	});
+
+	it("forgets a removed project", async () => {
+		vi.mocked(getProjectIntegrations).mockResolvedValue(bindings);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(resolved);
+		await loadProjectIntegrations("px");
+		forgetProject("px");
+		expect(get(bindingsByProject).px).toBeUndefined();
+		expect(capabilitiesOf("px")).toBe(NO_CAPABILITIES);
+	});
+});
+
+describe("active project views", () => {
+	const connection = (id: string, identity: string | null) =>
+		({ id, identity }) as unknown as IntegrationConnection;
+	const forgeCapability = (mergeRequest: "mr" | "pr") =>
+		({
+			...NO_CAPABILITIES,
+			forge: { kind: "github", label: "GitHub", terms: { mergeRequest } },
+		}) as unknown as ResolvedCapabilities;
+
+	beforeEach(() => {
+		forgetProject("pv");
+		activeProjectId.set("pv");
+		connections.set([]);
+		vi.mocked(getProjectIntegrations).mockReset();
+		vi.mocked(getProjectCapabilities).mockReset();
+	});
+
+	it("falls back to the empty bindings and capabilities while the project is unloaded", () => {
+		expect(get(projectBindings)).toBe(EMPTY_BINDINGS);
+		expect(get(capabilities)).toBe(NO_CAPABILITIES);
+	});
+
+	it("falls back to the empty ones when no project is active", () => {
+		activeProjectId.set(null);
+		expect(get(projectBindings)).toBe(EMPTY_BINDINGS);
+		expect(get(capabilities)).toBe(NO_CAPABILITIES);
+	});
+
+	it("exposes the bindings and capabilities of the active project", async () => {
+		const bindings = {
+			...EMPTY_BINDINGS,
+			ci: { connectionId: "c1" },
+		} as unknown as ProjectIntegrations;
+		const resolved = forgeCapability("pr");
+		vi.mocked(getProjectIntegrations).mockResolvedValue(bindings);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(resolved);
+		await loadProjectIntegrations("pv");
+		expect(get(projectBindings)).toBe(bindings);
+		expect(get(capabilities)).toBe(resolved);
+	});
+
+	it("reports which capabilities are present as booleans", async () => {
+		expect(get(hasTracker)).toBe(false);
+		expect(get(hasForge)).toBe(false);
+		expect(get(hasCi)).toBe(false);
+		vi.mocked(getProjectIntegrations).mockResolvedValue(EMPTY_BINDINGS);
+		vi.mocked(getProjectCapabilities).mockResolvedValue({
+			tracker: { kind: "jira", label: "Jira" },
+			forge: null,
+			ci: { kind: "gitlab", label: "GitLab" },
+		} as unknown as ResolvedCapabilities);
+		await loadProjectIntegrations("pv");
+		expect(get(hasTracker)).toBe(true);
+		expect(get(hasForge)).toBe(false);
+		expect(get(hasCi)).toBe(true);
+	});
+
+	it("speaks merge request by default and follows the forge's own term", async () => {
+		expect(get(forgeTerms)).toBe("mr");
+		vi.mocked(getProjectIntegrations).mockResolvedValue(EMPTY_BINDINGS);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(forgeCapability("pr"));
+		await loadProjectIntegrations("pv");
+		expect(get(forgeTerms)).toBe("pr");
+	});
+
+	it("answers the identity of the bound forge connection", async () => {
+		connections.set([connection("c1", "ada"), connection("c2", "bob")]);
+		expect(get(forgeIdentity)).toBeNull();
+		vi.mocked(getProjectIntegrations).mockResolvedValue({
+			...EMPTY_BINDINGS,
+			forge: { connectionId: "c2" },
+		} as unknown as ProjectIntegrations);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(NO_CAPABILITIES);
+		await loadProjectIntegrations("pv");
+		expect(get(forgeIdentity)).toBe("bob");
+	});
+
+	it("answers null when the bound connection is unknown", async () => {
+		connections.set([connection("c1", "ada")]);
+		vi.mocked(getProjectIntegrations).mockResolvedValue({
+			...EMPTY_BINDINGS,
+			forge: { connectionId: "gone" },
+		} as unknown as ProjectIntegrations);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(NO_CAPABILITIES);
+		await loadProjectIntegrations("pv");
+		expect(get(forgeIdentity)).toBeNull();
+	});
+
+	it("is cleared by the project teardown registry", async () => {
+		vi.mocked(getProjectIntegrations).mockResolvedValue(EMPTY_BINDINGS);
+		vi.mocked(getProjectCapabilities).mockResolvedValue(forgeCapability("mr"));
+		await loadProjectIntegrations("pv");
+		await runProjectTeardowns("pv");
+		expect(get(bindingsByProject).pv).toBeUndefined();
+		expect(capabilitiesOf("pv")).toBe(NO_CAPABILITIES);
 	});
 });

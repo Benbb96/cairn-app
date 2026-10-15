@@ -34,6 +34,10 @@ describe("tabsToEvict", () => {
 		expect(tabsToEvict(pane(TABS_PER_PANE_MAX), 0, isClean)).toEqual([]);
 	});
 
+	it("keeps a pane well under the cap untouched", () => {
+		expect(tabsToEvict(pane(TABS_PER_PANE_MAX - 2), 0, isClean)).toEqual([]);
+	});
+
 	it("drops exactly the excess, least recently shown first", () => {
 		const tabs = pane(TABS_PER_PANE_MAX + 3);
 		const evicted = tabsToEvict(tabs, TABS_PER_PANE_MAX + 2, isClean);

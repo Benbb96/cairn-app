@@ -143,6 +143,22 @@ describe("workflow tab restoration", () => {
 		expect(current().workflowTabs).toHaveLength(DEFAULT_WF_TABS.length);
 	});
 
+	it("appends a single missing tab", async () => {
+		const saved = DEFAULT_WF_TABS.slice(0, -1);
+		getSettings.mockResolvedValue({ workflowTabs: saved });
+		await settings.load();
+		expect(current().workflowTabs.map((t) => t.key)).toEqual(
+			DEFAULT_WF_TABS.map((t) => t.key),
+		);
+	});
+
+	it("leaves the saved list untouched when no tab is missing", async () => {
+		const saved = DEFAULT_WF_TABS.map((t) => ({ ...t }));
+		getSettings.mockResolvedValue({ workflowTabs: saved });
+		await settings.load();
+		expect(current().workflowTabs).toBe(saved);
+	});
+
 	it("keeps a tab the user disabled rather than resetting it", async () => {
 		const saved = DEFAULT_WF_TABS.map((t) => ({ ...t, enabled: false }));
 		getSettings.mockResolvedValue({ workflowTabs: saved });
@@ -267,7 +283,10 @@ describe("activeSyntaxTokens", () => {
 			],
 			activeSyntaxThemeId: "gone",
 		});
-		expect(get(activeSyntaxTokens).kw.color).not.toBe("#ff0000");
+		const fallback = get(activeSyntaxTokens);
+		expect(fallback.kw.color).not.toBe("#ff0000");
+		await settings.save({ syntaxThemes: [], activeSyntaxThemeId: "" });
+		expect(fallback).toEqual(get(activeSyntaxTokens));
 	});
 
 	it("fills in the tokens a partial theme leaves out", async () => {

@@ -20,6 +20,7 @@ vi.mock("./integrations", () => ({
 }));
 
 import {
+	forgetProject,
 	forgetProjectInbox,
 	inboxLabel,
 	loadProjectInbox,
@@ -38,6 +39,7 @@ const page = (count: number, hasMore = false) => ({
 
 beforeEach(() => {
 	vi.useFakeTimers();
+	vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 	trackerListTickets.mockReset();
 	loadProjectIntegrations.mockReset();
 	loadProjectIntegrations.mockResolvedValue(undefined);
@@ -133,6 +135,24 @@ describe("loadProjectInbox", () => {
 		expect(trackerListTickets).toHaveBeenCalledTimes(2);
 	});
 
+	it("still serves the cache one millisecond before the window ends", async () => {
+		const id = freshProject();
+		withTracker(id);
+		await loadProjectInbox(id);
+		vi.advanceTimersByTime(5 * 60 * 1000 - 1);
+		await loadProjectInbox(id);
+		expect(trackerListTickets).toHaveBeenCalledTimes(1);
+	});
+
+	it("asks again exactly when the window has elapsed", async () => {
+		const id = freshProject();
+		withTracker(id);
+		await loadProjectInbox(id);
+		vi.advanceTimersByTime(5 * 60 * 1000);
+		await loadProjectInbox(id);
+		expect(trackerListTickets).toHaveBeenCalledTimes(2);
+	});
+
 	it("caches a failure too, so a broken tracker is not hammered", async () => {
 		const id = freshProject();
 		withTracker(id);
@@ -147,6 +167,30 @@ describe("loadProjectInbox", () => {
 		withTracker(id);
 		await Promise.all([loadProjectInbox(id), loadProjectInbox(id)]);
 		expect(trackerListTickets).toHaveBeenCalledTimes(1);
+	});
+
+	it("lets a concurrent caller wait for the fetch it shares", async () => {
+		const id = freshProject();
+		withTracker(id);
+		trackerListTickets.mockResolvedValue(page(5));
+		const first = loadProjectInbox(id);
+		await loadProjectInbox(id);
+		expect(get(projectInbox)[id]).toEqual({ tickets: 5, hasMore: false });
+		await first;
+	});
+
+	it("refreshes the bindings of the project before reading them", async () => {
+		const id = freshProject();
+		await loadProjectInbox(id);
+		expect(loadProjectIntegrations).toHaveBeenCalledWith(id);
+	});
+
+	it("leaves the counts untouched when an unbound project had none", async () => {
+		const id = freshProject();
+		const counts = { other: { tickets: 1, hasMore: false } };
+		projectInbox.set(counts);
+		await loadProjectInbox(id);
+		expect(get(projectInbox)).toBe(counts);
 	});
 
 	it("keeps projects independent", async () => {
@@ -207,5 +251,29 @@ describe("forgetProjectInbox", () => {
 
 	it("does nothing for a project with no count", () => {
 		expect(() => forgetProjectInbox("never-loaded")).not.toThrow();
+	});
+});
+
+describe("forgetProject", () => {
+	it("drops the count and the cache of a removed project", async () => {
+		const id = freshProject();
+		withTracker(id);
+		trackerListTickets.mockResolvedValue(page(2));
+		await loadProjectInbox(id);
+		forgetProject(id);
+		expect(get(projectInbox)).not.toHaveProperty(id);
+		await loadProjectInbox(id);
+		expect(trackerListTickets).toHaveBeenCalledTimes(2);
+	});
+
+	it("drops a fetch still in flight so the next read asks again", async () => {
+		const id = freshProject();
+		withTracker(id);
+		trackerListTickets.mockReturnValueOnce(new Promise(() => {}));
+		void loadProjectInbox(id);
+		await vi.waitFor(() => expect(trackerListTickets).toHaveBeenCalledTimes(1));
+		forgetProject(id);
+		void loadProjectInbox(id);
+		await vi.waitFor(() => expect(trackerListTickets).toHaveBeenCalledTimes(2));
 	});
 });

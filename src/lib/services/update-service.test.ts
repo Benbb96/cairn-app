@@ -1,9 +1,18 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import type { Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { describe, expect, it, vi } from "vitest";
-import { type DownloadProgress, downloadAndInstall } from "./update-service";
+import {
+	checkForUpdate,
+	type DownloadProgress,
+	downloadAndInstall,
+	restartApp,
+} from "./update-service";
+
+vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
+vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 
 type ProgressEvent =
 	| { event: "Started"; data: { contentLength?: number } }
@@ -95,9 +104,23 @@ describe("downloadAndInstall", () => {
 	});
 
 	it("waits for the plugin before resolving", async () => {
-		const update = updateEmitting([]);
-		await downloadAndInstall(update, () => {});
+		let finishPlugin: () => void = () => {};
+		const update = {
+			downloadAndInstall: vi.fn(
+				() => new Promise<void>((resolve) => (finishPlugin = resolve)),
+			),
+		} as unknown as Update;
+		let isResolved = false;
+		const pending = downloadAndInstall(update, () => {}).then(() => {
+			isResolved = true;
+		});
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(update.downloadAndInstall).toHaveBeenCalledTimes(1);
+		expect(isResolved).toBe(false);
+		finishPlugin();
+		await pending;
+		expect(isResolved).toBe(true);
 	});
 
 	it("lets a failed download reject rather than reporting success", async () => {
@@ -107,5 +130,26 @@ describe("downloadAndInstall", () => {
 		await expect(downloadAndInstall(update, () => {})).rejects.toThrow(
 			"network",
 		);
+	});
+});
+
+describe("checkForUpdate", () => {
+	it("answers the update the updater found", async () => {
+		const update = { version: "2.0.0" } as unknown as Update;
+		vi.mocked(check).mockResolvedValue(update);
+		await expect(checkForUpdate()).resolves.toBe(update);
+	});
+
+	it("answers null when the app is up to date", async () => {
+		vi.mocked(check).mockResolvedValue(null);
+		await expect(checkForUpdate()).resolves.toBeNull();
+	});
+});
+
+describe("restartApp", () => {
+	it("relaunches the app", async () => {
+		vi.mocked(relaunch).mockResolvedValue(undefined);
+		await expect(restartApp()).resolves.toBeUndefined();
+		expect(relaunch).toHaveBeenCalledTimes(1);
 	});
 });

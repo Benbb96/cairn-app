@@ -181,7 +181,7 @@ describe("BinaryPreview", () => {
 			readFileBase64.mockClear();
 			await image().dispatchEvent(new Event("error"));
 			await settle();
-			expect(readFileBase64).toHaveBeenCalled();
+			expect(readFileBase64).toHaveBeenCalledWith("/repo/logo.png");
 			expect(document.querySelector(".preview-note")).toBeNull();
 		});
 

@@ -2,17 +2,90 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { invoke } from "@tauri-apps/api/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	addRemote,
 	amendCommit,
+	checkIgnore,
+	checkoutBranch,
+	cherryPick,
+	cherryPickAbort,
+	cherryPickContinue,
+	cherryPickSkip,
 	commit,
+	commitExists,
+	createBranch,
+	deleteBranch,
+	deleteRemoteBranch,
+	discardFile,
+	fetch,
+	forgetRepoRoots,
 	GIT_ERROR_CODES,
 	type GitError,
+	getBranchDivergence,
+	getChangedPaths,
+	getCommitBody,
+	getCurrentBranch,
+	getDiffCommit,
+	getDiffFileBetween,
+	getDiffFilesBetween,
+	getDiffStaged,
+	getDiffs,
+	getDiffUnstaged,
+	getFileAtHead,
+	getFileInIndex,
+	getGraph,
+	getGraphStashes,
+	getHeadMessage,
+	getIdentity,
+	getLog,
+	getOperationState,
+	getRemoteStatus,
+	getRemoteUrl,
 	getSnapshot,
+	getStashList,
+	getStashShow,
+	getStatusFull,
+	getTagList,
+	initRepository,
+	isGitRepo,
 	isKnownGitErrorCode,
+	listRemotes,
 	merge,
+	mergeAbort,
+	mergeContinue,
+	pull,
 	push,
+	readExclude,
+	rebase,
+	rebaseAbort,
+	rebaseContinue,
+	rebaseSkip,
+	removeIndexLock,
+	removeRemote,
+	renameBranch,
+	renameRemote,
+	resetToCommit,
+	revertCommit,
+	rmFile,
+	setRemoteUrl,
+	stageAll,
+	stageFile,
+	stashApply,
+	stashClear,
+	stashDrop,
+	stashPop,
+	stashPush,
+	stashRename,
+	tagCreate,
+	tagDelete,
+	tagDeleteRemote,
+	tagPush,
+	tagRemoteList,
 	toGitError,
+	unstageAll,
+	unstageFile,
+	writeExclude,
 } from "./git-service";
 
 const mockInvoke = vi.mocked(invoke);
@@ -272,6 +345,15 @@ describe("push", () => {
 });
 
 describe("getSnapshot sharing", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	/** Each case uses its own worktree, so entries never leak between tests. */
 	let n = 0;
 	const wt = () => `/w/${++n}`;
@@ -306,5 +388,535 @@ describe("getSnapshot sharing", () => {
 		await getSnapshot(wt(), "");
 		await getSnapshot(wt(), "");
 		expect(mockInvoke).toHaveBeenCalledTimes(2);
+	});
+});
+
+const WT = "/repo";
+
+/** Commands that only forward their arguments: name, how it is called, what invoke must receive. */
+const FORWARDERS: [
+	string,
+	() => Promise<unknown>,
+	string,
+	Record<string, unknown>,
+][] = [
+	["isGitRepo", () => isGitRepo(WT), "is_git_repo", { worktreePath: WT }],
+	[
+		"forgetRepoRoots",
+		() => forgetRepoRoots("p1", "/p"),
+		"git_forget_repo_roots",
+		{ projectId: "p1", projectPath: "/p" },
+	],
+	[
+		"getChangedPaths",
+		() => getChangedPaths(WT),
+		"git_changed_paths",
+		{ worktreePath: WT },
+	],
+	[
+		"checkIgnore",
+		() => checkIgnore(WT, ["a", "b"]),
+		"git_check_ignore",
+		{ worktreePath: WT, paths: ["a", "b"] },
+	],
+	[
+		"readExclude",
+		() => readExclude(WT),
+		"git_read_exclude",
+		{ worktreePath: WT },
+	],
+	[
+		"initRepository",
+		() => initRepository(WT),
+		"git_init",
+		{ worktreePath: WT },
+	],
+	[
+		"writeExclude",
+		() => writeExclude(WT, "*.log"),
+		"git_write_exclude",
+		{ worktreePath: WT, content: "*.log" },
+	],
+	[
+		"getDiffUnstaged",
+		() => getDiffUnstaged(WT),
+		"git_diff_unstaged",
+		{ worktreePath: WT },
+	],
+	[
+		"getDiffStaged",
+		() => getDiffStaged(WT),
+		"git_diff_staged",
+		{ worktreePath: WT },
+	],
+	[
+		"getDiffFilesBetween",
+		() => getDiffFilesBetween(WT, "main", "feat"),
+		"git_diff_files_between",
+		{ worktreePath: WT, base: "main", head: "feat" },
+	],
+	[
+		"getDiffFileBetween",
+		() => getDiffFileBetween(WT, "main", "feat", "a.ts"),
+		"git_diff_file_between",
+		{ worktreePath: WT, base: "main", head: "feat", filePath: "a.ts" },
+	],
+	[
+		"commitExists",
+		() => commitExists(WT, "abc"),
+		"git_commit_exists",
+		{ worktreePath: WT, commitHash: "abc" },
+	],
+	[
+		"getFileAtHead",
+		() => getFileAtHead(WT, "a.ts"),
+		"git_file_at_head",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	[
+		"getFileInIndex",
+		() => getFileInIndex(WT, "a.ts"),
+		"git_file_in_index",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	[
+		"stageFile",
+		() => stageFile(WT, "a.ts"),
+		"git_stage_file",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	[
+		"unstageFile",
+		() => unstageFile(WT, "a.ts"),
+		"git_unstage_file",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	["stageAll", () => stageAll(WT), "git_stage_all", { worktreePath: WT }],
+	["unstageAll", () => unstageAll(WT), "git_unstage_all", { worktreePath: WT }],
+	[
+		"getIdentity",
+		() => getIdentity(WT),
+		"git_get_identity",
+		{ worktreePath: WT },
+	],
+	[
+		"getCurrentBranch",
+		() => getCurrentBranch(WT),
+		"git_current_branch",
+		{ worktreePath: WT },
+	],
+	[
+		"checkoutBranch",
+		() => checkoutBranch(WT, "feat"),
+		"git_checkout_branch",
+		{ worktreePath: WT, branchName: "feat" },
+	],
+	[
+		"createBranch",
+		() => createBranch(WT, "feat", "main"),
+		"git_create_branch",
+		{ worktreePath: WT, branchName: "feat", fromBranch: "main" },
+	],
+	[
+		"deleteBranch",
+		() => deleteBranch(WT, "feat", true),
+		"git_delete_branch",
+		{ worktreePath: WT, branchName: "feat", force: true },
+	],
+	[
+		"deleteRemoteBranch",
+		() => deleteRemoteBranch(WT, "origin", "feat"),
+		"git_delete_remote_branch",
+		{ worktreePath: WT, remote: "origin", branchName: "feat" },
+	],
+	[
+		"renameBranch",
+		() => renameBranch(WT, "old", "new"),
+		"git_rename_branch",
+		{ worktreePath: WT, oldName: "old", newName: "new" },
+	],
+	["fetch", () => fetch(WT), "git_fetch", { worktreePath: WT }],
+	[
+		"removeIndexLock",
+		() => removeIndexLock(WT),
+		"git_remove_index_lock",
+		{ worktreePath: WT },
+	],
+	[
+		"getOperationState",
+		() => getOperationState(WT),
+		"git_operation_state",
+		{ worktreePath: WT },
+	],
+	[
+		"rmFile",
+		() => rmFile(WT, "a.ts"),
+		"git_rm",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	[
+		"mergeContinue",
+		() => mergeContinue(WT),
+		"git_merge_continue",
+		{ worktreePath: WT },
+	],
+	["mergeAbort", () => mergeAbort(WT), "git_merge_abort", { worktreePath: WT }],
+	[
+		"rebase",
+		() => rebase(WT, "main"),
+		"git_rebase",
+		{ worktreePath: WT, onto: "main" },
+	],
+	[
+		"rebaseContinue",
+		() => rebaseContinue(WT),
+		"git_rebase_continue",
+		{ worktreePath: WT },
+	],
+	["rebaseSkip", () => rebaseSkip(WT), "git_rebase_skip", { worktreePath: WT }],
+	[
+		"rebaseAbort",
+		() => rebaseAbort(WT),
+		"git_rebase_abort",
+		{ worktreePath: WT },
+	],
+	[
+		"cherryPick",
+		() => cherryPick(WT, ["a", "b"]),
+		"git_cherry_pick",
+		{ worktreePath: WT, commits: ["a", "b"] },
+	],
+	[
+		"cherryPickContinue",
+		() => cherryPickContinue(WT),
+		"git_cherry_pick_continue",
+		{ worktreePath: WT },
+	],
+	[
+		"cherryPickSkip",
+		() => cherryPickSkip(WT),
+		"git_cherry_pick_skip",
+		{ worktreePath: WT },
+	],
+	[
+		"cherryPickAbort",
+		() => cherryPickAbort(WT),
+		"git_cherry_pick_abort",
+		{ worktreePath: WT },
+	],
+	[
+		"getRemoteStatus",
+		() => getRemoteStatus(WT),
+		"git_remote_status",
+		{ worktreePath: WT },
+	],
+	[
+		"getRemoteUrl",
+		() => getRemoteUrl(WT),
+		"git_remote_url",
+		{ worktreePath: WT },
+	],
+	[
+		"listRemotes",
+		() => listRemotes(WT),
+		"git_remote_list",
+		{ worktreePath: WT },
+	],
+	[
+		"addRemote",
+		() => addRemote(WT, "up", "git@x:y.git"),
+		"git_remote_add",
+		{ worktreePath: WT, name: "up", url: "git@x:y.git" },
+	],
+	[
+		"renameRemote",
+		() => renameRemote(WT, "old", "new"),
+		"git_remote_rename",
+		{ worktreePath: WT, oldName: "old", newName: "new" },
+	],
+	[
+		"setRemoteUrl",
+		() => setRemoteUrl(WT, "up", "git@x:z.git"),
+		"git_remote_set_url",
+		{ worktreePath: WT, name: "up", url: "git@x:z.git" },
+	],
+	[
+		"removeRemote",
+		() => removeRemote(WT, "up"),
+		"git_remote_remove",
+		{ worktreePath: WT, name: "up" },
+	],
+	[
+		"getBranchDivergence",
+		() => getBranchDivergence(WT, "main"),
+		"git_branch_divergence",
+		{ worktreePath: WT, base: "main" },
+	],
+	[
+		"getHeadMessage",
+		() => getHeadMessage(WT),
+		"git_head_message",
+		{ worktreePath: WT },
+	],
+	[
+		"getGraphStashes",
+		() => getGraphStashes(WT),
+		"git_graph_stashes",
+		{ worktreePath: WT },
+	],
+	[
+		"getDiffCommit",
+		() => getDiffCommit(WT, "abc"),
+		"git_diff_commit",
+		{ worktreePath: WT, commitHash: "abc" },
+	],
+	[
+		"getCommitBody",
+		() => getCommitBody(WT, "abc"),
+		"git_commit_body",
+		{ worktreePath: WT, commitHash: "abc" },
+	],
+	[
+		"getStashList",
+		() => getStashList(WT),
+		"git_stash_list",
+		{ worktreePath: WT },
+	],
+	[
+		"stashPop",
+		() => stashPop(WT, 2),
+		"git_stash_pop",
+		{ worktreePath: WT, index: 2 },
+	],
+	[
+		"stashApply",
+		() => stashApply(WT, 2),
+		"git_stash_apply",
+		{ worktreePath: WT, index: 2 },
+	],
+	[
+		"stashDrop",
+		() => stashDrop(WT, 2),
+		"git_stash_drop",
+		{ worktreePath: WT, index: 2 },
+	],
+	[
+		"getStashShow",
+		() => getStashShow(WT, 2),
+		"git_stash_show",
+		{ worktreePath: WT, index: 2 },
+	],
+	["stashClear", () => stashClear(WT), "git_stash_clear", { worktreePath: WT }],
+	[
+		"stashRename",
+		() => stashRename(WT, 2, "renamed"),
+		"git_stash_rename",
+		{ worktreePath: WT, index: 2, message: "renamed" },
+	],
+	[
+		"revertCommit",
+		() => revertCommit(WT, "abc"),
+		"git_revert_commit",
+		{ worktreePath: WT, commitHash: "abc" },
+	],
+	[
+		"resetToCommit",
+		() => resetToCommit(WT, "abc", "hard"),
+		"git_reset",
+		{ worktreePath: WT, commitHash: "abc", mode: "hard" },
+	],
+	[
+		"discardFile",
+		() => discardFile(WT, "a.ts"),
+		"git_discard_file",
+		{ worktreePath: WT, filePath: "a.ts" },
+	],
+	["getTagList", () => getTagList(WT), "git_tag_list", { worktreePath: WT }],
+	[
+		"tagCreate",
+		() => tagCreate(WT, "v1", "release", "abc"),
+		"git_tag_create",
+		{ worktreePath: WT, name: "v1", message: "release", commitHash: "abc" },
+	],
+	[
+		"tagDelete",
+		() => tagDelete(WT, "v1"),
+		"git_tag_delete",
+		{ worktreePath: WT, name: "v1" },
+	],
+	[
+		"tagPush",
+		() => tagPush(WT, "origin", "v1"),
+		"git_tag_push",
+		{ worktreePath: WT, remote: "origin", name: "v1" },
+	],
+	[
+		"tagDeleteRemote",
+		() => tagDeleteRemote(WT, "origin", "v1"),
+		"git_tag_delete_remote",
+		{ worktreePath: WT, remote: "origin", name: "v1" },
+	],
+	[
+		"tagRemoteList",
+		() => tagRemoteList(WT, "origin"),
+		"git_tag_remote_list",
+		{ worktreePath: WT, remote: "origin" },
+	],
+];
+
+describe("commands that forward their arguments", () => {
+	it.each(FORWARDERS)(
+		"%s forwards its arguments to its command and returns the answer",
+		async (_name, call, command, args) => {
+			const answer = { sentinel: command };
+			mockInvoke.mockResolvedValue(answer);
+			await expect(call()).resolves.toBe(answer);
+			expect(mockInvoke).toHaveBeenCalledTimes(1);
+			expect(mockInvoke).toHaveBeenCalledWith(command, args);
+		},
+	);
+
+	it.each(FORWARDERS)(
+		"%s rejects with what the backend rejected with",
+		async (_name, call) => {
+			const error = { code: "unknown", raw: "boom" };
+			mockInvoke.mockRejectedValue(error);
+			await expect(call()).rejects.toBe(error);
+		},
+	);
+});
+
+describe("defaults of forwarded commands", () => {
+	it("pulls with a rebase by default", async () => {
+		await pull(WT);
+		expect(mockInvoke).toHaveBeenCalledWith("git_pull", {
+			worktreePath: WT,
+			mode: "rebase",
+		});
+	});
+
+	it("forwards the pull mode", async () => {
+		await pull(WT, "ff-only");
+		expect(mockInvoke).toHaveBeenCalledWith("git_pull", {
+			worktreePath: WT,
+			mode: "ff-only",
+		});
+	});
+
+	it("reads the first 50 commits of the log by default", async () => {
+		await getLog(WT);
+		expect(mockInvoke).toHaveBeenCalledWith("git_log", {
+			worktreePath: WT,
+			limit: 50,
+			offset: 0,
+		});
+	});
+
+	it("forwards the log window", async () => {
+		await getLog(WT, 10, 30);
+		expect(mockInvoke).toHaveBeenCalledWith("git_log", {
+			worktreePath: WT,
+			limit: 10,
+			offset: 30,
+		});
+	});
+
+	it("reads the first 200 commits of the graph by default", async () => {
+		await getGraph(WT);
+		expect(mockInvoke).toHaveBeenCalledWith("git_graph", {
+			worktreePath: WT,
+			limit: 200,
+			offset: 0,
+		});
+	});
+
+	it("forwards the graph window", async () => {
+		await getGraph(WT, 5, 15);
+		expect(mockInvoke).toHaveBeenCalledWith("git_graph", {
+			worktreePath: WT,
+			limit: 5,
+			offset: 15,
+		});
+	});
+
+	it("stashes everything tracked when no paths are given", async () => {
+		await stashPush(WT, "wip", true, false);
+		expect(mockInvoke).toHaveBeenCalledWith("git_stash_push", {
+			worktreePath: WT,
+			message: "wip",
+			includeUntracked: true,
+			keepIndex: false,
+			paths: [],
+		});
+	});
+
+	it("forwards the paths to stash", async () => {
+		await stashPush(WT, "wip", false, true, ["a.ts"]);
+		expect(mockInvoke).toHaveBeenCalledWith("git_stash_push", {
+			worktreePath: WT,
+			message: "wip",
+			includeUntracked: false,
+			keepIndex: true,
+			paths: ["a.ts"],
+		});
+	});
+});
+
+describe("shared reads", () => {
+	let n = 0;
+	const wt = () => `/shared/${++n}`;
+
+	it("reads the full status and shares it between concurrent callers", async () => {
+		const path = wt();
+		const status = { isGitRepo: true };
+		mockInvoke.mockResolvedValue(status);
+		const [first, second] = await Promise.all([
+			getStatusFull(path),
+			getStatusFull(path),
+		]);
+		expect(first).toBe(status);
+		expect(second).toBe(status);
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(mockInvoke).toHaveBeenCalledWith("git_status_full", {
+			worktreePath: path,
+		});
+	});
+
+	it("reads the diffs against a known version and shares them", async () => {
+		const path = wt();
+		const diffs = { version: "v2", unstaged: [], staged: [] };
+		mockInvoke.mockResolvedValue(diffs);
+		const [first, second] = await Promise.all([
+			getDiffs(path, "v1"),
+			getDiffs(path, "v1"),
+		]);
+		expect(first).toBe(diffs);
+		expect(second).toBe(diffs);
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(mockInvoke).toHaveBeenCalledWith("git_diffs", {
+			worktreePath: path,
+			knownVersion: "v1",
+		});
+	});
+
+	it("does not share diffs read against different versions", async () => {
+		const path = wt();
+		await Promise.all([getDiffs(path, "v1"), getDiffs(path, "v2")]);
+		expect(mockInvoke).toHaveBeenCalledTimes(2);
+	});
+
+	it("answers null for diffs when nothing changed since the known version", async () => {
+		mockInvoke.mockResolvedValue(null);
+		await expect(getDiffs(wt(), "v1")).resolves.toBeNull();
+	});
+
+	it("forwards the known version to the snapshot read", async () => {
+		const path = wt();
+		mockInvoke.mockResolvedValue(null);
+		await expect(getSnapshot(path, "v1")).resolves.toBeNull();
+		expect(mockInvoke).toHaveBeenCalledWith("git_snapshot", {
+			worktreePath: path,
+			knownVersion: "v1",
+		});
 	});
 });

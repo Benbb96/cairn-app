@@ -280,6 +280,10 @@ describe("LanguagesTab", () => {
 
 	it("shows the code of each language", () => {
 		render(LanguagesTab, {});
-		expect(rows()[0].querySelector(".lang-code")?.textContent).toBeTruthy();
+		expect(
+			rows()
+				.map((r) => r.querySelector(".lang-code")?.textContent)
+				.sort(),
+		).toEqual(Object.keys(LOCALE_META).sort());
 	});
 });

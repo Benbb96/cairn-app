@@ -14,6 +14,7 @@ import {
 	shellQuote,
 	slugify,
 	substitute,
+	substituteValues,
 } from "./command-variables";
 
 const ctx: CommandContext = {
@@ -102,6 +103,13 @@ describe("buildValues", () => {
 	});
 });
 
+describe("buildValues timestamp", () => {
+	it("is the epoch in whole seconds", () => {
+		const values = buildValues({ ...ctx, now: new Date(1_700_000_000_999) });
+		expect(values.timestamp).toBe("1700000000");
+	});
+});
+
 describe("collectPrompts", () => {
 	it("returns labels in order, without duplicates", () => {
 		expect(
@@ -110,6 +118,12 @@ describe("collectPrompts", () => {
 				"echo {{prompt:Tag}} {{prompt:Port}}",
 			]),
 		).toEqual(["Port", "Tag"]);
+	});
+
+	it("skips tokens that are not prompts", () => {
+		expect(collectPrompts(["echo {{instance.id}} {{prompt:Tag}}"])).toEqual([
+			"Tag",
+		]);
 	});
 
 	it("ignores an empty label", () => {
@@ -142,6 +156,23 @@ describe("collectPortBases", () => {
 	});
 });
 
+describe("port base range", () => {
+	it("accepts the lowest and the highest port", () => {
+		expect(collectPortBases(["a {{port:1}} b {{port:65535}}"])).toEqual([
+			1, 65535,
+		]);
+	});
+
+	it("rejects port 0 and port 65536", () => {
+		expect(collectPortBases(["a {{port:0}} b {{port:65536}}"])).toEqual([]);
+	});
+
+	it("does not read a base out of a token that is not a port", () => {
+		expect(collectPortBases(["a {{host:3000}}"])).toEqual([]);
+		expect(findInvalidPortTokens(["a {{host:3000}}"])).toEqual([]);
+	});
+});
+
 describe("findInvalidPortTokens", () => {
 	it("reports a port token with no base", () => {
 		expect(findInvalidPortTokens(["vite --port {{port}}"])).toEqual(["port"]);
@@ -155,6 +186,12 @@ describe("findInvalidPortTokens", () => {
 				"c {{port:70000}}",
 			]),
 		).toEqual(["port:", "port:abc", "port:70000"]);
+	});
+
+	it("reports a repeated invalid token once", () => {
+		expect(findInvalidPortTokens(["a {{port}}", "b {{port}}"])).toEqual([
+			"port",
+		]);
 	});
 
 	it("says nothing about a valid token", () => {
@@ -187,6 +224,12 @@ describe("substitute", () => {
 		).toBe("deploy 'v1 rc'");
 	});
 
+	it("leaves an unanswered prompt as written", () => {
+		expect(substitute("deploy {{prompt:Tag}}", resolution())).toBe(
+			"deploy {{prompt:Tag}}",
+		);
+	});
+
 	it("leaves an unknown token as written", () => {
 		expect(substitute("echo {{nope.here}}", resolution())).toBe(
 			"echo {{nope.here}}",
@@ -197,6 +240,14 @@ describe("substitute", () => {
 		expect(substitute("echo {{port:3000}}", resolution())).toBe(
 			"echo {{port:3000}}",
 		);
+	});
+});
+
+describe("substituteValues", () => {
+	it("inserts values as written and leaves unknown tokens", () => {
+		expect(
+			substituteValues("{{instance.branch}} {{nope}}", buildValues(ctx)),
+		).toBe("feat/ma super branche {{nope}}");
 	});
 });
 
@@ -217,6 +268,10 @@ describe("buildScript", () => {
 		expect(buildScript(["npm i", "   ", ""], true, resolution())).toBe("npm i");
 	});
 
+	it("keeps one character steps", () => {
+		expect(buildScript(["a", "b"], true, resolution())).toBe("a && b");
+	});
+
 	it("substitutes inside every step", () => {
 		expect(
 			buildScript(
@@ -234,6 +289,11 @@ describe("buildEnv", () => {
 		expect(env.CAIRN_INSTANCE_ID).toBe("inst-1");
 		expect(env.CAIRN_BRANCH).toBe("feat/ma super branche");
 		expect(env.CAIRN_PROJECT_PATH).toBe("/repo/cairn");
+	});
+
+	it("exports an empty string for a value the catalog lacks", () => {
+		const env = buildEnv(resolution({ values: {} }));
+		expect(env.CAIRN_BRANCH).toBe("");
 	});
 
 	it("exports the first allocated port as CAIRN_PORT", () => {

@@ -6,7 +6,11 @@ import {
 	effortsOf,
 	permissionModesOf,
 } from "$lib/components/home/agents/cli-options";
-import { humanizeOption } from "./run-options";
+import {
+	effortLabel,
+	humanizeOption,
+	permissionModeLabel,
+} from "./run-options";
 
 describe("humanizeOption", () => {
 	it("reads the camel case Claude Code uses", () => {
@@ -44,5 +48,26 @@ describe("the CLI option vocabularies", () => {
 		// field out of the picker without a special case.
 		expect(effortsOf("opencode")).toEqual([]);
 		expect(effortsOf("copilot")).toEqual([]);
+	});
+});
+
+describe("effortLabel", () => {
+	it("translates a level Cairn knows", () => {
+		expect(effortLabel("xhigh")).toBe("Extra high");
+	});
+
+	it("humanizes a level only a provider reports", () => {
+		expect(effortLabel("ultra-deep")).toBe("Ultra deep");
+	});
+});
+
+describe("permissionModeLabel", () => {
+	it("translates a mode Cairn knows", () => {
+		expect(permissionModeLabel("acceptEdits")).toBe("Accept edits");
+		expect(permissionModeLabel("dontAsk")).toBe("Don't ask");
+	});
+
+	it("humanizes a mode only a provider reports", () => {
+		expect(permissionModeLabel("read-only-sandbox")).toBe("Read only sandbox");
 	});
 });

@@ -60,6 +60,34 @@ describe("loadPaneBase", () => {
 		expect(state.baseContent).toBeNull();
 	});
 
+	it("suppresses the gutter (null base) for conflicted files without calling git", async () => {
+		vi.mocked(gitService.getFileAtHead).mockResolvedValue("head text");
+		vi.mocked(gitService.getFileInIndex).mockResolvedValue("staged text");
+		const state = await loadPaneBase("/wt", "file.ts", "conflicted");
+		expect(state.baseContent).toBeNull();
+		expect(gitService.getFileAtHead).not.toHaveBeenCalled();
+		expect(gitService.getFileInIndex).not.toHaveBeenCalled();
+		vi.mocked(gitService.getFileAtHead).mockResolvedValue(null);
+		vi.mocked(gitService.getFileInIndex).mockResolvedValue(null);
+	});
+
+	it("drops the baseline of an ignored file even when git holds a version", async () => {
+		vi.mocked(gitService.checkIgnore).mockResolvedValueOnce([".env"]);
+		vi.mocked(gitService.getFileAtHead).mockResolvedValueOnce("head text");
+		const state = await loadPaneBase("/wt", ".env", undefined);
+		expect(gitService.checkIgnore).toHaveBeenCalledWith("/wt", [".env"]);
+		expect(state.baseContent).toBeNull();
+	});
+
+	it("keeps the baseline of a file with a known status without asking about ignores", async () => {
+		vi.mocked(gitService.checkIgnore).mockResolvedValue([".env"]);
+		vi.mocked(gitService.getFileAtHead).mockResolvedValueOnce("head text");
+		const state = await loadPaneBase("/wt", ".env", "modified");
+		expect(gitService.checkIgnore).not.toHaveBeenCalled();
+		expect(state.baseContent).toBe("head text");
+		vi.mocked(gitService.checkIgnore).mockResolvedValue([]);
+	});
+
 	it("normalizes CRLF HEAD content to LF so it matches the editor buffer", async () => {
 		vi.mocked(gitService.getFileAtHead).mockResolvedValueOnce("a\r\nb\r\nc");
 		const state = await loadPaneBase("/wt", "file.ts", "modified");

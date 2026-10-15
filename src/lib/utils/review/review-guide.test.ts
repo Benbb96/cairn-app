@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { ReviewHunk, ReviewState } from "$lib/types/review";
 import { emptyReviewState } from "$lib/types/review";
 import {
+	anchorLabel,
 	guideProgress,
 	hunkFor,
 	isGuideStale,
@@ -433,5 +434,418 @@ describe("reviewAsMarkdown", () => {
 		expect(markdown).toContain("Verdict: changes");
 		expect(markdown).toContain("### src/a.ts:2");
 		expect(markdown).toContain("rename this");
+	});
+});
+
+describe("resolveGuide on malformed answers", () => {
+	const remarkOf = (overrides: Record<string, unknown>) => ({
+		kind: "issue",
+		path: "src/a.ts",
+		side: "new",
+		line: 2,
+		title: "t",
+		body: "b",
+		...overrides,
+	});
+	const chapterOf = (remarks: unknown[]) => ({
+		title: "Chapter",
+		summary: "",
+		excerpts: [{ path: "src/a.ts", side: "new", from: 2, to: 3 }],
+		remarks,
+	});
+
+	it("drops an excerpt that is not an object", () => {
+		const guide = guideOf([
+			{
+				title: "Mixed",
+				summary: "",
+				excerpts: [
+					"src/a.ts",
+					null,
+					{ path: "src/a.ts", side: "new", from: 2, to: 3 },
+				],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters[0].excerpts).toEqual([
+			{ path: "src/a.ts", side: "new", from: 2, to: 3, hunkHash: "aaa" },
+		]);
+	});
+
+	it("drops an excerpt with no path or no usable start line", () => {
+		const guide = guideOf([
+			{
+				title: "Unusable",
+				summary: "",
+				excerpts: [
+					{ path: "", side: "new", from: 2, to: 3 },
+					{ path: "src/a.ts", side: "new", from: "2", to: 3 },
+					{ path: "src/a.ts", side: "new", from: -4, to: 3 },
+					{ path: "src/a.ts", side: "new", from: 0, to: 3 },
+					{ path: "src/a.ts", side: "new", from: Number.NaN, to: 3 },
+					{ path: "src/b.ts", side: "new", from: 2, to: 4 },
+				],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters[0].excerpts).toEqual([
+			{ path: "src/b.ts", side: "new", from: 2, to: 4, hunkHash: "ccc" },
+		]);
+	});
+
+	it("truncates a fractional line and lifts a short end to the start", () => {
+		const guide = guideOf([
+			{
+				title: "Fractions",
+				summary: "",
+				excerpts: [{ path: "src/a.ts", side: "new", from: 3.9, to: 1 }],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters[0].excerpts[0]).toMatchObject({ from: 3, to: 3 });
+	});
+
+	it("reads the old side only when the answer says old", () => {
+		const guide = guideOf([
+			{
+				title: "Sides",
+				summary: "",
+				excerpts: [
+					{ path: "src/a.ts", side: "old", from: 2, to: 2 },
+					{ path: "src/a.ts", side: "sideways", from: 2, to: 2 },
+					{ path: "src/a.ts", from: 2, to: 2 },
+				],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters[0].excerpts.map((e) => e.side)).toEqual([
+			"old",
+			"new",
+			"new",
+		]);
+	});
+
+	it("drops a remark that is not an object", () => {
+		const guide = guideOf([chapterOf(["nope", null, remarkOf({})])]);
+		expect(guide.chapters[0].remarks).toHaveLength(1);
+		expect(guide.chapters[0].remarks[0].id).toBe("c1r3");
+	});
+
+	it("drops a remark with no path, no usable line or no title", () => {
+		const guide = guideOf([
+			chapterOf([
+				remarkOf({ path: "" }),
+				remarkOf({ line: 0 }),
+				remarkOf({ line: "2" }),
+				remarkOf({ line: -1 }),
+				remarkOf({ line: Number.NaN }),
+				remarkOf({ title: "" }),
+				remarkOf({ title: 5 }),
+				remarkOf({ title: "kept" }),
+			]),
+		]);
+		expect(guide.chapters[0].remarks.map((r) => r.title)).toEqual(["kept"]);
+	});
+
+	it("drops a chapter that is not an object but keeps numbering by position", () => {
+		const guide = guideOf([
+			"nope",
+			null,
+			{
+				title: "Third",
+				summary: "s",
+				excerpts: [{ path: "src/a.ts", side: "new", from: 2, to: 3 }],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters.map((c) => c.id)).toEqual(["c3"]);
+	});
+
+	it("takes a chapter whose excerpts and remarks are not lists as empty", () => {
+		const guide = guideOf([
+			{ title: "Bare", summary: "", excerpts: "a", remarks: "b" },
+			{
+				title: "Remarks only",
+				summary: "",
+				excerpts: 3,
+				remarks: [remarkOf({ line: 3 })],
+			},
+			{
+				title: "Excerpts only",
+				summary: "",
+				excerpts: [{ path: "src/a.ts", side: "new", from: 2, to: 3 }],
+				remarks: {},
+			},
+		]);
+		expect(guide.chapters.map((c) => c.id)).toEqual(["c2", "c3"]);
+		expect(guide.chapters[0].excerpts).toEqual([
+			{ path: "src/a.ts", side: "new", from: 3, to: 3, hunkHash: "aaa" },
+		]);
+		expect(guide.chapters[1].remarks).toEqual([]);
+	});
+
+	it("falls back to the id when the title is not a string", () => {
+		const guide = guideOf([
+			{
+				title: 7,
+				summary: 8,
+				excerpts: [{ path: "src/a.ts", side: "new", from: 2, to: 3 }],
+				remarks: [],
+			},
+		]);
+		expect(guide.chapters[0]).toMatchObject({ title: "c1", summary: "" });
+	});
+
+	it("stretches the excerpt nearest to a remark, whichever comes first", () => {
+		const guide = guideOf([
+			{
+				title: "Nearest",
+				summary: "",
+				excerpts: [
+					{ path: "src/b.ts", side: "new", from: 1, to: 1 },
+					{ path: "src/b.ts", side: "new", from: 3, to: 3 },
+				],
+				remarks: [remarkOf({ path: "src/b.ts", line: 6 })],
+			},
+			{
+				title: "Nearest first",
+				summary: "",
+				excerpts: [
+					{ path: "src/b.ts", side: "new", from: 5, to: 5 },
+					{ path: "src/b.ts", side: "new", from: 1, to: 1 },
+				],
+				remarks: [remarkOf({ path: "src/b.ts", line: 6 })],
+			},
+		]);
+		expect(guide.chapters[0].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[1, 1],
+			[3, 6],
+		]);
+		expect(guide.chapters[1].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[5, 6],
+			[1, 1],
+		]);
+	});
+
+	it("stretches the nearest extract down to a remark that sits before them", () => {
+		const guide = guideOf([
+			{
+				title: "Above",
+				summary: "",
+				excerpts: [
+					{ path: "src/b.ts", side: "new", from: 5, to: 5 },
+					{ path: "src/b.ts", side: "new", from: 4, to: 4 },
+				],
+				remarks: [remarkOf({ path: "src/b.ts", line: 2 })],
+			},
+		]);
+		expect(guide.chapters[0].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[5, 5],
+			[2, 4],
+		]);
+	});
+});
+
+describe("anchorLabel", () => {
+	it("names one line", () => {
+		expect(anchorLabel({ path: "src/a.ts", line: 12 })).toBe("src/a.ts:12");
+	});
+
+	it("names a range when the start is before the end", () => {
+		expect(anchorLabel({ path: "src/a.ts", line: 14, startLine: 10 })).toBe(
+			"src/a.ts:10-14",
+		);
+	});
+
+	it("names one line when the start is not before the end", () => {
+		expect(anchorLabel({ path: "src/a.ts", line: 14, startLine: 14 })).toBe(
+			"src/a.ts:14",
+		);
+		expect(anchorLabel({ path: "src/a.ts", line: 14, startLine: 20 })).toBe(
+			"src/a.ts:14",
+		);
+	});
+});
+
+describe("review guide boundaries", () => {
+	const WIDE_HUNKS: ReviewHunk[] = [
+		{
+			path: "src/wide.ts",
+			oldStart: 1,
+			oldLines: 100,
+			newStart: 1,
+			newLines: 100,
+			hunkHash: "wide",
+		},
+		{
+			path: "src/zero.ts",
+			oldStart: 0,
+			oldLines: 5,
+			newStart: 0,
+			newLines: 5,
+			hunkHash: "zero",
+		},
+		{
+			path: "",
+			oldStart: 1,
+			oldLines: 5,
+			newStart: 1,
+			newLines: 5,
+			hunkHash: "unnamed",
+		},
+	];
+	const resolveWide = (chapter: Record<string, unknown>) =>
+		resolveGuide(
+			{ chapters: [{ title: "Chapter", summary: "", ...chapter }] },
+			[...HUNKS, ...WIDE_HUNKS],
+			"base1",
+			"head1",
+			"now",
+		);
+	const remarkAt = (path: string, line: number) => ({
+		kind: "issue",
+		path,
+		side: "new",
+		line,
+		title: "t",
+		body: "b",
+	});
+
+	it("measures a hunk on each side with that side's own line count", () => {
+		expect(hunkFor(HUNKS, "src/a.ts", "old", 3)?.hunkHash).toBe("aaa");
+		expect(hunkFor(HUNKS, "src/a.ts", "old", 4)).toBeNull();
+		expect(hunkFor(HUNKS, "src/a.ts", "new", 4)?.hunkHash).toBe("aaa");
+	});
+
+	it("ends an excerpt at its start when the end is missing or infinite", () => {
+		const guide = resolveWide({
+			excerpts: [
+				{ path: "src/wide.ts", side: "new", from: 5 },
+				{
+					path: "src/wide.ts",
+					side: "new",
+					from: 6,
+					to: Number.POSITIVE_INFINITY,
+				},
+			],
+		});
+		expect(guide.chapters[0].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[5, 5],
+			[6, 6],
+		]);
+	});
+
+	it("never points at line 0 nor at a file with no name", () => {
+		const guide = resolveWide({
+			excerpts: [
+				{ path: "src/zero.ts", side: "new", from: 0, to: 2 },
+				{ path: "", side: "new", from: 1, to: 2 },
+				{ path: "src/wide.ts", side: "new", from: 1, to: 2 },
+			],
+			remarks: [
+				remarkAt("src/zero.ts", 0),
+				remarkAt("", 1),
+				remarkAt("src/wide.ts", 1),
+			],
+		});
+		expect(guide.chapters[0].excerpts).toEqual([
+			{ path: "src/wide.ts", side: "new", from: 1, to: 2, hunkHash: "wide" },
+		]);
+		expect(guide.chapters[0].remarks.map((r) => [r.path, r.line])).toEqual([
+			["src/wide.ts", 1],
+		]);
+	});
+
+	it("keeps a remark on the first line of a file", () => {
+		const guide = resolveWide({
+			excerpts: [{ path: "src/wide.ts", side: "new", from: 1, to: 3 }],
+			remarks: [remarkAt("src/wide.ts", 1)],
+		});
+		expect(guide.chapters[0].remarks).toHaveLength(1);
+	});
+
+	it("stretches the closest extract on either side of a remark", () => {
+		const guide = resolveWide({
+			excerpts: [
+				{ path: "src/wide.ts", side: "new", from: 10, to: 10 },
+				{ path: "src/wide.ts", side: "new", from: 53, to: 53 },
+			],
+			remarks: [remarkAt("src/wide.ts", 50)],
+		});
+		expect(guide.chapters[0].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[10, 10],
+			[50, 53],
+		]);
+	});
+
+	it("stretches the first of two equally close extracts", () => {
+		const guide = resolveWide({
+			excerpts: [
+				{ path: "src/wide.ts", side: "new", from: 1, to: 1 },
+				{ path: "src/wide.ts", side: "new", from: 3, to: 3 },
+			],
+			remarks: [remarkAt("src/wide.ts", 2)],
+		});
+		expect(guide.chapters[0].excerpts.map((e) => [e.from, e.to])).toEqual([
+			[1, 2],
+			[3, 3],
+		]);
+	});
+
+	it("does not take an extract of another side or file for a cover", () => {
+		const guide = guideOf([
+			{
+				title: "Other side",
+				summary: "",
+				excerpts: [{ path: "src/a.ts", side: "old", from: 2, to: 3 }],
+				remarks: [remarkAt("src/a.ts", 3)],
+			},
+			{
+				title: "Other file",
+				summary: "",
+				excerpts: [{ path: "src/b.ts", side: "new", from: 1, to: 6 }],
+				remarks: [remarkAt("src/a.ts", 3)],
+			},
+		]);
+		expect(guide.chapters[0].excerpts).toHaveLength(2);
+		expect(guide.chapters[0].excerpts[1]).toMatchObject({
+			side: "new",
+			from: 3,
+			to: 3,
+		});
+		expect(guide.chapters[1].excerpts).toHaveLength(2);
+		expect(guide.chapters[1].excerpts[1]).toMatchObject({
+			path: "src/a.ts",
+			from: 3,
+			to: 3,
+		});
+	});
+
+	it("counts a remark as covered by an extract running to its line, across hunks", () => {
+		const guide = guideOf([
+			{
+				title: "Long",
+				summary: "",
+				excerpts: [{ path: "src/a.ts", side: "new", from: 3, to: 42 }],
+				remarks: [remarkAt("src/a.ts", 42)],
+			},
+		]);
+		expect(guide.chapters[0].excerpts).toEqual([
+			{ path: "src/a.ts", side: "new", from: 3, to: 42, hunkHash: "aaa" },
+		]);
+	});
+
+	it("reconciles and measures progress against a diff that is missing", () => {
+		const state = { ...emptyReviewState(), seenHunks: ["aaa"] };
+		expect(reconcileWithDiff(state, undefined as never).seenHunks).toEqual([]);
+		expect(guideProgress(state, undefined as never).totalHunks).toBe(0);
+	});
+});
+
+describe("reviewAsMarkdown without a body", () => {
+	it("opens on the verdict when the body is blank", () => {
+		expect(reviewAsMarkdown(emptyReviewState(), "approve", "  ")).toBe(
+			"Verdict: approve",
+		);
 	});
 });

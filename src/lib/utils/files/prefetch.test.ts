@@ -74,6 +74,20 @@ describe("scheduleWorktreePrefetch", () => {
 
 		expect(warmed()).toEqual([]);
 	});
+
+	it("keeps a single timer pending while the pointer sweeps", () => {
+		scheduleWorktreePrefetch("/wt/a");
+		scheduleWorktreePrefetch("/wt/b");
+
+		expect(vi.getTimerCount()).toBe(1);
+	});
+
+	it("leaves no timer pending once the pointer leaves", () => {
+		scheduleWorktreePrefetch("/wt/a");
+		cancelPrefetch();
+
+		expect(vi.getTimerCount()).toBe(0);
+	});
 });
 
 describe("schedulePrefetch", () => {
@@ -81,6 +95,25 @@ describe("schedulePrefetch", () => {
 		schedulePrefetch("p1");
 		vi.advanceTimersByTime(80);
 		await vi.waitFor(() => expect(warmed()).toEqual(["/wt/p1"]));
+	});
+
+	it("falls back to the first instance when the active one is gone", async () => {
+		mockInstances.mockResolvedValue([
+			{ id: "x1", projectId: "p1", worktreePath: "/wt/x1" },
+			{ id: "x2", projectId: "p1", worktreePath: "/wt/x2" },
+		] as never);
+		schedulePrefetch("p1");
+		vi.advanceTimersByTime(80);
+		await vi.waitFor(() => expect(warmed()).toEqual(["/wt/x1"]));
+	});
+
+	it("reads nothing for a project that is not registered", async () => {
+		schedulePrefetch("unknown");
+		vi.advanceTimersByTime(80);
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(mockInstances).not.toHaveBeenCalled();
+		expect(warmed()).toEqual([]);
 	});
 
 	/* The instance listing is async, so leaving the tab after the timer fired

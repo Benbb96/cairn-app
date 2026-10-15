@@ -45,6 +45,22 @@ describe("resolveEnv", () => {
 		expect(resolved[0]).toMatchObject({ value: "instance", scope: "instance" });
 	});
 
+	it("reads the own value of a per-instance flagged variable declared at instance scope", () => {
+		const resolved = resolve({
+			instance: [
+				variable({
+					key: "PORT",
+					id: "i1",
+					perInstance: true,
+					value: "own",
+				}),
+			],
+		});
+
+		expect(resolved).toHaveLength(1);
+		expect(resolved[0]).toMatchObject({ value: "own", scope: "instance" });
+	});
+
 	it("keeps a project value when the instance says nothing", () => {
 		const resolved = resolve({
 			global: [variable({ key: "API_URL", value: "global" })],
@@ -212,7 +228,7 @@ describe("variable references", () => {
 		);
 
 		expect(record.A).toBe("ab{A}");
-		expect(record.B).toContain("b");
+		expect(record.B).toBe("b{A}");
 	});
 });
 

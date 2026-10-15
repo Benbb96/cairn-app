@@ -30,6 +30,10 @@ describe("reusablePrefix", () => {
 		expect(reusablePrefix(["a", "b", "c"], ["b"])).toBe(0);
 	});
 
+	it("reuses a layout of a single row", () => {
+		expect(reusablePrefix(["a"], ["a", "b"])).toBe(1);
+	});
+
 	it("has nothing to reuse from an empty layout", () => {
 		expect(reusablePrefix([], ["a"])).toBe(0);
 	});

@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { CliProviderId } from "$lib/services/cli-provider-service";
 import {
+	canResume,
 	freshArgv,
 	mintsSessionId,
 	newConversationArgv,
@@ -35,6 +36,27 @@ describe("reopening a conversation", () => {
 			"--conversation",
 			SID,
 		]);
+		expect(resumeArgv("amp", SID)).toEqual(["amp", "threads", "continue", SID]);
+		expect(resumeArgv("goose", SID)).toEqual([
+			"goose",
+			"session",
+			"-r",
+			"--name",
+			SID,
+		]);
+		expect(resumeArgv("cursor", SID)).toEqual(["agent", `--resume=${SID}`]);
+		expect(resumeArgv("qwen", SID)).toEqual(["qwen", "--resume", SID]);
+		expect(resumeArgv("droid", SID)).toEqual(["droid", "--resume", SID]);
+	});
+
+	it("falls back to the bare binary for a CLI it does not know", () => {
+		expect(resumeArgv("unknown-cli" as CliProviderId, SID)).toEqual([
+			undefined,
+		]);
+	});
+
+	it("can always resume once the id is known", () => {
+		expect(canResume()).toBe(true);
 	});
 
 	/**
@@ -69,6 +91,19 @@ describe("starting a conversation", () => {
 				SID,
 			]);
 		}
+	});
+
+	it("starts a goose session by name", () => {
+		expect(newConversationArgv("goose", SID)).toEqual([
+			"goose",
+			"session",
+			"--name",
+			SID,
+		]);
+	});
+
+	it("hands no id when none was minted", () => {
+		expect(newConversationArgv("claude-code", "")).toBeNull();
 	});
 
 	it("hands no invented id to a CLI that mints its own", () => {

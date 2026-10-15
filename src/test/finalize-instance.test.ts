@@ -173,7 +173,7 @@ describe("FinalizeInstance", () => {
 			mount();
 			await settle();
 			expect(steps().length).toBeGreaterThan(0);
-			expect(refreshStatus).toHaveBeenCalled();
+			expect(refreshStatus).toHaveBeenCalledWith(true);
 		});
 
 		it("measures the branch against its base", async () => {
@@ -326,7 +326,7 @@ describe("FinalizeInstance", () => {
 			refreshStatus.mockClear();
 			await userEvent.click(buttonIn(stepAt(SYNC)));
 			await settle();
-			expect(refreshStatus).toHaveBeenCalled();
+			expect(refreshStatus).toHaveBeenCalledWith(true);
 		});
 
 		/** A conflicted operation is resolved in the git view, not here. */
@@ -398,11 +398,12 @@ describe("FinalizeInstance", () => {
 		it("reports what git refused", async () => {
 			setGit({
 				remoteStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-				error: { kind: "rejected", message: "non fast-forward" },
+				error: { code: "non_fast_forward", raw: "non fast-forward" },
 			});
 			mount();
 			await settle();
-			expect(banners().join(" ")).not.toBe("");
+			expect(banners()).toHaveLength(1);
+			expect(banners()[0]).toContain("Push rejected: the remote is ahead");
 		});
 	});
 

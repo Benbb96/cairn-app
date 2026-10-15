@@ -63,6 +63,8 @@ const NAMED_ENTITIES: Record<string, string> = {
 	nbsp: " ",
 };
 
+const MAX_CODE_POINT = 0x10ffff;
+
 /** The handful of entities that appear in alt text and hrefs; unknown ones stay. */
 export function decodeHtmlEntities(text: string): string {
 	return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, body: string) => {
@@ -71,7 +73,9 @@ export function decodeHtmlEntities(text: string): string {
 				body[1] === "x" || body[1] === "X"
 					? Number.parseInt(body.slice(2), 16)
 					: Number.parseInt(body.slice(1), 10);
-			return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+			return Number.isFinite(code) && code <= MAX_CODE_POINT
+				? String.fromCodePoint(code)
+				: match;
 		}
 		return NAMED_ENTITIES[body.toLowerCase()] ?? match;
 	});

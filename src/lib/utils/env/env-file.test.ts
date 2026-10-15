@@ -41,6 +41,37 @@ describe("parseEnvFile", () => {
 		]);
 	});
 
+	it("resolves the carriage return, tab, vertical tab and form feed escapes", () => {
+		expect(parseEnvFile('MSG="a\\rb\\tc\\vd\\fe"').entries).toEqual([
+			{ key: "MSG", value: "a\rb\tc\vd\fe" },
+		]);
+	});
+
+	it("keeps backslashes literal in a terminated single quoted value", () => {
+		expect(parseEnvFile("MSG='a\\nb'").entries).toEqual([
+			{ key: "MSG", value: "a\\nb" },
+		]);
+	});
+
+	it("reads an empty quoted value", () => {
+		expect(parseEnvFile("A=\"\"\nB=''").entries).toEqual([
+			{ key: "A", value: "" },
+			{ key: "B", value: "" },
+		]);
+	});
+
+	it("keeps an unterminated double quoted value up to the end of the file", () => {
+		expect(parseEnvFile('MSG="open\\tvalue').entries).toEqual([
+			{ key: "MSG", value: "open\tvalue" },
+		]);
+	});
+
+	it("keeps an unterminated single quoted value literal up to the end of the file", () => {
+		expect(parseEnvFile("MSG='open\\tvalue").entries).toEqual([
+			{ key: "MSG", value: "open\\tvalue" },
+		]);
+	});
+
 	it("reads a value spanning several lines", () => {
 		const { entries } = parseEnvFile(
 			'KEY="-----BEGIN-----\nbody\n-----END-----"\nNEXT=1',

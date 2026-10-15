@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dedupeInflight, invalidateSettled, shareSettled } from "./inflight";
 
 /** A promise whose settlement this test controls. */
@@ -109,6 +109,15 @@ describe("dedupeInflight", () => {
 });
 
 describe("shareSettled", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("serves a second caller from the finished first read", async () => {
 		const run = vi.fn(async () => "snap");
 		await expect(shareSettled("s1", 1000, run)).resolves.toBe("snap");
@@ -118,14 +127,25 @@ describe("shareSettled", () => {
 
 	it("reads again once the window has passed", async () => {
 		const run = vi.fn(async () => "snap");
-		vi.useFakeTimers();
-		try {
-			await shareSettled("s2", 1000, run);
-			vi.advanceTimersByTime(1001);
-			await shareSettled("s2", 1000, run);
-		} finally {
-			vi.useRealTimers();
-		}
+		await shareSettled("s2", 1000, run);
+		vi.advanceTimersByTime(1001);
+		await shareSettled("s2", 1000, run);
+		expect(run).toHaveBeenCalledTimes(2);
+	});
+
+	it("still serves the entry one millisecond before the window ends", async () => {
+		const run = vi.fn(async () => "snap");
+		await shareSettled("s2b", 1000, run);
+		vi.advanceTimersByTime(999);
+		await shareSettled("s2b", 1000, run);
+		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	it("reads again exactly when the window has elapsed", async () => {
+		const run = vi.fn(async () => "snap");
+		await shareSettled("s2c", 1000, run);
+		vi.advanceTimersByTime(1000);
+		await shareSettled("s2c", 1000, run);
 		expect(run).toHaveBeenCalledTimes(2);
 	});
 
@@ -134,6 +154,19 @@ describe("shareSettled", () => {
 		await expect(shareSettled("s3", 1000, run)).resolves.toBeNull();
 		await expect(shareSettled("s3", 1000, run)).resolves.toBeNull();
 		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	it("drops an expired entry even when the read that replaces it fails", async () => {
+		const run = vi
+			.fn()
+			.mockResolvedValueOnce("old")
+			.mockRejectedValueOnce(new Error("boom"))
+			.mockResolvedValueOnce("fresh");
+		await shareSettled("s6", 1000, run);
+		vi.advanceTimersByTime(1500);
+		await expect(shareSettled("s6", 1000, run)).rejects.toThrow("boom");
+		await expect(shareSettled("s6", 10_000, run)).resolves.toBe("fresh");
+		expect(run).toHaveBeenCalledTimes(3);
 	});
 
 	it("keeps nothing from a failed read", async () => {

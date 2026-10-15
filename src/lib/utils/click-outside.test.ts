@@ -72,6 +72,17 @@ describe("clickOutside", () => {
 		expect(callback).not.toHaveBeenCalled();
 	});
 
+	it("ignores an event stamped at the very moment it armed", () => {
+		vi.spyOn(performance, "now").mockReturnValue(500);
+		const callback = vi.fn();
+		clickOutside(panel, callback);
+		const atArming = new PointerEvent("pointerdown", { bubbles: true });
+		Object.defineProperty(atArming, "timeStamp", { value: 500 });
+		outside.dispatchEvent(atArming);
+		expect(callback).not.toHaveBeenCalled();
+		vi.restoreAllMocks();
+	});
+
 	it("still fires on the next click after the one it ignored", () => {
 		const callback = vi.fn();
 		clickOutside(panel, callback);

@@ -5,7 +5,7 @@ import { render } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { tick } from "svelte";
 import { writable } from "svelte/store";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectFolder } from "$lib/types/project";
 
 const unregisterProject = vi.fn<(...a: unknown[]) => unknown>();
@@ -141,7 +141,12 @@ async function dragCard(card: HTMLElement, x: number, y: number) {
 	await settle();
 }
 
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
 beforeEach(() => {
+	vi.spyOn(Math, "random").mockReturnValue(0);
 	Element.prototype.setPointerCapture = vi.fn();
 	Element.prototype.releasePointerCapture = vi.fn();
 	document.body.classList.remove("dragging");
@@ -426,7 +431,7 @@ describe("ProjectsSection", () => {
 			await settle();
 			await userEvent.click(card);
 			expect(reorderProjects).not.toHaveBeenCalled();
-			expect(onOpenProject).toHaveBeenCalled();
+			expect(onOpenProject).toHaveBeenCalledWith("p1");
 		});
 
 		it("reorders the ungrouped projects", async () => {

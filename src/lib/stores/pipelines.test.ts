@@ -3,8 +3,15 @@
 
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { EMPTY_PIPELINE_QUERY, type Pipeline } from "$lib/types/integrations";
+import {
+	EMPTY_PIPELINE_QUERY,
+	type JobLog,
+	type Pipeline,
+} from "$lib/types/integrations";
 import { integrationKey } from "$lib/utils/integrations/instance-key";
+import { instance, project } from "../../test/fixtures";
+import { loadInstances } from "./instance";
+import { activeProjectId, projects } from "./project";
 
 const ciListPipelines = vi.hoisted(() => vi.fn());
 const ciGetPipeline = vi.hoisted(() => vi.fn());
@@ -12,6 +19,12 @@ const ciRetryJob = vi.hoisted(() => vi.fn());
 const ciPlayJob = vi.hoisted(() => vi.fn());
 const ciCancelPipeline = vi.hoisted(() => vi.fn());
 const ciJobLog = vi.hoisted(() => vi.fn());
+const listInstances = vi.hoisted(() => vi.fn());
+
+vi.mock("$lib/services/instance-service", async (importOriginal) => ({
+	...(await importOriginal<Record<string, unknown>>()),
+	listInstances,
+}));
 
 vi.mock("$lib/services/integration-service", async (importOriginal) => ({
 	...(await importOriginal<Record<string, unknown>>()),
@@ -24,11 +37,23 @@ vi.mock("$lib/services/integration-service", async (importOriginal) => ({
 }));
 
 import {
+	activeCiBusy,
+	activeCiFailing,
 	applyUpdate,
+	cancelPipeline,
+	ciBusy,
+	ciFailing,
 	clearPipelines,
+	closeJobLog,
+	loadMorePipelines,
 	loadPipelines,
+	openJobLog,
 	pipelineStateFor,
 	pipelines,
+	playJob,
+	refreshPipeline,
+	retryJob,
+	retryLatestPipeline,
 	selectPipeline,
 	setPipelineQuery,
 } from "./pipelines";
@@ -303,5 +328,453 @@ describe("clearPipelines", () => {
 		expect(pipelineStateFor(get(pipelines), "p1", "i2").pipelines).toHaveLength(
 			1,
 		);
+	});
+});
+
+describe("activeCiBusy", () => {
+	it("is false while no instance is on screen", () => {
+		activeProjectId.set(null);
+		projects.set([]);
+		applyUpdate(KEY, pipeline("1", "running"));
+		applyUpdate("Elench", pipeline("2", "running"));
+		expect(get(activeCiBusy)).toBe(false);
+	});
+
+	it("is true for the running pipeline of the instance on screen", async () => {
+		listInstances.mockResolvedValue([
+			instance("i1", "p1", { branch: "feat/x" }),
+		]);
+		await loadInstances("p1");
+		projects.set([project("p1", { activeInstanceId: "i1" })]);
+		activeProjectId.set("p1");
+		applyUpdate(KEY, pipeline("1", "running"));
+		expect(get(activeCiBusy)).toBe(true);
+		expect(get(activeCiFailing)).toBe(false);
+	});
+});
+
+describe("the latest pipeline of a filtered first load", () => {
+	const filtered = { ...EMPTY_PIPELINE_QUERY, status: "running" as const };
+
+	it("falls back to the first listed pipeline for the busy flag", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1", "running")],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x", filtered);
+		expect(state().latest).toBeNull();
+		expect(get(ciBusy)[KEY]).toBe(true);
+	});
+
+	it("falls back to the first listed pipeline for the failing flag", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1", "failed")],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x", filtered);
+		expect(get(ciFailing)[KEY]).toBe(true);
+	});
+});
+
+describe("loadPipelines on an empty answer", () => {
+	it("leaves no latest pipeline and no selection", async () => {
+		await loadPipelines("p1", "i1", "feat/x");
+		expect(state().latest).toBeNull();
+		expect(state().selectedPipelineId).toBe("");
+	});
+});
+
+describe("state cleared while a request is in flight", () => {
+	const pending = () => {
+		let release!: (v: unknown) => void;
+		ciListPipelines.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		return (v: unknown) => release(v);
+	};
+
+	it("still stores the answer of a first load", async () => {
+		const release = pending();
+		const loading = loadPipelines("p1", "i1", "feat/x");
+		clearPipelines("p1", "i1");
+		release({ items: [pipeline("1")], hasMore: false });
+		await loading;
+		expect(ids()).toEqual(["1"]);
+		expect(state().error).toBeNull();
+	});
+
+	it("still merges the answer of a further page", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1")],
+			hasMore: true,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		const release = pending();
+		const more = loadMorePipelines("p1", "i1", "feat/x");
+		clearPipelines("p1", "i1");
+		release({ items: [pipeline("0")], hasMore: false });
+		await more;
+		expect(ids()).toEqual(["0"]);
+		expect(state().error).toBeNull();
+	});
+
+	it("still stores a job log", async () => {
+		let release!: (v: unknown) => void;
+		ciJobLog.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		const opening = openJobLog("p1", "i1", "j1");
+		clearPipelines("p1", "i1");
+		release({ text: "x" });
+		await opening;
+		expect(state().error).toBeNull();
+	});
+});
+
+describe("loadMorePipelines on an instance that never loaded", () => {
+	it("asks for the first page of it and drops the answer", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1")],
+			hasMore: false,
+		});
+		await expect(
+			loadMorePipelines("never", "loaded", "feat/x"),
+		).resolves.toBeUndefined();
+		expect(ciListPipelines).toHaveBeenCalledWith(
+			"never",
+			"feat/x",
+			EMPTY_PIPELINE_QUERY,
+			20,
+			1,
+		);
+		expect(
+			pipelineStateFor(get(pipelines), "never", "loaded").pipelines,
+		).toEqual([]);
+	});
+});
+
+describe("applyUpdate on a filtered list", () => {
+	it("keeps the error of a pipeline it does not list", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1")],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x", {
+			...EMPTY_PIPELINE_QUERY,
+			status: "failed",
+		});
+		ciGetPipeline.mockRejectedValue(new Error("403"));
+		await refreshPipeline("p1", "i1", "1");
+		expect(state().error).not.toBeNull();
+		applyUpdate(KEY, pipeline("2"));
+		expect(state().error).not.toBeNull();
+	});
+});
+
+describe("loadPipelines when the answer is stale", () => {
+	it("drops a failure that a newer request replaced", async () => {
+		let rejectFirst!: (e: unknown) => void;
+		ciListPipelines.mockImplementationOnce(
+			() =>
+				new Promise((_, reject) => {
+					rejectFirst = reject;
+				}),
+		);
+		const slow = loadPipelines("p1", "i1", "feat/x");
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("fresh")],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		rejectFirst(new Error("403"));
+		await slow;
+		expect(ids()).toEqual(["fresh"]);
+		expect(state().error).toBeNull();
+	});
+});
+
+describe("loadMorePipelines", () => {
+	beforeEach(async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("2"), pipeline("1")],
+			hasMore: true,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		ciListPipelines.mockClear();
+	});
+
+	it("appends the next page without duplicating a known pipeline", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1"), pipeline("0")],
+			hasMore: false,
+		});
+		await loadMorePipelines("p1", "i1", "feat/x");
+		expect(ciListPipelines).toHaveBeenCalledWith(
+			"p1",
+			"feat/x",
+			EMPTY_PIPELINE_QUERY,
+			20,
+			2,
+		);
+		expect(ids()).toEqual(["2", "1", "0"]);
+		expect(state()).toMatchObject({
+			hasMore: false,
+			page: 2,
+			isLoadingMore: false,
+			error: null,
+		});
+	});
+
+	it("asks nothing when there is no further page", async () => {
+		ciListPipelines.mockResolvedValue({ items: [], hasMore: false });
+		await loadMorePipelines("p1", "i1", "feat/x");
+		ciListPipelines.mockClear();
+		await loadMorePipelines("p1", "i1", "feat/x");
+		expect(ciListPipelines).not.toHaveBeenCalled();
+	});
+
+	it("asks nothing while a page is already loading", async () => {
+		let release!: (v: unknown) => void;
+		ciListPipelines.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		const first = loadMorePipelines("p1", "i1", "feat/x");
+		await loadMorePipelines("p1", "i1", "feat/x");
+		expect(ciListPipelines).toHaveBeenCalledTimes(1);
+		release({ items: [], hasMore: false });
+		await first;
+	});
+
+	it("records a failure and lowers the loading flag", async () => {
+		ciListPipelines.mockRejectedValue(new Error("500"));
+		await expect(
+			loadMorePipelines("p1", "i1", "feat/x"),
+		).resolves.toBeUndefined();
+		expect(state().error?.message).toBe("Error: 500");
+		expect(state().isLoadingMore).toBe(false);
+		expect(state().page).toBe(1);
+		expect(ids()).toEqual(["2", "1"]);
+	});
+
+	it("drops a page that a reload replaced", async () => {
+		let release!: (v: unknown) => void;
+		ciListPipelines.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		const more = loadMorePipelines("p1", "i1", "feat/x");
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("fresh")],
+			hasMore: true,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		release({ items: [pipeline("late")], hasMore: false });
+		await more;
+		expect(ids()).toEqual(["fresh"]);
+		expect(state().page).toBe(1);
+	});
+
+	it("drops a failure that a reload replaced", async () => {
+		let reject!: (e: unknown) => void;
+		ciListPipelines.mockImplementationOnce(
+			() =>
+				new Promise((_, r) => {
+					reject = r;
+				}),
+		);
+		const more = loadMorePipelines("p1", "i1", "feat/x");
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("fresh")],
+			hasMore: true,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		reject(new Error("500"));
+		await more;
+		expect(state().error).toBeNull();
+		expect(ids()).toEqual(["fresh"]);
+	});
+});
+
+describe("refreshPipeline", () => {
+	it("replaces the listed pipeline with the fetched one", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [pipeline("1", "running")],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		ciGetPipeline.mockResolvedValue(pipeline("1", "success"));
+		await refreshPipeline("p1", "i1", "1");
+		expect(ciGetPipeline).toHaveBeenCalledWith("p1", "1");
+		expect(state().pipelines[0].status).toBe("success");
+	});
+
+	it("records a failure instead of throwing", async () => {
+		ciGetPipeline.mockRejectedValue(new Error("404"));
+		await expect(refreshPipeline("p1", "i1", "1")).resolves.toBeUndefined();
+		expect(state().error?.message).toBe("Error: 404");
+	});
+});
+
+describe("job log", () => {
+	const log = (text: string) => ({ text }) as unknown as JobLog;
+
+	it("opens the log of a job and stores it", async () => {
+		ciJobLog.mockResolvedValue(log("output"));
+		await openJobLog("p1", "i1", "j1");
+		expect(ciJobLog).toHaveBeenCalledWith("p1", "j1");
+		expect(state()).toMatchObject({
+			openJobId: "j1",
+			jobLog: log("output"),
+			isLogLoading: false,
+		});
+	});
+
+	it("shows the loading state and no log while it is fetched", async () => {
+		let release!: (v: unknown) => void;
+		ciJobLog.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		const opening = openJobLog("p1", "i1", "j1");
+		expect(state()).toMatchObject({
+			openJobId: "j1",
+			jobLog: null,
+			isLogLoading: true,
+		});
+		release(log("done"));
+		await opening;
+	});
+
+	it("drops a log whose job is no longer the open one", async () => {
+		let release!: (v: unknown) => void;
+		ciJobLog.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = r;
+				}),
+		);
+		const first = openJobLog("p1", "i1", "j1");
+		closeJobLog("p1", "i1");
+		release(log("late"));
+		await first;
+		expect(state()).toMatchObject({
+			openJobId: "",
+			jobLog: null,
+			isLogLoading: false,
+		});
+	});
+
+	it("records a failure and stops loading", async () => {
+		ciJobLog.mockRejectedValue(new Error("410"));
+		await openJobLog("p1", "i1", "j1");
+		expect(state().error?.message).toBe("Error: 410");
+		expect(state().isLogLoading).toBe(false);
+		expect(state().jobLog).toBeNull();
+	});
+
+	it("closes the log", async () => {
+		ciJobLog.mockResolvedValue(log("output"));
+		await openJobLog("p1", "i1", "j1");
+		closeJobLog("p1", "i1");
+		expect(state()).toMatchObject({
+			openJobId: "",
+			jobLog: null,
+			isLogLoading: false,
+		});
+	});
+});
+
+describe("job actions", () => {
+	beforeEach(() => {
+		ciRetryJob.mockResolvedValue(undefined);
+		ciPlayJob.mockResolvedValue(undefined);
+		ciCancelPipeline.mockResolvedValue(undefined);
+		ciGetPipeline.mockResolvedValue(pipeline("7", "running"));
+	});
+
+	it("retries a job then refreshes its pipeline", async () => {
+		await retryJob("p1", "i1", "7", "j1");
+		expect(ciRetryJob).toHaveBeenCalledWith("p1", "j1");
+		expect(ciGetPipeline).toHaveBeenCalledWith("p1", "7");
+		expect(ids()).toEqual(["7"]);
+	});
+
+	it("plays a job then refreshes its pipeline", async () => {
+		await playJob("p1", "i1", "7", "j2");
+		expect(ciPlayJob).toHaveBeenCalledWith("p1", "j2");
+		expect(ciGetPipeline).toHaveBeenCalledWith("p1", "7");
+	});
+
+	it("cancels a pipeline then refreshes it", async () => {
+		await cancelPipeline("p1", "i1", "7");
+		expect(ciCancelPipeline).toHaveBeenCalledWith("p1", "7");
+		expect(ciGetPipeline).toHaveBeenCalledWith("p1", "7");
+	});
+
+	it("records the failure and skips the refresh when the action is refused", async () => {
+		ciRetryJob.mockRejectedValue(new Error("403"));
+		await expect(retryJob("p1", "i1", "7", "j1")).resolves.toBeUndefined();
+		expect(state().error?.message).toBe("Error: 403");
+		expect(ciGetPipeline).not.toHaveBeenCalled();
+	});
+});
+
+describe("retryLatestPipeline", () => {
+	const job = (id: string, status: string, canRetry: boolean) => ({
+		id,
+		status,
+		canRetry,
+	});
+	const withJobs = (id: string, jobs: ReturnType<typeof job>[]): Pipeline =>
+		({
+			id,
+			status: "failed",
+			stages: [{ jobs: jobs.slice(0, 2) }, { jobs: jobs.slice(2) }],
+		}) as unknown as Pipeline;
+
+	beforeEach(() => {
+		ciRetryJob.mockResolvedValue(undefined);
+		ciGetPipeline.mockResolvedValue(pipeline("9", "running"));
+	});
+
+	it("retries only the failed and retryable jobs of every stage, then refreshes", async () => {
+		ciListPipelines.mockResolvedValue({
+			items: [
+				withJobs("9", [
+					job("a", "failed", true),
+					job("b", "success", true),
+					job("c", "failed", false),
+					job("d", "failed", true),
+				]),
+				withJobs("8", [job("old", "failed", true)]),
+			],
+			hasMore: false,
+		});
+		await loadPipelines("p1", "i1", "feat/x");
+		await retryLatestPipeline("p1", "i1");
+		expect(ciRetryJob.mock.calls).toEqual([
+			["p1", "a"],
+			["p1", "d"],
+		]);
+		expect(ciGetPipeline).toHaveBeenCalledWith("p1", "9");
+	});
+
+	it("does nothing when the instance has no pipeline", async () => {
+		await retryLatestPipeline("p1", "i1");
+		expect(ciRetryJob).not.toHaveBeenCalled();
+		expect(ciGetPipeline).not.toHaveBeenCalled();
 	});
 });

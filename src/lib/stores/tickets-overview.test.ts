@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const trackerListTickets = vi.hoisted(() => vi.fn());
 const loadProjectIntegrations = vi.hoisted(() => vi.fn());
+const onProjectRemoved = vi.hoisted(() => vi.fn());
 
 vi.mock("$lib/services/integration-service", () => ({ trackerListTickets }));
 vi.mock("$lib/stores/integrations", async () => {
@@ -29,16 +30,18 @@ vi.mock("$lib/stores/project", async () => {
 		]),
 	};
 });
-vi.mock("$lib/stores/project-teardown", () => ({ onProjectRemoved: () => {} }));
+vi.mock("$lib/stores/project-teardown", () => ({ onProjectRemoved }));
 
 type Store = typeof import("./tickets-overview");
 
 // The TTL and in-flight maps are module state; each test gets a fresh module so
 // one test's cache never answers the next one's call.
+let collapsedTicketProjects: Store["collapsedTicketProjects"];
 let forgetProject: Store["forgetProject"];
 let loadTicketsOverview: Store["loadTicketsOverview"];
 let ticketsByProject: Store["ticketsByProject"];
 let ticketsLoading: Store["ticketsLoading"];
+let toggleTicketProjectCollapse: Store["toggleTicketProjectCollapse"];
 
 const ticket = (key: string) => ({
 	id: key,
@@ -58,9 +61,16 @@ beforeEach(async () => {
 	trackerListTickets.mockReset();
 	loadProjectIntegrations.mockReset();
 	loadProjectIntegrations.mockResolvedValue(undefined);
+	onProjectRemoved.mockReset();
 	vi.resetModules();
-	({ forgetProject, loadTicketsOverview, ticketsByProject, ticketsLoading } =
-		await import("./tickets-overview"));
+	({
+		collapsedTicketProjects,
+		forgetProject,
+		loadTicketsOverview,
+		ticketsByProject,
+		ticketsLoading,
+		toggleTicketProjectCollapse,
+	} = await import("./tickets-overview"));
 });
 
 describe("loadTicketsOverview", () => {
@@ -74,6 +84,29 @@ describe("loadTicketsOverview", () => {
 		const map = get(ticketsByProject);
 		expect(Object.keys(map).sort()).toEqual(["a", "b"]);
 		expect(trackerListTickets).toHaveBeenCalledTimes(2);
+	});
+
+	it("refreshes the bindings of every project before listing its tickets", async () => {
+		trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
+		await loadTicketsOverview("assigned");
+
+		expect(loadProjectIntegrations.mock.calls).toEqual([["a"], ["b"], ["c"]]);
+	});
+
+	it("flags the overview as loading until every tracker answered", async () => {
+		let answer: (page: unknown) => void = () => {};
+		trackerListTickets.mockReturnValueOnce(
+			new Promise((resolve) => {
+				answer = resolve;
+			}),
+		);
+		trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
+		const loading = loadTicketsOverview("assigned");
+
+		expect(get(ticketsLoading)).toBe(true);
+		answer({ items: [], hasMore: false });
+		await loading;
+		expect(get(ticketsLoading)).toBe(false);
 	});
 
 	it("keeps the other projects when one tracker fails", async () => {
@@ -103,24 +136,32 @@ describe("loadTicketsOverview", () => {
 	});
 
 	it("serves the cache within the TTL instead of calling again", async () => {
-		trackerListTickets.mockResolvedValue({
-			items: [ticket("1")],
-			hasMore: false,
-		});
-		await loadTicketsOverview("assigned");
-		expect(trackerListTickets).toHaveBeenCalledTimes(2);
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		try {
+			trackerListTickets.mockResolvedValue({
+				items: [ticket("1")],
+				hasMore: false,
+			});
+			await loadTicketsOverview("assigned");
+			expect(trackerListTickets).toHaveBeenCalledTimes(2);
 
-		await loadTicketsOverview("assigned");
-		expect(trackerListTickets).toHaveBeenCalledTimes(2);
-		expect(get(ticketsByProject).a.tickets).toHaveLength(1);
+			vi.advanceTimersByTime(5 * 60 * 1000 - 1);
+			await loadTicketsOverview("assigned");
+			expect(trackerListTickets).toHaveBeenCalledTimes(2);
+			expect(get(ticketsByProject).a.tickets).toHaveLength(1);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("refetches once the TTL has expired", async () => {
 		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 		try {
 			trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
 			await loadTicketsOverview("assigned");
-			vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+			vi.advanceTimersByTime(5 * 60 * 1000);
 			await loadTicketsOverview("assigned");
 			expect(trackerListTickets).toHaveBeenCalledTimes(4);
 		} finally {
@@ -182,6 +223,18 @@ describe("loadTicketsOverview", () => {
 		expect(trackerListTickets).toHaveBeenCalledTimes(2);
 	});
 
+	it("still lists the tickets when the bindings could not be refreshed", async () => {
+		loadProjectIntegrations.mockRejectedValue(new Error("offline"));
+		trackerListTickets.mockResolvedValue({
+			items: [ticket("1")],
+			hasMore: false,
+		});
+		await loadTicketsOverview("assigned");
+
+		expect(Object.keys(get(ticketsByProject)).sort()).toEqual(["a", "b"]);
+		expect(get(ticketsByProject).a.tickets).toHaveLength(1);
+	});
+
 	it("drops a removed project from the map", async () => {
 		trackerListTickets.mockResolvedValue({
 			items: [ticket("1")],
@@ -191,5 +244,77 @@ describe("loadTicketsOverview", () => {
 		forgetProject("a");
 
 		expect(Object.keys(get(ticketsByProject))).toEqual(["b"]);
+	});
+});
+
+describe("toggleTicketProjectCollapse", () => {
+	it("folds a project then reopens it", () => {
+		toggleTicketProjectCollapse("a");
+		expect(get(collapsedTicketProjects)).toEqual(["a"]);
+		toggleTicketProjectCollapse("b");
+		expect(get(collapsedTicketProjects)).toEqual(["a", "b"]);
+		toggleTicketProjectCollapse("a");
+		expect(get(collapsedTicketProjects)).toEqual(["b"]);
+	});
+});
+
+describe("forgetProject", () => {
+	it("unfolds a removed project and keeps the other folds", () => {
+		toggleTicketProjectCollapse("a");
+		toggleTicketProjectCollapse("b");
+		forgetProject("a");
+		expect(get(collapsedTicketProjects)).toEqual(["b"]);
+	});
+
+	it("registers itself for the project teardown", () => {
+		expect(onProjectRemoved).toHaveBeenCalledWith(forgetProject);
+	});
+
+	it("does not rebuild the folds for a project that was not folded", () => {
+		toggleTicketProjectCollapse("b");
+		const folds = get(collapsedTicketProjects);
+		forgetProject("a");
+		expect(get(collapsedTicketProjects)).toBe(folds);
+	});
+
+	it("drops a request still in flight so a re-added project asks again", async () => {
+		trackerListTickets.mockReturnValueOnce(new Promise(() => {}));
+		trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
+		void loadTicketsOverview("assigned");
+		await vi.waitFor(() => expect(trackerListTickets).toHaveBeenCalledTimes(1));
+
+		forgetProject("a");
+		void loadTicketsOverview("assigned");
+
+		await vi.waitFor(() =>
+			expect(
+				trackerListTickets.mock.calls.filter(([id]) => id === "a"),
+			).toHaveLength(2),
+		);
+	});
+
+	it("leaves the map and the folds untouched for a project it never knew", async () => {
+		trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
+		await loadTicketsOverview("assigned");
+		toggleTicketProjectCollapse("b");
+		const before = get(ticketsByProject);
+		const folds = get(collapsedTicketProjects);
+		forgetProject("unknown");
+		expect(get(ticketsByProject)).toBe(before);
+		expect(get(collapsedTicketProjects)).toEqual(folds);
+	});
+
+	it("forgets the cache so a re-added project is fetched again", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		try {
+			trackerListTickets.mockResolvedValue({ items: [], hasMore: false });
+			await loadTicketsOverview("assigned");
+			forgetProject("a");
+			await loadTicketsOverview("assigned");
+			expect(trackerListTickets).toHaveBeenCalledTimes(3);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

@@ -95,7 +95,9 @@ describe("addCommand", () => {
 
 	it("persists the scope it changed", () => {
 		addCommand("project", "p1", newCommand("Build"));
-		expect(saveProjectCommands).toHaveBeenCalled();
+		expect(saveProjectCommands).toHaveBeenCalledWith("p1", {
+			commands: [expect.objectContaining({ name: "Build" })],
+		});
 		expect(saveGlobalCommands).not.toHaveBeenCalled();
 	});
 
@@ -252,8 +254,10 @@ describe("moveCommandToScope", () => {
 		addCommand("project", "p1", a);
 		vi.clearAllMocks();
 		moveCommandToScope("project", "global", "p1", a.id, 0);
-		expect(saveProjectCommands).toHaveBeenCalled();
-		expect(saveGlobalCommands).toHaveBeenCalled();
+		expect(saveProjectCommands).toHaveBeenCalledWith("p1", { commands: [] });
+		expect(saveGlobalCommands).toHaveBeenCalledWith({
+			commands: [expect.objectContaining({ id: a.id })],
+		});
 	});
 });
 
@@ -286,5 +290,73 @@ describe("reorderCommand", () => {
 
 	it("does not crash on a project with no command", () => {
 		expect(() => reorderCommand("project", "empty", 0, 1)).not.toThrow();
+	});
+});
+
+describe("moveCommandToScope without a source list", () => {
+	it("does nothing for a project that has no commands", () => {
+		expect(() =>
+			moveCommandToScope("project", "global", "unknown", "x", 0),
+		).not.toThrow();
+		expect(saveGlobalCommands).not.toHaveBeenCalled();
+		expect(saveProjectCommands).not.toHaveBeenCalled();
+	});
+});
+
+describe("loadCommands", () => {
+	async function freshStore() {
+		vi.resetModules();
+		const store = await import("./custom-command");
+		const service = await import("$lib/services/custom-command-service");
+		return { store, service };
+	}
+
+	it("reads the global commands once, however many projects load", async () => {
+		const { store, service } = await freshStore();
+		const build = newCommand("Build");
+		vi.mocked(service.getGlobalCommands).mockResolvedValue({
+			commands: [build],
+		});
+
+		await store.loadCommands("p1");
+		await store.loadCommands("p2");
+
+		expect(get(store.globalCommands)).toEqual([build]);
+		expect(service.getGlobalCommands).toHaveBeenCalledTimes(1);
+	});
+
+	it("falls back to an empty global list when the read fails", async () => {
+		const { store, service } = await freshStore();
+		store.globalCommands.set([newCommand("Stale")]);
+		vi.mocked(service.getGlobalCommands).mockRejectedValue(new Error("boom"));
+
+		await store.loadCommands("p1");
+
+		expect(get(store.globalCommands)).toEqual([]);
+	});
+
+	it("reads each project once and keeps the projects apart", async () => {
+		const { store, service } = await freshStore();
+		const a = newCommand("A");
+		const b = newCommand("B");
+		vi.mocked(service.getProjectCommands).mockImplementation(async (id) => ({
+			commands: id === "p1" ? [a] : [b],
+		}));
+
+		await store.loadCommands("p1");
+		await store.loadCommands("p1");
+		await store.loadCommands("p2");
+
+		expect(get(store.projectCommands)).toEqual({ p1: [a], p2: [b] });
+		expect(service.getProjectCommands).toHaveBeenCalledTimes(2);
+	});
+
+	it("falls back to an empty project list when the read fails", async () => {
+		const { store, service } = await freshStore();
+		vi.mocked(service.getProjectCommands).mockRejectedValue(new Error("boom"));
+
+		await store.loadCommands("p1");
+
+		expect(get(store.projectCommands)).toEqual({ p1: [] });
 	});
 });

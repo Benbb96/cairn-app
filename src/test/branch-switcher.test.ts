@@ -327,8 +327,11 @@ describe("BranchSwitcher", () => {
 			).pop() as HTMLElement;
 			await userEvent.click(stash);
 			await settle();
-			expect(pushStash).toHaveBeenCalled();
+			expect(pushStash).toHaveBeenCalledWith(expect.any(String), true, false);
 			expect(checkoutBranch).toHaveBeenCalledTimes(2);
+			expect(checkoutBranch.mock.calls[1]).toEqual(
+				checkoutBranch.mock.calls[0],
+			);
 		});
 
 		it("closes the modal once the retry succeeded", async () => {

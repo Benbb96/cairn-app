@@ -14,6 +14,7 @@ import {
 	git,
 	refreshStatus,
 	setDiffsWanted,
+	setGitWatched,
 	stageFile as stageFileInStore,
 	startGitPolling,
 } from "./git";
@@ -250,6 +251,22 @@ describe("startGitPolling", () => {
 		setDiffsWanted(false);
 	});
 
+	it("falls back to the slow safety-net cadence while a watcher reports changes", async () => {
+		setGitWatched(true);
+		stop = startGitPolling();
+		window.dispatchEvent(new Event("focus"));
+		activeScreen.set("workspace");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getStatusFull).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(GIT_REFRESH_IDLE_INTERVAL_MS);
+		expect(getStatusFull).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getStatusFull).toHaveBeenCalledTimes(2);
+		setGitWatched(false);
+	});
+
 	it("stops while the window is in the background and catches up on focus", async () => {
 		activeScreen.set("workspace");
 		stop = startGitPolling();
@@ -268,6 +285,101 @@ describe("startGitPolling", () => {
 		stop();
 		await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS * 3);
 		expect(getStatusFull).not.toHaveBeenCalled();
+	});
+
+	it("waits out a refresh that was asked for less than the idle cadence ago", async () => {
+		stop = startGitPolling();
+		window.dispatchEvent(new Event("focus"));
+		activeScreen.set("workspace");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getStatusFull).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(2000);
+		window.dispatchEvent(new Event("focus"));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getStatusFull).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(GIT_REFRESH_IDLE_INTERVAL_MS - 2000);
+		expect(getStatusFull).toHaveBeenCalledTimes(3);
+	});
+
+	describe("with the window already focused", () => {
+		let hasFocus: ReturnType<typeof vi.spyOn>;
+
+		beforeEach(() => {
+			hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+		});
+
+		afterEach(() => {
+			hasFocus.mockRestore();
+			vi.unstubAllGlobals();
+		});
+
+		it("waits for the first interval when the workspace is already showing", async () => {
+			activeScreen.set("workspace");
+			stop = startGitPolling();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(getStatusFull).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS);
+			expect(getStatusFull).toHaveBeenCalledTimes(1);
+		});
+
+		it("stops once the window loses the focus", async () => {
+			activeScreen.set("workspace");
+			stop = startGitPolling();
+			window.dispatchEvent(new Event("blur"));
+			await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS * 3);
+			expect(getStatusFull).not.toHaveBeenCalled();
+		});
+
+		it("refreshes nothing once stopped, whatever the window does", async () => {
+			activeScreen.set("workspace");
+			stop = startGitPolling();
+			stop();
+			await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS * 3);
+			expect(getStatusFull).not.toHaveBeenCalled();
+		});
+
+		it("lets go of both window listeners once stopped", () => {
+			const removeListener = vi.spyOn(window, "removeEventListener");
+			stop = startGitPolling();
+			stop();
+			const removed = removeListener.mock.calls.map(([type]) => type);
+			removeListener.mockRestore();
+			expect(removed).toContain("focus");
+			expect(removed).toContain("blur");
+		});
+
+		it("refreshes without raising the loading state", async () => {
+			let finish: (value: unknown) => void = () => {};
+			getStatusFull.mockReturnValue(
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+			);
+			activeScreen.set("workspace");
+			stop = startGitPolling();
+			await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS);
+			expect(getStatusFull).toHaveBeenCalledTimes(1);
+			expect(get(git).isLoading).toBe(false);
+			finish({
+				isGitRepo: true,
+				status: {},
+				changedPaths: { staged: [], unstaged: [] },
+			});
+			await vi.advanceTimersByTimeAsync(0);
+		});
+
+		it("starts without a document to ask about the focus", async () => {
+			vi.stubGlobal("document", undefined);
+			activeScreen.set("workspace");
+			expect(() => {
+				stop = startGitPolling();
+			}).not.toThrow();
+			await vi.advanceTimersByTimeAsync(GIT_REFRESH_INTERVAL_MS);
+			expect(getStatusFull).toHaveBeenCalledTimes(1);
+		});
 	});
 });
 

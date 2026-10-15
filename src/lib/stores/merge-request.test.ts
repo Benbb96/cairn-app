@@ -3,10 +3,12 @@
 
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runProjectTeardowns } from "$lib/stores/project-teardown";
 import type {
 	Comment,
 	Discussion,
 	MergeRequest,
+	MergeRequestDraft,
 } from "$lib/types/integrations";
 import { integrationKey } from "$lib/utils/integrations/instance-key";
 
@@ -35,11 +37,17 @@ import {
 	applyUpdate,
 	approveMergeRequest,
 	clearMergeRequest,
+	createMergeRequest,
+	forgetProject,
 	loadDiscussions,
+	loadForgeLabels,
 	loadMergeRequest,
+	mergeRequestFormRequest,
 	mergeRequestStateFor,
 	mergeRequests,
 	replyToDiscussion,
+	requestMergeRequestForm,
+	searchForgeMembers,
 	selectDiscussion,
 	setDiscussionResolved,
 } from "./merge-request";
@@ -339,5 +347,166 @@ describe("clearMergeRequest", () => {
 		expect(
 			mergeRequestStateFor(get(mergeRequests), "p1", "i2").mergeRequest,
 		).not.toBeNull();
+	});
+});
+
+describe("createMergeRequest", () => {
+	const draft = { title: "New" } as unknown as MergeRequestDraft;
+
+	it("sends the draft and stores the merge request the forge created", async () => {
+		forgeCreateMergeRequest.mockResolvedValue(mr({ id: "mr-9", title: "New" }));
+		const created = await createMergeRequest("p1", "i1", draft);
+		expect(forgeCreateMergeRequest).toHaveBeenCalledWith("p1", draft);
+		expect(created).toEqual(mr({ id: "mr-9", title: "New" }));
+		expect(state().mergeRequest).toEqual(created);
+		expect(state().isLoaded).toBe(true);
+	});
+
+	it("publishes the failure and rethrows", async () => {
+		forgeCreateMergeRequest.mockRejectedValue(new Error("422"));
+		await expect(createMergeRequest("p1", "i1", draft)).rejects.toThrow("422");
+		expect(state().error?.message).toBe("Error: 422");
+		expect(state().mergeRequest).toBeNull();
+	});
+});
+
+describe("requestMergeRequestForm", () => {
+	it("bumps the counter by one each time", () => {
+		const before = get(mergeRequestFormRequest);
+		requestMergeRequestForm();
+		expect(get(mergeRequestFormRequest)).toBe(before + 1);
+		requestMergeRequestForm();
+		expect(get(mergeRequestFormRequest)).toBe(before + 2);
+	});
+});
+
+describe("searchForgeMembers", () => {
+	it("forwards the text and answers the members", async () => {
+		const members = [{ id: "u1" }];
+		forgeListMembers.mockResolvedValue(members);
+		await expect(searchForgeMembers("p1", "al")).resolves.toBe(members);
+		expect(forgeListMembers).toHaveBeenCalledWith("p1", "al");
+	});
+});
+
+describe("loadForgeLabels", () => {
+	it("asks the forge once per project and serves the cache afterwards", async () => {
+		forgetProject("pl");
+		forgeListLabels.mockResolvedValue(["bug", "ux"]);
+		await expect(loadForgeLabels("pl")).resolves.toEqual(["bug", "ux"]);
+		forgeListLabels.mockResolvedValue(["other"]);
+		await expect(loadForgeLabels("pl")).resolves.toEqual(["bug", "ux"]);
+		expect(forgeListLabels).toHaveBeenCalledTimes(1);
+		expect(forgeListLabels).toHaveBeenCalledWith("pl");
+	});
+
+	it("asks again once the project was forgotten", async () => {
+		forgeListLabels.mockResolvedValue(["bug"]);
+		await loadForgeLabels("pl2");
+		forgetProject("pl2");
+		forgeListLabels.mockResolvedValue(["new"]);
+		await expect(loadForgeLabels("pl2")).resolves.toEqual(["new"]);
+	});
+
+	it("keeps projects apart", async () => {
+		forgeListLabels.mockResolvedValueOnce(["a"]).mockResolvedValueOnce(["b"]);
+		await loadForgeLabels("pl3");
+		await expect(loadForgeLabels("pl4")).resolves.toEqual(["b"]);
+	});
+});
+
+/** A promise settled by hand, to act while a request is in flight. */
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((r) => {
+		resolve = r;
+	});
+	return { promise, resolve };
+}
+
+describe("a request in flight", () => {
+	it("raises the refreshing flag while the merge request loads", async () => {
+		const pending = deferred<MergeRequest | null>();
+		forgeFindMergeRequest.mockReturnValue(pending.promise);
+
+		const loading = loadMergeRequest("p1", "i1", "feat/x");
+		expect(state().isRefreshing).toBe(true);
+
+		pending.resolve(null);
+		await loading;
+		expect(state().isRefreshing).toBe(false);
+	});
+
+	it("stores the discussions of an instance cleared meanwhile", async () => {
+		forgeFindMergeRequest.mockResolvedValue(mr());
+		await loadMergeRequest("p1", "i1", "feat/x");
+		const pending = deferred<Discussion[]>();
+		forgeListDiscussions.mockReturnValue(pending.promise);
+
+		const loading = loadDiscussions("p1", "i1");
+		clearMergeRequest("p1", "i1");
+		pending.resolve([discussion("d1")]);
+		await loading;
+
+		expect(state().discussions.map((d) => d.id)).toEqual(["d1"]);
+		expect(state().error).toBeNull();
+	});
+
+	it("applies a reply to an instance cleared meanwhile without failing", async () => {
+		forgeFindMergeRequest.mockResolvedValue(mr());
+		await loadMergeRequest("p1", "i1", "feat/x");
+		const pending = deferred<Comment>();
+		forgeReply.mockReturnValue(pending.promise);
+
+		const replying = replyToDiscussion("p1", "i1", "d1", "hello");
+		clearMergeRequest("p1", "i1");
+		pending.resolve(comment("late"));
+
+		await expect(replying).resolves.toBeUndefined();
+	});
+
+	it("applies a resolution to an instance cleared meanwhile without failing", async () => {
+		forgeFindMergeRequest.mockResolvedValue(mr());
+		await loadMergeRequest("p1", "i1", "feat/x");
+		const pending = deferred<undefined>();
+		forgeResolve.mockReturnValue(pending.promise);
+
+		const resolving = setDiscussionResolved("p1", "i1", "d1", true);
+		clearMergeRequest("p1", "i1");
+		pending.resolve(undefined);
+
+		await expect(resolving).resolves.toBeUndefined();
+	});
+});
+
+describe("loading discussions without a merge request", () => {
+	it("leaves the state untouched", async () => {
+		await loadDiscussions("p1", "i1");
+
+		expect(state().error).toBeNull();
+		expect(state().areDiscussionsLoaded).toBe(false);
+	});
+});
+
+describe("forgetting a project", () => {
+	beforeEach(async () => {
+		forgeFindMergeRequest.mockResolvedValue(mr());
+		await loadMergeRequest("p1", "i1", "feat/x");
+		await loadMergeRequest("p2", "i1", "feat/x");
+	});
+
+	it("drops the state of its instances and keeps the other projects", () => {
+		forgetProject("p1");
+
+		expect(state().isLoaded).toBe(false);
+		expect(mergeRequestStateFor(get(mergeRequests), "p2", "i1").isLoaded).toBe(
+			true,
+		);
+	});
+
+	it("runs when the project is removed", async () => {
+		await runProjectTeardowns("p1");
+
+		expect(state().isLoaded).toBe(false);
 	});
 });

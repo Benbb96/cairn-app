@@ -235,6 +235,30 @@ describe("rehydrateFromPersisted", () => {
 		expect(result.panes[0].activeTabIdx).toBe(0);
 	});
 
+	it("keeps the stored active index when it is in range", async () => {
+		const result = await rehydrateFromPersisted(
+			"/wt",
+			statePersisting(["a.ts", "b.ts", "c.ts"], 1),
+		);
+		expect(result.panes[0].activeTabIdx).toBe(1);
+	});
+
+	it("keeps no active tab on a pane that was stored empty", async () => {
+		const result = await rehydrateFromPersisted("/wt", statePersisting([], -1));
+		expect(result.panes[0].activeTabIdx).toBe(-1);
+	});
+
+	it("opens an empty tab when the read carries no text", async () => {
+		vi.mocked(fileService.readFileVersioned).mockResolvedValue({
+			version: '"v1"',
+		} as never);
+		const result = await rehydrateFromPersisted(
+			"/wt",
+			statePersisting(["a.ts"], 0),
+		);
+		expect(result.panes[0].tabs[0].savedDoc.toString()).toBe("");
+	});
+
 	it("restores the expanded set and defaults the missing split fields", async () => {
 		const result = await rehydrateFromPersisted("/wt", {
 			panes: [],
@@ -282,6 +306,22 @@ describe("toPersistedState", () => {
 			state([tab("a.ts", { diskSnapshot: true }), live], 1),
 		);
 		expect(out.panes[0].tabs[out.panes[0].activeTabIdx].path).toBe("b.ts");
+	});
+
+	it("follows the active tab by identity when a snapshot sits before it", () => {
+		const out = toPersistedState(
+			state(
+				[
+					tab("snap.ts", { diskSnapshot: true }),
+					tab("a.ts"),
+					tab("b.ts"),
+					tab("c.ts"),
+				],
+				2,
+			),
+		);
+		expect(out.panes[0].activeTabIdx).toBe(1);
+		expect(out.panes[0].tabs[1].path).toBe("b.ts");
 	});
 
 	it("falls back to a valid index when the active tab was the snapshot", () => {

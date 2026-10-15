@@ -9,6 +9,10 @@ describe("errorMessage", () => {
 		expect(errorMessage(new Error("boom"))).toBe("boom");
 	});
 
+	it("keeps an Error's empty message rather than rendering the object", () => {
+		expect(errorMessage(new Error(""))).toBe("");
+	});
+
 	it("passes a string rejection through", () => {
 		expect(errorMessage("the CLI did not answer")).toBe(
 			"the CLI did not answer",

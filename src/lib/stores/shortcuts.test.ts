@@ -88,6 +88,17 @@ describe("SHORTCUT_DEFS", () => {
 		}
 	});
 
+	it.skipIf(IS_MAC)("ships fullscreen on F11 outside a Mac", () => {
+		const def = SHORTCUT_DEFS.find((d) => d.id === "toggleFullscreen");
+		expect(def?.default).toEqual({
+			key: "F11",
+			mod: false,
+			shift: false,
+			alt: false,
+			ctrl: false,
+		});
+	});
+
 	it("binds every mouse command to the click key", () => {
 		for (const def of SHORTCUT_DEFS.filter((d) => d.mouse && d.default)) {
 			expect(def.default?.key, def.id).toBe(MOUSE_KEY);
@@ -122,6 +133,14 @@ describe("shortcuts", () => {
 		expect(get(shortcuts)[withDefault.id]).toEqual(custom);
 	});
 
+	it("serves the factory binding when the settings carry no shortcut list", async () => {
+		expect(withDefault).toBeDefined();
+		if (!withDefault) return;
+		await settings.save({ shortcuts: undefined });
+		expect(get(shortcuts)[withDefault.id]).toEqual(withDefault.default);
+		expect(get(activeShortcuts)[withDefault.id]).toEqual(withDefault.default);
+	});
+
 	it("covers every declared command", () => {
 		for (const def of SHORTCUT_DEFS) {
 			expect(get(shortcuts), def.id).toHaveProperty(def.id);
@@ -131,9 +150,12 @@ describe("shortcuts", () => {
 	it("hands back a copy, so editing one binding cannot rewrite the default", () => {
 		expect(withDefault).toBeDefined();
 		if (!withDefault) return;
+		const original = withDefault.default?.key;
 		const first = get(shortcuts)[withDefault.id];
+		expect(first).toBeDefined();
 		if (first) first.key = "zzz";
-		expect(withDefault.default?.key).not.toBe("zzz");
+		expect(withDefault.default?.key).toBe(original);
+		expect(get(shortcuts)[withDefault.id]?.key).toBe(original);
 	});
 });
 
@@ -384,6 +406,18 @@ describe("bindingKey", () => {
 
 	it("ignores the case of the key, since matching does too", () => {
 		expect(bindingKey(binding({ key: "S", mod: true }))).toBe("1000:s");
+	});
+
+	it("writes each modifier flag in its own position", () => {
+		expect(bindingKey(binding({ key: "a", mod: true }))).toBe("1000:a");
+		expect(bindingKey(binding({ key: "a", shift: true }))).toBe("0100:a");
+		expect(bindingKey(binding({ key: "a", alt: true }))).toBe("0010:a");
+		expect(bindingKey(binding({ key: "a", ctrl: true }))).toBe("0001:a");
+		expect(
+			bindingKey(
+				binding({ key: "a", mod: true, shift: true, alt: true, ctrl: true }),
+			),
+		).toBe("1111:a");
 	});
 
 	it("separates bindings that differ by a modifier", () => {

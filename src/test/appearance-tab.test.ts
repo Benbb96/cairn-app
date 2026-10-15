@@ -75,11 +75,12 @@ describe("AppearanceTab", () => {
 
 		it("stores the theme that was picked", async () => {
 			render(AppearanceTab, {});
-			const other = themeCards().find(
+			const index = themeCards().findIndex(
 				(c) => !c.classList.contains("active"),
-			) as HTMLElement;
-			await userEvent.click(other);
+			);
+			await userEvent.click(themeCards()[index]);
 			await tick();
+			expect(stored().theme).toBe(availableThemes()[index].id);
 			expect(stored().theme).not.toBe("default");
 		});
 	});
@@ -147,11 +148,12 @@ describe("AppearanceTab", () => {
 
 		it("stores the font that was picked", async () => {
 			render(AppearanceTab, {});
-			const other = fontCards().find(
+			const index = fontCards().findIndex(
 				(c) => !c.classList.contains("active"),
-			) as HTMLElement;
-			await userEvent.click(other);
+			);
+			await userEvent.click(fontCards()[index]);
 			await tick();
+			expect(stored().fontFamily).toBe(FONT_OPTIONS[index].stack);
 			expect(stored().fontFamily).not.toBe("Menlo, ui-monospace, monospace");
 		});
 	});

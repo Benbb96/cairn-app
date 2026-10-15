@@ -217,7 +217,7 @@ describe("ProjectMenu", () => {
 			[/delete|supprimer/i, spies.delete],
 		] as const) {
 			await userEvent.click(itemNamed(pattern));
-			expect(spy).toHaveBeenCalled();
+			expect(spy).toHaveBeenCalledTimes(1);
 		}
 	});
 
@@ -267,7 +267,7 @@ describe("ProjectMenu", () => {
 	it("reports taking the project out of its folder", async () => {
 		const spies = mount({ folders: [folder("a")], currentFolderId: "a" });
 		await userEvent.click(itemNamed(/remove|retirer/i));
-		expect(spies.removeFromFolder).toHaveBeenCalled();
+		expect(spies.removeFromFolder).toHaveBeenCalledTimes(1);
 	});
 
 	/** The menu sits on a card that selects on click; acting is not selecting. */

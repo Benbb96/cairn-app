@@ -375,7 +375,7 @@ describe("FormattingView", () => {
 			scan.mockClear();
 			await userEvent.click(buttonBy(/install/i));
 			await settle();
-			expect(scan).toHaveBeenCalled();
+			expect(scan).toHaveBeenCalledWith("/wt");
 		});
 
 		/**

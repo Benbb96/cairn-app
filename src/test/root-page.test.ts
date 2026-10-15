@@ -5,7 +5,7 @@ import { render } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { tick } from "svelte";
 import { get, writable } from "svelte/store";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("$lib/components/Home.svelte", async () => ({
 	default: (await import("./stubs/HomeStub.svelte")).default,
@@ -112,7 +112,9 @@ vi.mock("$lib/stores/settings", async (importOriginal) => ({
 	},
 }));
 
-const { projects, activeProjectId } = await import("$lib/stores/project");
+const { projects, activeProjectId, openTabOrder } = await import(
+	"$lib/stores/project"
+);
 const { activeScreen } = await import("$lib/stores/ui");
 const { project } = await import("./fixtures");
 const { default: Page } = await import("../routes/+page.svelte");
@@ -149,7 +151,12 @@ async function settle() {
 	}
 }
 
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
 beforeEach(() => {
+	vi.spyOn(Math, "random").mockReturnValue(0);
 	vi.useRealTimers();
 	listen.mockReset().mockResolvedValue(() => {});
 	takePendingCliPaths
@@ -173,6 +180,8 @@ beforeEach(() => {
 		project("p2", { name: "Beta", path: "/repos/beta" }),
 	]);
 	activeProjectId.set(null);
+	openTabOrder.set([]);
+	activeScreen.set("home");
 });
 
 describe("application root", () => {

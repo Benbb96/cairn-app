@@ -60,6 +60,24 @@ describe("interceptExternalLinks", () => {
 		expect(event.defaultPrevented).toBe(false);
 	});
 
+	it("leaves a click with Meta alone", () => {
+		const event = click(link("https://a.test/", true), { metaKey: true });
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("leaves a click with Alt alone", () => {
+		const event = click(link("https://a.test/", true), { altKey: true });
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("leaves a click of another button alone", () => {
+		const event = click(link("https://a.test/", true), { button: 1 });
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
 	it("ignores a scheme the desktop is not trusted with", () => {
 		click(link("file:///etc/passwd", true));
 		expect(openUrl).not.toHaveBeenCalled();
@@ -77,5 +95,41 @@ describe("interceptExternalLinks", () => {
 		click(link("https://a.test/", true));
 		expect(openUrl).not.toHaveBeenCalled();
 		release = () => {};
+	});
+
+	it("ignores a click that crosses no anchor", () => {
+		const div = document.createElement("div");
+		document.body.append(div);
+		const event = click(div, { ctrlKey: true });
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("ignores an anchor without a destination", () => {
+		const a = document.createElement("a");
+		a.target = "_blank";
+		document.body.append(a);
+		const event = click(a);
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("ignores a destination that does not parse as a URL", () => {
+		const a = document.createElement("a");
+		a.setAttribute("href", "http://");
+		a.target = "_blank";
+		document.body.append(a);
+		expect(a.href).toBe("http://");
+		const event = click(a);
+		expect(openUrl).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("swallows a failure of the system browser", async () => {
+		vi.mocked(openUrl).mockRejectedValue(new Error("no opener"));
+		const event = click(link("https://a.test/", true));
+		await Promise.resolve();
+		expect(openUrl).toHaveBeenCalledWith("https://a.test/");
+		expect(event.defaultPrevented).toBe(true);
 	});
 });

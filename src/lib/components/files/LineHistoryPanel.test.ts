@@ -178,11 +178,11 @@ describe("LineHistoryPanel", () => {
 
 		/** The full hash is what one copies, even though the short one is shown. */
 		it("offers the full hash to copy, not the short one", async () => {
+			const user = userEvent.setup();
 			mount();
 			await settle();
-			expect(
-				entries()[0].querySelector(".copy-btn, button[aria-label]"),
-			).not.toBeNull();
+			await user.click(entries()[0].querySelector(".copy-btn") as HTMLElement);
+			expect(await navigator.clipboard.readText()).toBe(entry("aaa1111").hash);
 		});
 
 		it("shows no date for a commit without a timestamp", async () => {

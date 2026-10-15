@@ -45,4 +45,18 @@ describe("resolveTabClose", () => {
 		expect(resolveTabClose(1, 0, 3).activeChanged).toBe(false);
 		expect(resolveTabClose(1, 2, 3).activeChanged).toBe(false);
 	});
+
+	it("leaves the active index at none when a tab goes and nothing remains", () => {
+		expect(resolveTabClose(2, 0, 0)).toEqual({
+			activeTabIdx: -1,
+			activeChanged: false,
+		});
+	});
+
+	it("keeps the only remaining tab when the active one beside it is closed", () => {
+		expect(resolveTabClose(0, 0, 1)).toEqual({
+			activeTabIdx: 0,
+			activeChanged: true,
+		});
+	});
 });

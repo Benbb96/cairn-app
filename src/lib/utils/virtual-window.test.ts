@@ -25,6 +25,11 @@ describe("virtualWindow", () => {
 		expect(end.padBottom).toBe(0);
 	});
 
+	it("still windows rows that are a single pixel tall", () => {
+		const w = virtualWindow(1000, 500, 200, 1, 0);
+		expect(w).toEqual({ first: 500, last: 700, padTop: 500, padBottom: 300 });
+	});
+
 	it("renders everything when the row height is unknown", () => {
 		const w = virtualWindow(10, 0, 200, 0, 2);
 		expect(w).toEqual({ first: 0, last: 10, padTop: 0, padBottom: 0 });

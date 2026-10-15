@@ -79,6 +79,20 @@ describe("resolveAiFeature", () => {
 		expect(resolved.promptTemplate).toBe("Write it my way.");
 	});
 
+	it("leaves the model empty when nothing was assigned", () => {
+		const resolved = resolveAiFeature("commitMessage", undefined, installed());
+		expect(resolved.model).toBe("");
+	});
+
+	it("resolves an unknown feature to an empty template", () => {
+		const resolved = resolveAiFeature(
+			"unknownFeature" as Parameters<typeof resolveAiFeature>[0],
+			{},
+			installed(ASSIST_CLI),
+		);
+		expect(resolved.promptTemplate).toBe("");
+	});
+
 	it("falls back to the built-in template when the custom one is blank", () => {
 		const resolved = resolveAiFeature(
 			"commitMessage",

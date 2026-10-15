@@ -296,7 +296,7 @@ describe("TerminalView", () => {
 				document.querySelector(".term-empty .btn.primary") as HTMLElement,
 			);
 			await settle();
-			expect(addTerminal).toHaveBeenCalled();
+			expect(addTerminal).toHaveBeenCalledWith("p1", "i1", "/wt");
 		});
 	});
 

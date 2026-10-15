@@ -173,3 +173,55 @@ describe("background budget", () => {
 		expect(seen).toEqual(["input", "background"]);
 	});
 });
+
+describe("without a MessageChannel", () => {
+	type SchedulerModule = typeof import("./scheduler");
+	let scheduler: SchedulerModule;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal("MessageChannel", undefined);
+		vi.resetModules();
+		scheduler = await import("./scheduler");
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+		vi.resetModules();
+	});
+
+	it("drains on a timer instead", () => {
+		const run = vi.fn();
+		scheduler.schedule("input", run);
+		expect(run).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(0);
+		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	it("arms a single timer for a burst of tasks", () => {
+		scheduler.schedule("input", () => {});
+		scheduler.schedule("visible", () => {});
+		scheduler.schedule("background", () => {});
+		expect(vi.getTimerCount()).toBe(1);
+	});
+
+	it("yields to a new timer when the background work overruns the budget", () => {
+		let now = 0;
+		vi.spyOn(performance, "now").mockImplementation(() => now);
+		const seen: number[] = [];
+		for (const n of [1, 2]) {
+			scheduler.schedule("background", () => {
+				seen.push(n);
+				now += 100;
+			});
+		}
+		vi.advanceTimersByTime(0);
+		expect(seen).toEqual([1]);
+		expect(vi.getTimerCount()).toBe(1);
+		vi.advanceTimersByTime(1);
+		expect(seen).toEqual([1, 2]);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+});

@@ -150,6 +150,40 @@ describe("checkForUpdates", () => {
 		await expect(checkForUpdates()).resolves.toBeUndefined();
 	});
 
+	it("releases the handle of a previous check when the next one fails", async () => {
+		const first = release("1.0.0");
+		checkForUpdate.mockResolvedValue(first);
+		await checkForUpdates();
+		checkForUpdate.mockRejectedValue(new Error("down"));
+		await checkForUpdates({ silent: true });
+		expect(first.close).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(["downloading", "installing"])(
+		"does not start a check while %s",
+		async (blockedPhase) => {
+			checkForUpdate.mockResolvedValue(release("2.0.0"));
+			await checkForUpdates();
+			let unblock!: () => void;
+			const blocked = new Promise<void>((r) => {
+				unblock = r;
+			});
+			if (blockedPhase === "downloading") {
+				downloadAndInstall.mockReturnValue(blocked);
+			} else {
+				restartApp.mockReturnValue(blocked);
+			}
+			const install = installUpdate();
+			await vi.waitFor(() => expect(phase()).toBe(blockedPhase));
+			checkForUpdate.mockClear();
+			await checkForUpdates();
+			expect(checkForUpdate).not.toHaveBeenCalled();
+			expect(phase()).toBe(blockedPhase);
+			unblock();
+			await install;
+		},
+	);
+
 	it("does not start a second check while one is running", async () => {
 		let resolveFirst!: (v: unknown) => void;
 		checkForUpdate.mockImplementation(
@@ -178,6 +212,23 @@ describe("installUpdate", () => {
 		});
 		await installUpdate();
 		expect(get(updateState)).toMatchObject({ downloaded: 50, total: 100 });
+	});
+
+	it("starts the download from zero with the previous error cleared", async () => {
+		downloadAndInstall.mockRejectedValueOnce(new Error("first failure"));
+		await installUpdate();
+		expect(get(updateState).error).toBe("first failure");
+		const seen: unknown[] = [];
+		downloadAndInstall.mockImplementation(async () => {
+			seen.push({ ...get(updateState) });
+		});
+		await installUpdate();
+		expect(seen[0]).toMatchObject({
+			phase: "downloading",
+			downloaded: 0,
+			total: null,
+			error: null,
+		});
 	});
 
 	it("restarts once the install is done", async () => {
@@ -244,6 +295,28 @@ describe("hasPendingUpdate", () => {
 		await pending;
 	});
 
+	it.each(["downloading", "installing"])(
+		"is true while %s",
+		async (activePhase) => {
+			checkForUpdate.mockResolvedValue(release());
+			await checkForUpdates();
+			let unblock!: () => void;
+			const blocked = new Promise<void>((r) => {
+				unblock = r;
+			});
+			if (activePhase === "downloading") {
+				downloadAndInstall.mockReturnValue(blocked);
+			} else {
+				restartApp.mockReturnValue(blocked);
+			}
+			const install = installUpdate();
+			await vi.waitFor(() => expect(phase()).toBe(activePhase));
+			expect(get(hasPendingUpdate)).toBe(true);
+			unblock();
+			await install;
+		},
+	);
+
 	it("is false after a failed check", async () => {
 		checkForUpdate.mockRejectedValue(new Error("down"));
 		await checkForUpdates();
@@ -303,6 +376,17 @@ describe("startUpdateChecks", () => {
 		stop();
 	});
 
+	it("does not start a second schedule when another setting changes", async () => {
+		await settings.save({ autoCheckUpdates: true });
+		vi.useFakeTimers();
+		const stop = startUpdateChecks();
+		await settings.save({ autoCheckUpdates: true });
+		await vi.advanceTimersByTimeAsync(STARTUP_CHECK_DELAY_MS);
+		expect(checkForUpdate).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(1);
+		stop();
+	});
+
 	it("stops checking once torn down", async () => {
 		await settings.save({ autoCheckUpdates: true });
 		vi.useFakeTimers();
@@ -322,5 +406,26 @@ describe("startUpdateChecks", () => {
 		vi.advanceTimersByTime(STARTUP_CHECK_DELAY_MS + CHECK_INTERVAL_MS);
 		expect(checkForUpdate).not.toHaveBeenCalled();
 		stop();
+	});
+
+	it("clears both timers when the setting is turned off", async () => {
+		vi.useFakeTimers();
+		await settings.save({ autoCheckUpdates: true });
+		const stop = startUpdateChecks();
+		expect(vi.getTimerCount()).toBe(2);
+		await settings.save({ autoCheckUpdates: false });
+		expect(vi.getTimerCount()).toBe(0);
+		vi.advanceTimersByTime(STARTUP_CHECK_DELAY_MS + CHECK_INTERVAL_MS);
+		expect(checkForUpdate).not.toHaveBeenCalled();
+		stop();
+	});
+
+	it("ignores settings changes once torn down", async () => {
+		vi.useFakeTimers();
+		await settings.save({ autoCheckUpdates: false });
+		const stop = startUpdateChecks();
+		stop();
+		await settings.save({ autoCheckUpdates: true });
+		expect(vi.getTimerCount()).toBe(0);
 	});
 });

@@ -5,7 +5,7 @@
 // cache is module state that outlives a single test.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readFile } from "./file-service";
+import { readFile, readFileVersioned } from "./file-service";
 
 let nextPath = 0;
 /** A path no earlier test cached. */
@@ -196,5 +196,73 @@ describe("readFile", () => {
 		await expect(readFile(path)).resolves.toBe("kept");
 		expect(requests[1].headers).toEqual({ "If-None-Match": "keep" });
 		expect(requests[2].headers).toEqual({ "If-None-Match": "keep" });
+	});
+
+	async function fillCache(): Promise<string[]> {
+		const paths = Array.from({ length: 64 }, () => freshPath());
+		stageFetch(...paths.map((_, i) => ({ body: `body-${i}`, etag: `v${i}` })));
+		for (const path of paths) await readFile(path);
+		return paths;
+	}
+
+	it("keeps all 64 entries when the cache is exactly full", async () => {
+		const paths = await fillCache();
+		const { requests } = stageFetch({ status: 304 });
+		await readFile(paths[0]);
+		expect(requests[0].headers).toEqual({ "If-None-Match": "v0" });
+	});
+
+	it("counts a revalidated entry as recently used", async () => {
+		const paths = await fillCache();
+		stageFetch({ status: 304 }, { body: "extra", etag: "vx" });
+		await readFile(paths[0]);
+		await readFile(freshPath());
+
+		const { requests } = stageFetch({ status: 304 }, { body: "again" });
+		await readFile(paths[0]);
+		await readFile(paths[1]);
+		expect(requests[0].headers).toEqual({ "If-None-Match": "v0" });
+		expect(requests[1].headers).toEqual({});
+	});
+
+	it("counts an entry re-read with a new ETag as recently used", async () => {
+		const paths = await fillCache();
+		stageFetch({ body: "changed", etag: "v0b" }, { body: "extra", etag: "vx" });
+		await readFile(paths[0]);
+		await readFile(freshPath());
+
+		const { requests } = stageFetch({ status: 304 }, { body: "again" });
+		await readFile(paths[0]);
+		await readFile(paths[1]);
+		expect(requests[0].headers).toEqual({ "If-None-Match": "v0b" });
+		expect(requests[1].headers).toEqual({});
+	});
+});
+
+describe("readFileVersioned", () => {
+	it("answers the ETag as the version", async () => {
+		stageFetch({ body: "a", etag: "v1" });
+		await expect(readFileVersioned(freshPath())).resolves.toEqual({
+			text: "a",
+			version: "v1",
+		});
+	});
+
+	it("answers a null version when the response has no ETag", async () => {
+		stageFetch({ body: "a", etag: null });
+		await expect(readFileVersioned(freshPath())).resolves.toEqual({
+			text: "a",
+			version: null,
+		});
+	});
+
+	it("answers the stored ETag as the version of a 304", async () => {
+		const path = freshPath();
+		stageFetch({ body: "a", etag: "v1" }, { status: 304 });
+		await readFileVersioned(path);
+		await expect(readFileVersioned(path)).resolves.toEqual({
+			text: "a",
+			version: "v1",
+		});
 	});
 });

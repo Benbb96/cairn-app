@@ -155,4 +155,32 @@ describe("installCopySelectionHandler", () => {
 		window.dispatchEvent(copyKey());
 		expect(write).not.toHaveBeenCalled();
 	});
+
+	it("copies when nothing holds the focus", () => {
+		vi.spyOn(document, "activeElement", "get").mockReturnValue(null);
+		window.dispatchEvent(copyKey());
+		expect(write).toHaveBeenCalledWith("selected text");
+	});
+
+	it("watches the meta key without Ctrl on a Mac", async () => {
+		teardown();
+		vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+		);
+		vi.resetModules();
+		const mac = await import("./copy-selection");
+		const macWrite = vi.mocked(
+			(await import("@tauri-apps/plugin-clipboard-manager")).writeText,
+		);
+		macWrite.mockResolvedValue(undefined);
+		macWrite.mockClear();
+		teardown = mac.installCopySelectionHandler();
+		const key = (init: KeyboardEventInit) =>
+			new KeyboardEvent("keydown", { key: "c", cancelable: true, ...init });
+		window.dispatchEvent(key({ ctrlKey: true }));
+		window.dispatchEvent(key({ metaKey: true, ctrlKey: true }));
+		expect(macWrite).not.toHaveBeenCalled();
+		window.dispatchEvent(key({ metaKey: true }));
+		expect(macWrite).toHaveBeenCalledWith("selected text");
+	});
 });

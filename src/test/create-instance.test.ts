@@ -263,7 +263,10 @@ describe("CreateInstance", () => {
 			capabilitiesOf.mockReturnValue({ tracker: { kind: "jira" } });
 			await mountOnTicket();
 			expect(tabs()).toHaveLength(2);
-			expect(searchTickets).toHaveBeenCalled();
+			expect(searchTickets).toHaveBeenCalledWith(
+				"p1",
+				expect.objectContaining({ page: 1 }),
+			);
 		});
 	});
 
@@ -877,7 +880,11 @@ describe("CreateInstance", () => {
 					connectionId: "c1",
 				},
 			});
-			expect(setTicket).toHaveBeenCalled();
+			expect(setTicket).toHaveBeenCalledWith(
+				"p1",
+				"new-i",
+				expect.objectContaining({ key: "CAIRN-42" }),
+			);
 		});
 
 		/** The tracker can be told the ticket has started. */

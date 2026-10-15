@@ -1,7 +1,8 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listDirNames, readFile } from "$lib/services/file-service";
 import {
 	buildCandidates,
 	candidateToCommand,
@@ -9,7 +10,13 @@ import {
 	iconForScript,
 	parseScripts,
 	runScriptCommand,
+	scanPackageJson,
 } from "./command-import";
+
+vi.mock("$lib/services/file-service", () => ({
+	listDirNames: vi.fn(),
+	readFile: vi.fn(),
+}));
 
 describe("detectPackageManager", () => {
 	it("reads the manager from the lockfile", () => {
@@ -61,6 +68,11 @@ describe("parseScripts", () => {
 	it("survives a package.json without scripts", () => {
 		expect(parseScripts('{"name":"x"}')).toEqual({});
 	});
+
+	it("ignores a scripts field that is not an object", () => {
+		expect(parseScripts('{"scripts":"build"}')).toEqual({});
+		expect(parseScripts('{"scripts":null}')).toEqual({});
+	});
 });
 
 describe("buildCandidates", () => {
@@ -84,5 +96,40 @@ describe("candidateToCommand", () => {
 		expect(command.source).toBe("package.json");
 		expect(command.pinned).toBe(false);
 		expect(command.steps).toEqual(["npm run dev"]);
+	});
+});
+
+describe("scanPackageJson", () => {
+	beforeEach(() => {
+		vi.mocked(listDirNames).mockReset();
+		vi.mocked(readFile).mockReset();
+	});
+
+	it("offers the scripts through the manager the lockfile names", async () => {
+		vi.mocked(listDirNames).mockResolvedValue(["pnpm-lock.yaml"]);
+		vi.mocked(readFile).mockResolvedValue('{"scripts":{"dev":"vite"}}');
+		expect(await scanPackageJson("/repo")).toEqual({
+			manager: "pnpm",
+			candidates: [{ name: "dev", script: "pnpm run dev", icon: "play" }],
+		});
+		expect(readFile).toHaveBeenCalledWith("/repo/package.json");
+	});
+
+	it("offers nothing when there is no package.json", async () => {
+		vi.mocked(listDirNames).mockResolvedValue(["yarn.lock"]);
+		vi.mocked(readFile).mockResolvedValue(null);
+		expect(await scanPackageJson("/repo")).toEqual({
+			manager: "yarn",
+			candidates: [],
+		});
+	});
+
+	it("falls back to npm and nothing when the directory cannot be read", async () => {
+		vi.mocked(listDirNames).mockRejectedValue(new Error("denied"));
+		vi.mocked(readFile).mockRejectedValue(new Error("denied"));
+		expect(await scanPackageJson("/repo")).toEqual({
+			manager: "npm",
+			candidates: [],
+		});
 	});
 });

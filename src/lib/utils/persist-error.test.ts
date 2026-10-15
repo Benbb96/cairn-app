@@ -63,7 +63,10 @@ describe("persist", () => {
 			persist("settings", Promise.reject(new Error("x"))),
 		).not.toThrow();
 		await Promise.resolve();
-		expect(error).toHaveBeenCalled();
+		expect(error).toHaveBeenCalledWith(
+			"[cairn] failed to save settings:",
+			expect.objectContaining({ message: "x" }),
+		);
 	});
 
 	it("reports each failed write separately", async () => {

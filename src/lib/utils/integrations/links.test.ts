@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { WebLinkTarget } from "$lib/types/integrations";
 import {
 	buildPipelinesUrl,
 	buildTokenHelpUrl,
@@ -45,6 +46,14 @@ describe("fallbackForgeLink", () => {
 	});
 });
 
+describe("fallbackForgeLink with an unknown target", () => {
+	it("answers null instead of guessing a URL", () => {
+		expect(
+			fallbackForgeLink(remote, { type: "tag" } as unknown as WebLinkTarget),
+		).toBeNull();
+	});
+});
+
 describe("forgeLink", () => {
 	it("asks the bound forge when the project has the capability", async () => {
 		capabilitiesOf.mockReturnValue({
@@ -73,6 +82,23 @@ describe("forgeLink", () => {
 			forgeLink("p1", remote, { type: "commit", sha: "abc" }),
 		).resolves.toBe("https://gitlab.acme.io/group/repo/-/commit/abc");
 		expect(forgeWebLink).not.toHaveBeenCalled();
+	});
+
+	it("falls back to the remote when the forge has no link to give", async () => {
+		capabilitiesOf.mockReturnValue({
+			tracker: null,
+			forge: {
+				kind: "gitlab",
+				label: "GitLab",
+				webUrl: "",
+				terms: { mergeRequest: "mr" },
+			},
+			ci: null,
+		});
+		forgeWebLink.mockResolvedValue(null);
+		await expect(
+			forgeLink("p1", remote, { type: "branch", name: "dev" }),
+		).resolves.toBe("https://gitlab.acme.io/group/repo/-/tree/dev");
 	});
 
 	it("falls back to the remote when the forge fails", async () => {
@@ -122,6 +148,15 @@ describe("buildPipelinesUrl", () => {
 		expect(buildPipelinesUrl(gitlab, "")).toBe(
 			"https://gitlab.acme.io/acme/backend/-/pipelines",
 		);
+	});
+
+	it("opens every workflow run of the repository on GitHub when no branch is known", () => {
+		expect(
+			buildPipelinesUrl(
+				{ kind: "github", webUrl: "https://github.com/acme/repo/" },
+				"",
+			),
+		).toBe("https://github.com/acme/repo/actions");
 	});
 
 	it("uses the Actions shape on GitHub", () => {

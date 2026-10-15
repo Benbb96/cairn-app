@@ -3,8 +3,11 @@
 
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FormattingConfig } from "$lib/services/formatting-service";
-import { formatting } from "./formatting";
+import {
+	DEFAULT_FORMATTING,
+	type FormattingConfig,
+} from "$lib/services/formatting-service";
+import { forgetProject, formatting } from "./formatting";
 
 const getProjectFormatting = vi.hoisted(() => vi.fn());
 const saveProjectFormatting = vi.hoisted(() => vi.fn());
@@ -48,6 +51,20 @@ describe("the formatting store", () => {
 		expect(written.base).toEqual({ indentSize: 4 });
 		expect(written.formatOnSave).toBe(true);
 		expect(written.languages).toHaveLength(1);
+		expect(getProjectFormatting).toHaveBeenCalledTimes(1);
+		expect(formatting.projectConfig("p1")).toEqual(written);
+		expect(get(formatting.projects).p1).toEqual(written);
+	});
+
+	it("falls back to the defaults for a loaded project whose cache was dropped", async () => {
+		await formatting.loadProject("dropped");
+		forgetProject("dropped");
+		await formatting.saveProject("dropped", { base: { indentSize: 4 } });
+
+		expect(saveProjectFormatting).toHaveBeenCalledWith("dropped", {
+			...DEFAULT_FORMATTING,
+			base: { indentSize: 4 },
+		});
 	});
 
 	it("reads the project before saving when it never was", async () => {
@@ -68,5 +85,22 @@ describe("the formatting store", () => {
 
 		expect(saveProjectFormatting).not.toHaveBeenCalled();
 		expect(get(formatting.projects).p3).toBeUndefined();
+	});
+});
+
+describe("forgetProject", () => {
+	beforeEach(() => {
+		getProjectFormatting.mockReset().mockResolvedValue(structuredClone(onDisk));
+	});
+
+	it("drops the config cached for the removed project only", async () => {
+		await formatting.loadProject("gone");
+		await formatting.loadProject("kept");
+		forgetProject("gone");
+
+		const cached = get(formatting.projects);
+		expect(cached.gone).toBeUndefined();
+		expect(cached.kept).toEqual(onDisk);
+		expect(formatting.projectConfig("gone")).toBeNull();
 	});
 });

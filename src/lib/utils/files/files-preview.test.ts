@@ -6,6 +6,7 @@ import {
 	formatByteSize,
 	formatHexDump,
 	hexToBytes,
+	mimeFromPath,
 	previewKindFromPath,
 	svgDataUrl,
 } from "./files-preview";
@@ -25,6 +26,19 @@ describe("previewKindFromPath", () => {
 	it("falls back to binary", () => {
 		expect(previewKindFromPath("build/app.wasm")).toBe("binary");
 		expect(previewKindFromPath("LICENSE")).toBe("binary");
+	});
+});
+
+describe("mimeFromPath", () => {
+	it("maps an extension to its media type regardless of case", () => {
+		expect(mimeFromPath("a/logo.PNG")).toBe("image/png");
+		expect(mimeFromPath("icons/arrow.svg")).toBe("image/svg+xml");
+		expect(mimeFromPath("docs/spec.pdf")).toBe("application/pdf");
+	});
+
+	it("falls back to an opaque stream for anything else", () => {
+		expect(mimeFromPath("build/app.wasm")).toBe("application/octet-stream");
+		expect(mimeFromPath("LICENSE")).toBe("application/octet-stream");
 	});
 });
 
@@ -48,9 +62,41 @@ describe("formatByteSize", () => {
 	});
 });
 
+describe("formatByteSize thresholds", () => {
+	it("switches to the next unit exactly at 1024", () => {
+		expect(formatByteSize(1024)).toBe("1.0 KB");
+		expect(formatByteSize(1024 * 1024 - 1)).toBe("1024 KB");
+		expect(formatByteSize(1024 * 1024)).toBe("1.0 MB");
+		expect(formatByteSize(1024 ** 3)).toBe("1.0 GB");
+		expect(formatByteSize(1024 ** 4)).toBe("1.0 TB");
+	});
+
+	it("stays in terabytes however large the size", () => {
+		expect(formatByteSize(1024 ** 5)).toBe("1024 TB");
+	});
+
+	it("divides by exactly 1024 at every step", () => {
+		expect(formatByteSize(10 * 1024)).toBe("10 KB");
+		expect(formatByteSize(1000 * 1024 * 1024)).toBe("1000 MB");
+	});
+
+	it("rounds from ten upwards and keeps a decimal below", () => {
+		expect(formatByteSize(10.5 * 1024)).toBe("11 KB");
+		expect(formatByteSize(9.5 * 1024)).toBe("9.5 KB");
+	});
+});
+
 describe("hexToBytes", () => {
 	it("parses a hex string", () => {
 		expect(Array.from(hexToBytes("00ff10"))).toEqual([0, 255, 16]);
+	});
+
+	it("reads every byte of a long string from its own position", () => {
+		const bytes = Array.from({ length: 16 }, (_, index) => index + 1);
+		const hex = bytes
+			.map((byte) => byte.toString(16).padStart(2, "0"))
+			.join("");
+		expect(Array.from(hexToBytes(hex))).toEqual(bytes);
 	});
 
 	it("ignores a trailing half byte", () => {
@@ -68,6 +114,13 @@ describe("formatHexDump", () => {
 			"00000000  68 69 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |hi..............|",
 		);
 		expect(lines[1].startsWith("00000010  00 00 00 00")).toBe(true);
+	});
+
+	it("shows printable ascii from space to tilde and dots elsewhere", () => {
+		const line = formatHexDump(
+			new Uint8Array([0x1f, 0x20, 0x41, 0x7e, 0x7f, 0x80]),
+		);
+		expect(line.endsWith("|. A~..|")).toBe(true);
 	});
 
 	it("pads a short trailing line", () => {

@@ -63,6 +63,9 @@ describe("soleDifference", () => {
 		expect(soleDifference(new Set(), new Set(["a", "b"]))).toBeNull();
 		// Same size, different contents: one opened and one closed at once.
 		expect(soleDifference(new Set(["a"]), new Set(["b"]))).toBeNull();
+		// One entry more, but two of them are new.
+		expect(soleDifference(new Set(["a"]), new Set(["b", "c"]))).toBeNull();
+		expect(soleDifference(new Set(["b", "c"]), new Set(["a"]))).toBeNull();
 	});
 });
 
@@ -104,6 +107,19 @@ describe("spliceFolder", () => {
 				path: "a/b",
 				opened: true,
 			}),
+		).toBeNull();
+	});
+
+	it("asks for a rebuild when the row is a file or has no loaded children", () => {
+		const rows = flattenTree(
+			[file("f.ts"), { path: "lazy", isDir: true, children: null }] as N[],
+			new Set(["lazy"]),
+		);
+		expect(
+			spliceFolder(rows, new Set(["f.ts"]), { path: "f.ts", opened: true }),
+		).toBeNull();
+		expect(
+			spliceFolder(rows, new Set(["lazy"]), { path: "lazy", opened: true }),
 		).toBeNull();
 	});
 

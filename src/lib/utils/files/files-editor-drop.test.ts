@@ -43,6 +43,13 @@ describe("resolvePaneDrop", () => {
 		});
 	});
 
+	it("returns null outside both panes of a split", () => {
+		expect(resolvePaneDrop([left, right], true, 402, 100)).toBeNull();
+		expect(resolvePaneDrop([left, right], true, 100, 400)).toBeNull();
+		expect(resolvePaneDrop([left, null], true, 700, 100)).toBeNull();
+		expect(resolvePaneDrop([null, null], true, 10, 10)).toBeNull();
+	});
+
 	it("ignores a missing pane box", () => {
 		expect(resolvePaneDrop([null, null], false, 10, 10)).toBeNull();
 	});
@@ -87,5 +94,79 @@ describe("osDropPoint", () => {
 			x: 2000,
 			y: 1400,
 		});
+	});
+});
+
+describe("resolvePaneDrop boundaries", () => {
+	const offset: PaneBox = { left: 100, right: 500, top: 50, bottom: 350 };
+
+	it("counts the four edges of a pane as inside it", () => {
+		expect(resolvePaneDrop([offset, null], true, 100, 200)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+		expect(resolvePaneDrop([offset, null], true, 500, 200)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+		expect(resolvePaneDrop([offset, null], true, 300, 50)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+		expect(resolvePaneDrop([offset, null], true, 300, 350)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+	});
+
+	it("opens the split from 28 percent of the width before the right edge", () => {
+		expect(resolvePaneDrop([offset, null], false, 388, 200)).toEqual({
+			pane: 1,
+			openSplit: true,
+		});
+		expect(resolvePaneDrop([offset, null], false, 387, 200)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+		expect(resolvePaneDrop([offset, null], false, 300, 200)).toEqual({
+			pane: 0,
+			openSplit: false,
+		});
+	});
+});
+
+describe("osDropPoint boundaries", () => {
+	const viewport = { width: 1440, height: 900 };
+
+	it("keeps a position sitting exactly on the viewport corner", () => {
+		expect(osDropPoint({ x: 1440, y: 900 }, viewport, 2)).toEqual({
+			x: 1440,
+			y: 900,
+		});
+		expect(osDropPoint({ x: 1440, y: 100 }, viewport, 2)).toEqual({
+			x: 1440,
+			y: 100,
+		});
+		expect(osDropPoint({ x: 100, y: 900 }, viewport, 2)).toEqual({
+			x: 100,
+			y: 900,
+		});
+	});
+
+	it("scales a position that overflows only one axis", () => {
+		expect(osDropPoint({ x: 100, y: 1400 }, viewport, 2)).toEqual({
+			x: 50,
+			y: 700,
+		});
+		expect(osDropPoint({ x: 2000, y: 100 }, viewport, 2)).toEqual({
+			x: 1000,
+			y: 50,
+		});
+	});
+});
+
+describe("toWorktreeRelative single character", () => {
+	it("keeps a one character relative path", () => {
+		expect(toWorktreeRelative("/wt/a", "/wt")).toBe("a");
 	});
 });

@@ -34,6 +34,10 @@ describe("normalizeLineEndings", () => {
 	it("is a no-op for LF text", () => {
 		expect(normalizeLineEndings("a\nb", "LF")).toBe("a\nb");
 	});
+
+	it("leaves carriage returns alone when the file is LF", () => {
+		expect(normalizeLineEndings("a\r\nb", "LF")).toBe("a\r\nb");
+	});
 });
 
 describe("denormalizeLineEndings", () => {
@@ -62,6 +66,12 @@ describe("detectIndentStyle", () => {
 	it("prefers tabs when equal", () => {
 		expect(detectIndentStyle("\ta\n  b")).toBe("tabs");
 	});
+
+	it("looks at the first 100 lines only", () => {
+		const text = `${"a\n".repeat(100)}\tindented`;
+		expect(detectIndentStyle(text)).toBeNull();
+		expect(detectIndentStyle(`${"a\n".repeat(99)}\tindented`)).toBe("tabs");
+	});
 });
 
 describe("detectSpaceSize", () => {
@@ -79,6 +89,11 @@ describe("detectSpaceSize", () => {
 
 	it("prefers smaller sizes up to 4", () => {
 		expect(detectSpaceSize("  a\n    b")).toBe(2);
+	});
+
+	it("looks at the first 100 lines only", () => {
+		expect(detectSpaceSize(`${"a\n".repeat(100)}    indented`)).toBe(2);
+		expect(detectSpaceSize(`${"a\n".repeat(99)}    indented`)).toBe(4);
 	});
 
 	it("falls back to first size when all are > 4", () => {

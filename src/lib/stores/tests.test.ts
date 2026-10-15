@@ -4,6 +4,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runProjectTeardowns } from "$lib/stores/project-teardown";
 import type { TestEvent } from "$lib/types/tests";
 
 const getTestState = vi.hoisted(() => vi.fn());
@@ -24,6 +25,7 @@ vi.mock("$lib/utils/tests/test-detect", () => ({ detectTestRunners }));
 
 import {
 	disposeTests,
+	forgetProject,
 	initTests,
 	loadTests,
 	runTests,
@@ -31,6 +33,7 @@ import {
 	selectRunner,
 	setFilter,
 	setSearch,
+	stopTests,
 	testKey,
 	testStateFor,
 	tests,
@@ -167,7 +170,13 @@ describe("runTests", () => {
 
 	it("starts a run and records it as active", async () => {
 		await runTests("p1", INSTANCE, WORKTREE);
-		expect(runTestsService).toHaveBeenCalled();
+		expect(runTestsService).toHaveBeenCalledWith(
+			state().activeRunId,
+			WORKTREE,
+			WORKTREE,
+			expect.any(String),
+			expect.any(String),
+		);
 		expect(state().activeRunId).not.toBe("");
 	});
 
@@ -184,6 +193,95 @@ describe("runTests", () => {
 		emit({ runId: state().activeRunId, kind: "run_end", exitCode: 1 });
 		await runTests("p1", INSTANCE, WORKTREE);
 		expect(state().error).toBe("");
+	});
+});
+
+describe("runTests when it cannot run", () => {
+	it("does nothing when the worktree offers no runner", async () => {
+		detectTestRunners.mockResolvedValue([]);
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		expect(runTestsService).not.toHaveBeenCalled();
+		expect(state().activeRunId).toBe("");
+		expect(state().summary).toBeNull();
+	});
+
+	it("runs a runner from its own subdirectory", async () => {
+		detectTestRunners.mockResolvedValue([
+			{ ...runner("vitest"), subdir: "packages/web" },
+		]);
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		expect(runTestsService).toHaveBeenCalledWith(
+			state().activeRunId,
+			WORKTREE,
+			`${WORKTREE}/packages/web`,
+			"run vitest",
+			"vitest",
+		);
+	});
+
+	it("reports a run the backend refused to start and frees the instance", async () => {
+		await loadTests("p1", INSTANCE, WORKTREE);
+		runTestsService.mockRejectedValue(new Error("spawn failed"));
+
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		expect(state().activeRunId).toBe("");
+		expect(state().error).toBe("Error: spawn failed");
+		expect(state().pending).toEqual([]);
+		expect(get(testsBusy)[KEY]).toBe(false);
+	});
+
+	it("lets the instance run again after a refused start", async () => {
+		await loadTests("p1", INSTANCE, WORKTREE);
+		runTestsService.mockRejectedValueOnce(new Error("spawn failed"));
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		expect(runTestsService).toHaveBeenCalledTimes(2);
+		expect(state().error).toBe("");
+		expect(state().activeRunId).not.toBe("");
+	});
+});
+
+describe("stopTests", () => {
+	it("stops the run in flight by its id", async () => {
+		await loadTests("p1", INSTANCE, WORKTREE);
+		await runTests("p1", INSTANCE, WORKTREE);
+
+		await stopTests("p1", INSTANCE);
+
+		expect(stopTestsService).toHaveBeenCalledTimes(1);
+		expect(stopTestsService).toHaveBeenCalledWith(state().activeRunId);
+	});
+
+	it("does nothing when no run is going", async () => {
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		await stopTests("p1", INSTANCE);
+
+		expect(stopTestsService).not.toHaveBeenCalled();
+	});
+});
+
+describe("forgetProject", () => {
+	it("drops the state of every instance of the project and keeps the others", async () => {
+		await loadTests("pf", "i1", WORKTREE);
+		await loadTests("pf", "i2", WORKTREE);
+		await loadTests("pg", "i1", WORKTREE);
+
+		forgetProject("pf");
+
+		const keys = Object.keys(get(tests));
+		expect(keys).not.toContain("pf:i1");
+		expect(keys).not.toContain("pf:i2");
+		expect(keys).toContain("pg:i1");
 	});
 });
 
@@ -229,6 +327,35 @@ describe("handling backend events", () => {
 		expect(state().rawOutput).toHaveLength(2000);
 		expect(state().rawOutput.at(-1)).toBe("line 2099");
 		expect(state().rawOutput[0]).toBe("line 100");
+	});
+
+	it("ignores a run start announcement", () => {
+		const before = state();
+		emit({ runId: activeRun(), kind: "run_start" });
+		expect(state()).toEqual(before);
+	});
+
+	it("shows a file whose suite failed to load, with its message", () => {
+		emit({
+			runId: activeRun(),
+			kind: "suite_error",
+			file: "broken.test.ts",
+			message: "cannot import",
+		});
+		expect(state().suites).toEqual([
+			{
+				file: "broken.test.ts",
+				cases: [],
+				error: "cannot import",
+				status: "fail",
+				durationMs: 0,
+			},
+		]);
+	});
+
+	it("ignores a suite error that names no file", () => {
+		emit({ runId: activeRun(), kind: "suite_error", message: "orphan" });
+		expect(state().suites).toEqual([]);
 	});
 
 	it("surfaces a run error", () => {
@@ -353,6 +480,322 @@ describe("view preferences", () => {
 			search: "auth",
 		});
 		vi.useRealTimers();
+	});
+});
+
+const savedSuite = (file: string) => ({
+	file,
+	status: "pass",
+	durationMs: 0,
+	cases: [],
+	error: null,
+});
+
+const passingCase = (id: string, file: string) => ({
+	id,
+	name: id,
+	ancestors: [],
+	file,
+	line: null,
+	status: "pass" as const,
+	durationMs: 1,
+	failure: null,
+});
+
+async function startRunOverSavedFiles(files: string[]): Promise<string> {
+	getTestState.mockResolvedValue({
+		runnerId: "vitest",
+		suites: files.map(savedSuite),
+		summary: null,
+		selectedCaseId: "",
+		filter: "all",
+		search: "",
+	});
+	await loadTests("p1", INSTANCE, WORKTREE);
+	await runTests("p1", INSTANCE, WORKTREE);
+	return state().activeRunId;
+}
+
+describe("run results over a restored tree", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("shows a reported case while the files not reached yet stay in the list", async () => {
+		const run = await startRunOverSavedFiles(["a.test.ts", "b.test.ts"]);
+
+		emit({
+			runId: run,
+			kind: "case",
+			case: passingCase("a1", "a.test.ts"),
+		});
+
+		expect(state().suites.map((suite) => suite.file)).toEqual([
+			"a.test.ts",
+			"b.test.ts",
+		]);
+		expect(state().suites[0].cases.map((entry) => entry.id)).toEqual(["a1"]);
+	});
+
+	it("ignores a case event that carries no case", async () => {
+		const run = await startRunOverSavedFiles(["a.test.ts"]);
+		const before = state().suites;
+
+		expect(() => emit({ runId: run, kind: "case" })).not.toThrow();
+
+		expect(state().suites).toEqual(before);
+	});
+
+	it("drops a file the finished run never reported", async () => {
+		const run = await startRunOverSavedFiles(["a.test.ts", "b.test.ts"]);
+		emit({ runId: run, kind: "case", case: passingCase("a1", "a.test.ts") });
+
+		emit({ runId: run, kind: "run_end", exitCode: 0 });
+
+		expect(state().suites.map((suite) => suite.file)).toEqual(["a.test.ts"]);
+	});
+
+	it("keeps every file when the run was cancelled", async () => {
+		const run = await startRunOverSavedFiles(["a.test.ts", "b.test.ts"]);
+		emit({ runId: run, kind: "case", case: passingCase("a1", "a.test.ts") });
+
+		emit({ runId: run, kind: "run_end", cancelled: true });
+
+		expect(state().suites.map((suite) => suite.file)).toEqual([
+			"a.test.ts",
+			"b.test.ts",
+		]);
+		expect(state().summary?.status).toBe("cancelled");
+	});
+
+	it("records a suite error without message as an empty message", async () => {
+		const run = await startRunOverSavedFiles([]);
+
+		emit({ runId: run, kind: "suite_error", file: "broken.test.ts" });
+
+		expect(state().suites[0]).toMatchObject({
+			file: "broken.test.ts",
+			error: "",
+		});
+	});
+
+	it("records a run error without message as an empty message", async () => {
+		const run = await startRunOverSavedFiles([]);
+
+		emit({ runId: run, kind: "error" });
+
+		expect(state().error).toBe("");
+	});
+
+	it("ignores a raw event without a line", async () => {
+		const run = await startRunOverSavedFiles([]);
+
+		emit({ runId: run, kind: "raw" });
+		emit({ runId: run, kind: "raw", line: "" });
+
+		expect(state().rawOutput).toEqual([]);
+	});
+
+	it("keeps the exit code null when the run ends without one", async () => {
+		const run = await startRunOverSavedFiles([]);
+
+		emit({ runId: run, kind: "run_end" });
+
+		expect(state().summary?.exitCode).toBeNull();
+	});
+
+	it("measures the duration from the start of the run", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		const run = await startRunOverSavedFiles([]);
+
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.500Z"));
+		emit({ runId: run, kind: "run_end", exitCode: 0 });
+
+		expect(state().summary?.durationMs).toBe(1500);
+	});
+
+	it("does not let a replaced run end the run that took over", async () => {
+		const replaced = await startRunOverSavedFiles([]);
+		forgetProject("p1");
+		await loadTests("p1", INSTANCE, WORKTREE);
+		await runTests("p1", INSTANCE, WORKTREE);
+		const current = state().activeRunId;
+		expect(current).not.toBe(replaced);
+
+		emit({ runId: replaced, kind: "run_end", exitCode: 1 });
+
+		expect(state().activeRunId).toBe(current);
+		expect(state().summary?.status).toBe("running");
+	});
+
+	it("survives events of a run whose instance was forgotten", async () => {
+		const run = await startRunOverSavedFiles([]);
+		forgetProject("p1");
+
+		expect(() => emit({ runId: run, kind: "raw", line: "late" })).not.toThrow();
+
+		expect(state().rawOutput).toEqual([]);
+	});
+
+	it("creates no state for an event whose run is unknown", () => {
+		emit({ runId: "", kind: "raw", line: "orphan" });
+
+		expect(Object.keys(get(tests))).not.toContain("undefined");
+	});
+});
+
+describe("persisting", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("saves the tree and its summary once a run ends", async () => {
+		const run = await startRunOverSavedFiles(["a.test.ts"]);
+
+		emit({ runId: run, kind: "run_end", exitCode: 0 });
+		await vi.advanceTimersByTimeAsync(600);
+
+		expect(saveTestState).toHaveBeenCalledWith(
+			"p1",
+			INSTANCE,
+			expect.objectContaining({
+				runnerId: "vitest",
+				summary: expect.objectContaining({ status: "passed" }),
+			}),
+		);
+	});
+
+	it.each([
+		[
+			"selectRunner",
+			() => selectRunner("p1", INSTANCE, "jest"),
+			{ runnerId: "jest" },
+		],
+		[
+			"selectCase",
+			() => selectCase("p1", INSTANCE, "c9"),
+			{ selectedCaseId: "c9" },
+		],
+		[
+			"setSearch",
+			() => setSearch("p1", INSTANCE, "needle"),
+			{ search: "needle" },
+		],
+		[
+			"setFilter",
+			() => setFilter("p1", INSTANCE, "failed"),
+			{ filter: "failed" },
+		],
+	])("%s saves the preference", async (_name, act, expected) => {
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		act();
+		await vi.advanceTimersByTimeAsync(600);
+
+		expect(saveTestState).toHaveBeenCalledWith(
+			"p1",
+			INSTANCE,
+			expect.objectContaining(expected),
+		);
+	});
+});
+
+describe("loadTests restoring the runner", () => {
+	it("starts without a selection while detection is still running", async () => {
+		let finishDetection: (runners: unknown[]) => void = () => {};
+		detectTestRunners.mockReturnValue(
+			new Promise((resolve) => {
+				finishDetection = resolve;
+			}),
+		);
+
+		const loading = loadTests("p1", INSTANCE, WORKTREE);
+		await vi.waitFor(() => expect(state().detecting).toBe(true));
+
+		expect(state().selectedRunnerId).toBe("");
+		expect(state().selectedCaseId).toBe("");
+		finishDetection([]);
+		await loading;
+	});
+
+	it("resolves a runner saved by its bare engine id to its package", async () => {
+		detectTestRunners.mockResolvedValue([
+			runner("jest"),
+			{ ...runner("vitest"), subdir: "packages/web" },
+		]);
+		getTestState.mockResolvedValue({ runnerId: "vitest", suites: [] });
+
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		expect(state().selectedRunnerId).toBe("vitest:packages/web");
+	});
+
+	it("keeps the saved runner when it is not the first one detected", async () => {
+		detectTestRunners.mockResolvedValue([runner("jest"), runner("vitest")]);
+		getTestState.mockResolvedValue({ runnerId: "vitest", suites: [] });
+
+		await loadTests("p1", INSTANCE, WORKTREE);
+
+		expect(state().selectedRunnerId).toBe("vitest");
+	});
+});
+
+describe("run quoting", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const fileScope = { kind: "file" as const, file: "a.test.ts" };
+
+	async function commandSentFor(platform: string | null): Promise<string> {
+		vi.stubGlobal("navigator", platform === null ? undefined : { platform });
+		await loadTests("p1", INSTANCE, WORKTREE);
+		await runTests("p1", INSTANCE, WORKTREE, fileScope);
+		return runTestsService.mock.calls[0][3];
+	}
+
+	it("quotes for cmd on Windows", async () => {
+		expect(await commandSentFor("Win32")).toBe('run vitest "a.test.ts"');
+	});
+
+	it("quotes for a POSIX shell elsewhere", async () => {
+		expect(await commandSentFor("MacIntel")).toBe("run vitest 'a.test.ts'");
+	});
+
+	it("quotes for a POSIX shell when there is no navigator", async () => {
+		expect(await commandSentFor(null)).toBe("run vitest 'a.test.ts'");
+	});
+});
+
+describe("project removal", () => {
+	it("forgets the instances of a removed project", async () => {
+		await loadTests("pz", "i1", WORKTREE);
+
+		await runProjectTeardowns("pz");
+
+		expect(Object.keys(get(tests))).not.toContain("pz:i1");
+	});
+});
+
+describe("disposeTests", () => {
+	it("detaches the listener it registered", async () => {
+		const off = vi.fn();
+		disposeTests();
+		vi.mocked(listen).mockImplementation(
+			(async () => off) as unknown as typeof listen,
+		);
+		initTests();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		disposeTests();
+
+		expect(off).toHaveBeenCalledTimes(1);
 	});
 });
 

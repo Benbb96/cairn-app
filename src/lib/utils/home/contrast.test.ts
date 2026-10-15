@@ -10,6 +10,12 @@ describe("relativeLuminance", () => {
 		expect(relativeLuminance("#ffffff")).toBeCloseTo(1, 5);
 	});
 
+	it("follows the WCAG curve on a dark, a mid and a mixed colour", () => {
+		expect(relativeLuminance("#0a0a0a")).toBeCloseTo(0.0030353, 7);
+		expect(relativeLuminance("#808080")).toBeCloseTo(0.2158605, 6);
+		expect(relativeLuminance("#c80a80")).toBeCloseTo(0.1405496, 6);
+	});
+
 	it("reads oklch as well as hex", () => {
 		expect(relativeLuminance("oklch(0.96 0.005 80)")).toBeGreaterThan(0.8);
 	});

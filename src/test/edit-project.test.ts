@@ -303,9 +303,15 @@ describe("EditProject", () => {
 		it("saves on Enter when there is something to save", async () => {
 			mount();
 			await settle();
+			const before = nameField().value;
 			await userEvent.type(nameField(), " x{Enter}");
 			await settle();
-			expect(editProject).toHaveBeenCalled();
+			expect(editProject).toHaveBeenCalledWith(
+				"p1",
+				`${before} x`,
+				expect.anything(),
+				null,
+			);
 		});
 
 		/**

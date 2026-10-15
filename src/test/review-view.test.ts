@@ -519,7 +519,9 @@ describe("ReviewView", () => {
 		it("says the commit is missing rather than showing an error", async () => {
 			mount();
 			await settle();
-			expect(banners().join(" ")).not.toBe("");
+			expect(banners()).toHaveLength(1);
+			expect(banners()[0]).toContain("is not in this worktree yet");
+			expect(banners()[0]).not.toContain("Git operation failed");
 		});
 
 		/**
@@ -551,7 +553,11 @@ describe("ReviewView", () => {
 			commitExists.mockResolvedValue(true);
 			await userEvent.click(buttonBy(/fetch|récupérer/i));
 			await settle();
-			expect(getDiffFilesBetween).toHaveBeenCalled();
+			expect(getDiffFilesBetween).toHaveBeenCalledWith(
+				"/wt",
+				"main",
+				"sha-head",
+			);
 		});
 
 		it("reports a fetch that failed", async () => {
@@ -560,7 +566,7 @@ describe("ReviewView", () => {
 			await settle();
 			await userEvent.click(buttonBy(/fetch|récupérer/i));
 			await settle();
-			expect(banners().join(" ")).not.toBe("");
+			expect(banners().join(" ")).toContain("Git operation failed");
 		});
 	});
 
@@ -1116,7 +1122,11 @@ describe("ReviewView", () => {
 			}));
 			mount();
 			await settle();
-			expect(loadReview).toHaveBeenCalled();
+			expect(loadReview).toHaveBeenCalledWith({
+				projectId: "p1",
+				instanceId: "i1",
+				worktreePath: "/wt",
+			});
 			expect(discPanel()).toBeNull();
 			expect(discRail()).not.toBeNull();
 		});

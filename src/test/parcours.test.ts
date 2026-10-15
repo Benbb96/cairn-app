@@ -37,6 +37,7 @@ vi.mock("$lib/components/files/CodeEditor.svelte", async () => ({
 const { default: Page } = await import("../routes/+page.svelte");
 
 await import("$lib/components/Workspace.svelte");
+const { openTabOrder, activeProjectId } = await import("$lib/stores/project");
 
 const WORKTREE = "/worktrees/p1/feature";
 
@@ -82,7 +83,12 @@ async function settle(rounds = 12) {
 }
 
 beforeEach(() => {
+	vi.spyOn(Math, "random").mockReturnValue(0);
+	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 	backend = seedWorld();
+	openTabOrder.set([]);
+	activeProjectId.set(null);
 	Element.prototype.setPointerCapture = vi.fn();
 	Element.prototype.releasePointerCapture = vi.fn();
 	Element.prototype.scrollIntoView = () => {};
@@ -112,6 +118,7 @@ beforeEach(() => {
 // The prototype patch and the stubbed globals above are process-wide; left in
 // place they reach whatever runs next in the same worker.
 afterEach(() => {
+	vi.restoreAllMocks();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	delete (HTMLElement.prototype as unknown as Record<string, unknown>)
@@ -289,6 +296,12 @@ describe("parcours: creating an instance", () => {
 			branch: "second",
 			baseBranch: "main",
 		});
+
+		expect(get(instances).map((i) => i.id)).toEqual(["i1", created.id]);
+		const { projects } = await import("$lib/stores/project");
+		expect(get(projects).find((p) => p.id === "p1")?.activeInstanceId).toBe(
+			created.id,
+		);
 		await loadInstances("p1");
 
 		expect(get(instances).map((i) => i.id)).toEqual(["i1", created.id]);

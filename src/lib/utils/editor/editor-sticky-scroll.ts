@@ -30,6 +30,7 @@ export function stickyLinesAt(state: EditorState, pos: number): StickyLine[] {
 
 	const cursor = syntaxTree(state).resolveInner(pos, 1).cursor();
 	do {
+		if (!cursor.node.parent) break;
 		const line = state.doc.lineAt(cursor.from);
 		if (
 			line.number !== seen &&

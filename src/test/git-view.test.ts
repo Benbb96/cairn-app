@@ -612,22 +612,26 @@ describe("GitView", () => {
 			mount();
 			await settle();
 			const profileButton = document.querySelector(
-				".profile-btn, .profile-trigger",
-			);
-			if (profileButton) {
-				await userEvent.click(profileButton as HTMLElement);
-				await settle();
-				const option = Array.from(
-					document.querySelectorAll<HTMLElement>("button"),
-				).find((b) => b.textContent?.includes("Work"));
-				if (option) await userEvent.click(option);
-				await settle();
-			}
+				".profile-trigger",
+			) as HTMLElement;
+			expect(profileButton).not.toBeNull();
+			await userEvent.click(profileButton);
+			await settle();
+			const option = Array.from(
+				document.querySelectorAll<HTMLElement>(".profile-opt"),
+			).find((b) => b.textContent?.includes("Work")) as HTMLElement;
+			expect(option).toBeDefined();
+			await userEvent.click(option);
+			await settle();
 			await userEvent.click(
 				commitButtons().find((b) => !b.disabled) as HTMLElement,
 			);
 			await settle();
 			expect(commitChanges).toHaveBeenCalledTimes(1);
+			expect(commitChanges.mock.calls[0][1]).toMatchObject({
+				authorName: "Alice",
+				authorEmail: "a@x.dev",
+			});
 		});
 
 		it("commits and pushes on the primary action", async () => {
@@ -641,8 +645,11 @@ describe("GitView", () => {
 				document.querySelector(".btn.primary") as HTMLElement,
 			);
 			await settle();
-			expect(commitChanges).toHaveBeenCalled();
-			expect(pushBranch).toHaveBeenCalled();
+			expect(commitChanges).toHaveBeenCalledWith(
+				"feat: add login",
+				expect.objectContaining({ allowEmpty: false }),
+			);
+			expect(pushBranch).toHaveBeenCalledWith();
 		});
 	});
 

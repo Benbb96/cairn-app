@@ -137,7 +137,45 @@ describe("titleSlug", () => {
 	});
 });
 
+describe("titleSlug length cap", () => {
+	const word = (letter: string, length: number) => letter.repeat(length);
+
+	it("keeps a slug of exactly the maximum length", () => {
+		const title = [10, 10, 10, 10, 8]
+			.map((length, i) => word("abcde"[i], length))
+			.join(" ");
+		expect(titleSlug(title)).toBe(
+			`${word("a", 10)}-${word("b", 10)}-${word("c", 10)}-${word("d", 10)}-${word("e", 8)}`,
+		);
+	});
+
+	it("drops trailing words until the slug fits", () => {
+		const title = ["a", "b", "c", "d", "e", "f"]
+			.map((letter) => word(letter, 10))
+			.join(" ");
+		expect(titleSlug(title)).toBe(
+			`${word("a", 10)}-${word("b", 10)}-${word("c", 10)}-${word("d", 10)}`,
+		);
+	});
+
+	it("falls back to the first word when two words are too long together", () => {
+		expect(titleSlug(`${word("a", 30)} ${word("b", 30)}`)).toBe(word("a", 30));
+	});
+
+	it("never drops the only word, however long", () => {
+		expect(titleSlug(word("a", 60))).toBe(word("a", 60));
+	});
+
+	it("reads a missing title as empty", () => {
+		expect(titleSlug(null as unknown as string)).toBe("");
+	});
+});
+
 describe("slugSegment", () => {
+	it("reads a missing slug as empty", () => {
+		expect(slugSegment(null as unknown as string)).toBe("");
+	});
+
 	/**
 	 * The words are the model's answer. Passing them back through `titleSlug`
 	 * rewrote them - `drop-stale-sessions-on-logout` lost its `on`, and a

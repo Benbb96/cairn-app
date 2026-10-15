@@ -225,7 +225,11 @@ describe("LanguageServersSection", () => {
 			statuses.set({ "tsserver:/wt": "ready" });
 			mount();
 			await settle();
-			expect(rowFor("TypeScript").querySelector(".ls-dot")).not.toBeNull();
+			const dot = rowFor("TypeScript").querySelector(".ls-dot");
+			expect(dot).not.toBeNull();
+			expect(dot?.classList.contains("failed")).toBe(false);
+			expect(dot?.classList.contains("starting")).toBe(false);
+			expect(dot?.getAttribute("title")).toBe("Running");
 		});
 	});
 
@@ -273,7 +277,7 @@ describe("LanguageServersSection", () => {
 				rowFor("TypeScript").querySelector(".ls-install") as HTMLElement,
 			);
 			await settle();
-			expect(refreshLanguageServers).toHaveBeenCalled();
+			expect(refreshLanguageServers).toHaveBeenCalledWith("/wt");
 		});
 
 		it("reports a failed install", async () => {
@@ -640,7 +644,7 @@ describe("LanguageServersSection", () => {
 			);
 			await settle();
 			expect(removeCustomServer).toHaveBeenCalledWith("custom-1");
-			expect(refreshLanguageServers).toHaveBeenCalled();
+			expect(refreshLanguageServers).toHaveBeenCalledWith("/wt");
 		});
 	});
 });

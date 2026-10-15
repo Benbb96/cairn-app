@@ -15,9 +15,11 @@ import {
 	flattenToNodes,
 	flattenVisible,
 	getSiblingNames,
+	gitStatusIndex,
 	isExternalPath,
 	isUnder,
 	nodeGitStatus,
+	normalizeGitStatus,
 	parentPathOf,
 	pasteDestName,
 	pathWithinWorktree,
@@ -306,5 +308,95 @@ describe("pathWithinWorktree", () => {
 
 	it("leaves the path alone without a worktree", () => {
 		expect(pathWithinWorktree("/wt/src/app.ts", null)).toBe("/wt/src/app.ts");
+	});
+});
+
+describe("malformed nodes", () => {
+	const fileWithChildren: FileNode = {
+		name: "odd",
+		path: "odd",
+		isDir: false,
+		children: [dir("odd/sub", [file("odd/sub/inner.ts")])],
+	};
+	const childlessDir: FileNode = { name: "bare", path: "bare", isDir: true };
+
+	it("does not descend into a file that carries children", () => {
+		const nodes = [fileWithChildren];
+		expect(flattenVisible(nodes, new Set(["odd"])).map((n) => n.path)).toEqual([
+			"odd",
+		]);
+		expect(
+			flattenToNodes(nodes, new Set(["odd/sub"])).map((n) => n.path),
+		).toEqual([]);
+		expect([...collectFilePaths(nodes)]).toEqual(["odd"]);
+		expect(getSiblingNames(nodes, "odd/sub")).toEqual(new Set());
+	});
+
+	it("walks past a directory without children", () => {
+		const nodes = [childlessDir];
+		expect(flattenVisible(nodes, new Set(["bare"])).map((n) => n.path)).toEqual(
+			["bare"],
+		);
+		expect(flattenToNodes(nodes, new Set(["x"]))).toEqual([]);
+		expect([...collectFilePaths(nodes)]).toEqual([]);
+		expect(getSiblingNames(nodes, "x")).toEqual(new Set());
+	});
+});
+
+describe("getSiblingNames nested", () => {
+	it("finds a directory below a sibling that does not contain it", () => {
+		const nodes = [
+			dir("a", [file("a/one.ts")]),
+			dir("b", [dir("b/deep", [file("b/deep/two.ts")])]),
+		];
+		expect(getSiblingNames(nodes, "b/deep")).toEqual(new Set(["two.ts"]));
+		expect(getSiblingNames(tree, "src/lib")).toEqual(new Set(["a.ts", "b.ts"]));
+	});
+});
+
+describe("normalizeGitStatus", () => {
+	it("keeps known statuses, folds staged variants and rejects the rest", () => {
+		expect(normalizeGitStatus("modified")).toBe("modified");
+		expect(normalizeGitStatus("staged-added")).toBe("staged");
+		expect(normalizeGitStatus("renamed")).toBeNull();
+	});
+
+	it("does not report an unknown status for a file", () => {
+		const map = { "a.ts": "renamed" } as unknown as GitStatusMap;
+		expect(nodeGitStatus(file("a.ts"), map)).toBeNull();
+	});
+});
+
+describe("gitStatusIndex", () => {
+	it("memoises on the status map instance", () => {
+		const map: GitStatusMap = { "d/a.ts": "modified" };
+		expect(gitStatusIndex(map)).toBe(gitStatusIndex(map));
+		expect(gitStatusIndex({ ...map })).not.toBe(gitStatusIndex(map));
+	});
+
+	it("keeps the most urgent status whatever the entry order", () => {
+		const map = {
+			"d/a.ts": "staged-modified",
+			"d/b.ts": "modified",
+		} as GitStatusMap;
+		expect(gitStatusIndex(map).get("d")).toBe("staged");
+	});
+});
+
+describe("pasteDestName dotfiles", () => {
+	it("treats a leading dot as part of the base name", () => {
+		expect(pasteDestName(".gitignore", new Set([".gitignore"]))).toBe(
+			".gitignore copy",
+		);
+	});
+
+	it("splits a one-letter base from its extension", () => {
+		expect(pasteDestName("a.ts", new Set(["a.ts"]))).toBe("a copy.ts");
+	});
+});
+
+describe("resolveDestName conflicts", () => {
+	it("avoids a name already present in the target directory", () => {
+		expect(resolveDestName(tree, "other/a.ts", "src/lib")).toBe("a copy.ts");
 	});
 });

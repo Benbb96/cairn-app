@@ -368,7 +368,7 @@ describe("GitignoreView", () => {
 		await settle();
 		await userEvent.type(textarea(), "dist");
 		await userEvent.keyboard("{Meta>}s{/Meta}");
-		expect(writeExclude).toHaveBeenCalled();
+		expect(writeExclude).toHaveBeenCalledWith("node_modules\ndist");
 	});
 
 	it("puts the content back on request", async () => {

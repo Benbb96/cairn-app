@@ -152,7 +152,10 @@ describe("DuplicateInstanceModal", () => {
 	it("duplicates on Enter", async () => {
 		const { onConfirm } = mount();
 		await userEvent.type(field(), "{Enter}");
-		expect(onConfirm).toHaveBeenCalled();
+		expect(onConfirm).toHaveBeenCalledWith({
+			title: "i1 (copy)",
+			copyWorkingChanges: true,
+		});
 	});
 });
 

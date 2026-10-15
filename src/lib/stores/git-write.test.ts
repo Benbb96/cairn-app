@@ -7,7 +7,7 @@
 // not the git calls themselves (git-service.test.ts covers those).
 
 import { get } from "svelte/store";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { instance, project } from "../../test/fixtures";
 
 const service = vi.hoisted(() => ({
@@ -35,17 +35,51 @@ const service = vi.hoisted(() => ({
 	renameRemote: vi.fn(),
 	setRemoteUrl: vi.fn(),
 	removeRemote: vi.fn(),
+	initRepository: vi.fn(),
+	getHeadMessage: vi.fn(),
+	unstageFile: vi.fn(),
+	stageAll: vi.fn(),
+	unstageAll: vi.fn(),
+	rebase: vi.fn(),
+	rebaseContinue: vi.fn(),
+	rebaseSkip: vi.fn(),
+	rebaseAbort: vi.fn(),
+	rmFile: vi.fn(),
+	mergeContinue: vi.fn(),
+	mergeAbort: vi.fn(),
+	cherryPick: vi.fn(),
+	cherryPickContinue: vi.fn(),
+	cherryPickSkip: vi.fn(),
+	cherryPickAbort: vi.fn(),
+	getRemoteUrl: vi.fn(),
+	getBranchDivergence: vi.fn(),
+	checkoutBranch: vi.fn(),
+	createBranch: vi.fn(),
+	getGraphStashes: vi.fn(),
+	getDiffs: vi.fn(),
+	getStashList: vi.fn(),
+	readExclude: vi.fn(),
+	writeExclude: vi.fn(),
+	tagDelete: vi.fn(),
+	stashPush: vi.fn(),
+	discardFile: vi.fn(),
+	stashPop: vi.fn(),
+	stashApply: vi.fn(),
+	stashDrop: vi.fn(),
+	stashClear: vi.fn(),
+	stashRename: vi.fn(),
+	getStashShow: vi.fn(),
+	revertCommit: vi.fn(),
+	resetToCommit: vi.fn(),
 	toGitError: vi.fn((e: unknown) => ({ code: "unknown", raw: String(e) })),
 }));
 
 vi.mock("$lib/services/git-service", () => ({
 	...service,
-	getGraphStashes: vi.fn().mockResolvedValue([]),
 	getStatusFull: vi.fn().mockResolvedValue({}),
 	getChangedPaths: vi.fn().mockResolvedValue({ staged: [], unstaged: [] }),
 	getDiffUnstaged: vi.fn().mockResolvedValue([]),
 	getDiffStaged: vi.fn().mockResolvedValue([]),
-	getDiffs: vi.fn().mockResolvedValue(null),
 	getCurrentBranch: vi.fn().mockResolvedValue("main"),
 	getRemoteStatus: vi.fn().mockResolvedValue(null),
 	getOperationState: vi.fn().mockResolvedValue(null),
@@ -67,30 +101,80 @@ vi.mock("$lib/services/instance-service", () => ({
 }));
 
 import {
+	abortCherryPick,
+	abortMerge,
+	abortRebase,
 	amendLastCommit,
+	applyStash,
+	checkoutBranch,
+	cherryPickCommits,
+	clearGitData,
 	clearGitError,
+	clearStashes,
 	commitChanges,
 	commitDraft,
+	continueCherryPick,
+	continueMerge,
+	continueRebase,
+	createBranch,
 	createTag,
 	deleteBranch,
 	deleteRemoteBranch,
 	deleteRemoteTag,
+	deleteTag,
+	discardFile,
+	discardFiles,
+	dropStash,
 	editRemote,
 	fetchRemote,
+	getBranchDivergence,
+	getHeadCommitMessage,
+	getRemoteUrl,
+	getStashDiff,
 	git,
+	gitFileCounts,
+	gitHasConflicts,
+	initRepository,
+	loadAllGraph,
+	loadAllLog,
+	loadBranches,
 	loadMoreGraph,
+	loadMoreLog,
 	mergeBranch,
+	popStash,
 	pullBranch,
 	pushBranch,
+	pushStash,
+	pushTag,
+	readExclude,
+	rebaseOnto,
 	recoverFromGitError,
 	refreshGraph,
+	refreshLog,
+	refreshRemotes,
 	refreshRemoteTags,
+	refreshStashes,
 	refreshStatus,
+	refreshTags,
+	removeFile,
 	renameBranch,
+	renameStash,
 	resetGitStore,
+	resetToCommit,
+	revertCommit,
 	setCommitBody,
 	setCommitMessage,
+	setDiffsWanted,
+	skipCherryPick,
+	skipRebase,
+	stageAll,
+	stageFile,
+	stageFiles,
 	syncGraph,
+	unstageAll,
+	unstageFile,
+	unstageFiles,
+	writeExclude,
 } from "./git";
 import { activeInstance, loadInstances } from "./instance";
 import { activeProjectId, projects } from "./project";
@@ -123,10 +207,13 @@ const clean = () => ({
 
 beforeEach(async () => {
 	vi.clearAllMocks();
+	for (const fn of Object.values(service)) fn.mockReset();
 	resetGitStore();
 	listInstances.mockResolvedValue([]);
 	service.getSnapshot.mockResolvedValue(null);
 	service.getLog.mockResolvedValue([]);
+	service.getGraphStashes.mockResolvedValue([]);
+	service.getDiffs.mockResolvedValue(null);
 	service.getGraph.mockResolvedValue([]);
 	service.commit.mockResolvedValue("abc1234");
 	service.amendCommit.mockResolvedValue("abc1234");
@@ -340,7 +427,7 @@ describe("keeping the graph in step with the writes", () => {
 		await graphLoaded(["a"]);
 		service.getGraph.mockResolvedValue([graphRow("b"), graphRow("a")]);
 		await pushBranch();
-		expect(service.getGraph).toHaveBeenCalled();
+		expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 0);
 		expect(get(git).graph.map((c) => c.hash)).toEqual(["b", "a"]);
 	});
 
@@ -353,7 +440,7 @@ describe("keeping the graph in step with the writes", () => {
 		]) {
 			await graphLoaded(["a"]);
 			await op();
-			expect(service.getGraph).toHaveBeenCalled();
+			expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 0);
 		}
 	});
 
@@ -386,7 +473,7 @@ describe("keeping the graph in step with the writes", () => {
 			operationState: null,
 		});
 		await refreshStatus(true);
-		expect(service.getGraph).toHaveBeenCalled();
+		expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 0);
 	});
 
 	/** Nothing moved, so the poll answers with nothing and asks for nothing. */
@@ -691,8 +778,14 @@ describe("recoverFromGitError", () => {
 
 	it("pulls then pushes when the branch is behind", async () => {
 		await recoverFromGitError("pullThenPush");
-		expect(service.pull).toHaveBeenCalled();
-		expect(service.push).toHaveBeenCalled();
+		expect(service.pull).toHaveBeenCalledWith(WORKTREE, expect.anything());
+		expect(service.push).toHaveBeenCalledWith(
+			WORKTREE,
+			expect.any(Boolean),
+			expect.any(String),
+			expect.any(Boolean),
+			expect.anything(),
+		);
 	});
 
 	it("does not push when the pull did not land cleanly", async () => {
@@ -752,5 +845,1476 @@ describe("clearGitError", () => {
 		const before = get(git);
 		clearGitError();
 		expect(get(git)).toBe(before);
+	});
+});
+
+const conflicted = () => ({
+	ok: false,
+	hasConflicts: true,
+	conflictedFiles: ["a.ts"],
+	output: "CONFLICT",
+});
+
+describe("gitFileCounts", () => {
+	it("counts untracked files as unstaged and a file once in the total", async () => {
+		service.getSnapshot.mockResolvedValue({
+			version: 1,
+			status: {
+				isGitRepo: true,
+				status: { "u.txt": "untracked", "m.txt": "modified" },
+				changedPaths: { staged: ["s.txt", "m.txt"], unstaged: ["m.txt"] },
+			},
+			currentBranch: "main",
+			remoteStatus: null,
+			operationState: null,
+		});
+		await refreshStatus();
+		expect(get(gitFileCounts)).toEqual({ staged: 2, unstaged: 2, total: 3 });
+	});
+});
+
+describe("refreshStatus diffs", () => {
+	it("asks for the diffs from scratch on a worktree it has not read yet", async () => {
+		service.getSnapshot.mockResolvedValue({
+			version: 1,
+			status: {
+				isGitRepo: true,
+				status: {},
+				changedPaths: { staged: [], unstaged: [] },
+			},
+			currentBranch: "main",
+			remoteStatus: null,
+			operationState: null,
+		});
+		setDiffsWanted(true);
+		await refreshStatus();
+		setDiffsWanted(false);
+		expect(service.getDiffs).toHaveBeenCalledWith(WORKTREE, "");
+	});
+});
+
+describe("initRepository", () => {
+	it("initialises the worktree and rereads its status", async () => {
+		await initRepository();
+		expect(service.initRepository).toHaveBeenCalledWith(WORKTREE);
+		expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+	});
+
+	it("does nothing without an active worktree", async () => {
+		withoutWorktree();
+		await initRepository();
+		expect(service.initRepository).not.toHaveBeenCalled();
+	});
+});
+
+describe("the log", () => {
+	const commits = (count: number, prefix = "c") =>
+		Array.from({ length: count }, (_, i) => ({
+			hash: `${prefix}${i}`,
+			message: `commit ${i}`,
+		}));
+
+	it("loads the first page and arms the scroll when the page is full", async () => {
+		const page = commits(50);
+		service.getLog.mockResolvedValue(page);
+		await refreshLog();
+		expect(service.getLog).toHaveBeenCalledWith(WORKTREE, 50, 0);
+		expect(get(git).log).toEqual(page);
+		expect(get(git).logHasMore).toBe(true);
+	});
+
+	it("does not arm the scroll on a short page", async () => {
+		service.getLog.mockResolvedValue(commits(3));
+		await refreshLog();
+		expect(get(git).logHasMore).toBe(false);
+	});
+
+	it("does nothing without an active worktree", async () => {
+		withoutWorktree();
+		await refreshLog();
+		expect(service.getLog).not.toHaveBeenCalled();
+	});
+
+	it("publishes a failure while nothing is listed yet", async () => {
+		const error = { code: "unknown", raw: "no log" };
+		service.getLog.mockRejectedValue(new Error("no log"));
+		service.toGitError.mockReturnValue(error);
+		await refreshLog();
+		expect(get(git).error).toEqual(error);
+	});
+
+	it("keeps quiet about a failed reload when a list is already showing", async () => {
+		service.getLog.mockResolvedValue(commits(2));
+		await refreshLog();
+		service.getLog.mockRejectedValue(new Error("no log"));
+		await refreshLog();
+		expect(get(git).error).toBeNull();
+		expect(get(git).log).toEqual(commits(2));
+	});
+
+	it("appends the next page without the hashes already listed", async () => {
+		service.getLog.mockResolvedValue(commits(50));
+		await refreshLog();
+		const next = [...commits(1, "c").slice(0, 1), ...commits(10, "n")];
+		service.getLog.mockResolvedValue(next);
+		await loadMoreLog();
+		expect(service.getLog).toHaveBeenLastCalledWith(WORKTREE, 50, 50);
+		expect(get(git).log).toHaveLength(60);
+		expect(get(git).log.slice(50)).toEqual(commits(10, "n"));
+		expect(get(git).logHasMore).toBe(false);
+	});
+
+	it("does not ask for a page once the end was reached", async () => {
+		service.getLog.mockResolvedValue(commits(3));
+		await refreshLog();
+		service.getLog.mockClear();
+		await loadMoreLog();
+		expect(service.getLog).not.toHaveBeenCalled();
+	});
+
+	it("does not load more without an active worktree", async () => {
+		service.getLog.mockResolvedValue(commits(50));
+		await refreshLog();
+		service.getLog.mockClear();
+		withoutWorktree();
+		await loadMoreLog();
+		expect(service.getLog).not.toHaveBeenCalled();
+	});
+
+	it("swallows a failed page and keeps what is listed", async () => {
+		service.getLog.mockResolvedValue(commits(50));
+		await refreshLog();
+		service.getLog.mockRejectedValue(new Error("boom"));
+		await expect(loadMoreLog()).resolves.toBeUndefined();
+		expect(get(git).log).toHaveLength(50);
+		expect(get(git).error).toBeNull();
+	});
+
+	it("loads the whole history in one request", async () => {
+		service.getLog.mockResolvedValue(commits(50));
+		await refreshLog();
+		const all = commits(120);
+		service.getLog.mockResolvedValue(all);
+		await loadAllLog();
+		expect(service.getLog).toHaveBeenLastCalledWith(WORKTREE, 1_000_000, 0);
+		expect(get(git).log).toEqual(all);
+		expect(get(git).logHasMore).toBe(false);
+	});
+
+	it("keeps the list when loading everything fails", async () => {
+		service.getLog.mockResolvedValue(commits(2));
+		await refreshLog();
+		service.getLog.mockRejectedValue(new Error("boom"));
+		await loadAllLog();
+		expect(get(git).log).toEqual(commits(2));
+	});
+
+	it("loads nothing at all without an active worktree", async () => {
+		withoutWorktree();
+		await loadAllLog();
+		expect(service.getLog).not.toHaveBeenCalled();
+	});
+});
+
+describe("the graph reads", () => {
+	it("does not read the graph without an active worktree or project", async () => {
+		withoutWorktree();
+		await refreshGraph();
+		await loadMoreGraph();
+		await loadAllGraph();
+		expect(service.getGraph).not.toHaveBeenCalled();
+	});
+
+	it("keeps the rows when a reload fails", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		service.getGraph.mockRejectedValue(new Error("boom"));
+		await refreshGraph();
+		expect(get(git).graph.map((c) => c.hash)).toEqual(["a"]);
+		expect(get(git).error).toBeNull();
+	});
+
+	it("keeps the rows when a sync fails", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		service.getGraph.mockRejectedValue(new Error("boom"));
+		await expect(syncGraph()).resolves.toBeUndefined();
+		expect(get(git).graph.map((c) => c.hash)).toEqual(["a"]);
+	});
+
+	it("ignores a second page request while one is in flight", async () => {
+		const page = Array.from({ length: 20 }, (_, i) => graphRow(`a${i}`));
+		service.getGraph.mockResolvedValue(page);
+		await refreshGraph();
+		service.getGraph.mockClear();
+		let resolvePage: (rows: ReturnType<typeof graphRow>[]) => void = () => {};
+		service.getGraph.mockReturnValue(
+			new Promise((resolve) => {
+				resolvePage = resolve;
+			}),
+		);
+		const first = loadMoreGraph();
+		await loadMoreGraph();
+		expect(get(git).graphPaging).toBe("loading");
+		resolvePage([]);
+		await first;
+		expect(service.getGraph).toHaveBeenCalledTimes(1);
+		expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 20);
+	});
+
+	it("loads the whole graph in one request and stops the scroll", async () => {
+		const stash = graphRow("s");
+		service.getGraph.mockResolvedValue([graphRow("a"), graphRow("b")]);
+		service.getGraphStashes.mockResolvedValue([stash]);
+		await loadAllGraph();
+		expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 1_000_000, 0);
+		expect(get(git).graph.map((c) => c.hash)).toEqual(["a", "b"]);
+		expect(get(git).graphStashes).toEqual([stash]);
+		expect(get(git).graphHasMore).toBe(false);
+	});
+
+	it("keeps the graph when loading everything fails", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		service.getGraph.mockRejectedValue(new Error("boom"));
+		await loadAllGraph();
+		expect(get(git).graph.map((c) => c.hash)).toEqual(["a"]);
+	});
+
+	it("still shows the graph when the stashes cannot be read", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		service.getGraphStashes.mockRejectedValue(new Error("boom"));
+		await refreshGraph();
+		expect(get(git).graph.map((c) => c.hash)).toEqual(["a"]);
+		expect(get(git).graphStashes).toEqual([]);
+	});
+});
+
+describe("reads that fall back to an empty answer", () => {
+	it("reads the message of HEAD", async () => {
+		service.getHeadMessage.mockResolvedValue("feat: head");
+		await expect(getHeadCommitMessage()).resolves.toBe("feat: head");
+		expect(service.getHeadMessage).toHaveBeenCalledWith(WORKTREE);
+	});
+
+	it("answers an empty message when HEAD cannot be read", async () => {
+		service.getHeadMessage.mockRejectedValue(new Error("no commit"));
+		await expect(getHeadCommitMessage()).resolves.toBe("");
+	});
+
+	it("answers an empty message without an active worktree", async () => {
+		withoutWorktree();
+		await expect(getHeadCommitMessage()).resolves.toBe("");
+		expect(service.getHeadMessage).not.toHaveBeenCalled();
+	});
+
+	it("reads the origin url", async () => {
+		service.getRemoteUrl.mockResolvedValue("git@host:a/b.git");
+		await expect(getRemoteUrl()).resolves.toBe("git@host:a/b.git");
+		expect(service.getRemoteUrl).toHaveBeenCalledWith(WORKTREE);
+	});
+
+	it("answers an empty url when there is no remote", async () => {
+		service.getRemoteUrl.mockRejectedValue(new Error("no remote"));
+		await expect(getRemoteUrl()).resolves.toBe("");
+	});
+
+	it("answers an empty url without an active worktree", async () => {
+		withoutWorktree();
+		await expect(getRemoteUrl()).resolves.toBe("");
+		expect(service.getRemoteUrl).not.toHaveBeenCalled();
+	});
+
+	it("reads the divergence against a base", async () => {
+		service.getBranchDivergence.mockResolvedValue({ ahead: 2, behind: 1 });
+		await expect(getBranchDivergence("main")).resolves.toEqual({
+			ahead: 2,
+			behind: 1,
+		});
+		expect(service.getBranchDivergence).toHaveBeenCalledWith(WORKTREE, "main");
+	});
+
+	it("answers null for an empty base or a failed read", async () => {
+		await expect(getBranchDivergence("")).resolves.toBeNull();
+		expect(service.getBranchDivergence).not.toHaveBeenCalled();
+		service.getBranchDivergence.mockRejectedValue(new Error("bad base"));
+		await expect(getBranchDivergence("nope")).resolves.toBeNull();
+	});
+
+	it("answers null for a divergence without an active worktree", async () => {
+		withoutWorktree();
+		await expect(getBranchDivergence("main")).resolves.toBeNull();
+		expect(service.getBranchDivergence).not.toHaveBeenCalled();
+	});
+
+	it("reads the local ignore file", async () => {
+		service.readExclude.mockResolvedValue("dist\n");
+		await expect(readExclude()).resolves.toBe("dist\n");
+		expect(service.readExclude).toHaveBeenCalledWith(WORKTREE);
+	});
+
+	it("answers an empty ignore file without an active worktree", async () => {
+		withoutWorktree();
+		await expect(readExclude()).resolves.toBe("");
+		expect(service.readExclude).not.toHaveBeenCalled();
+	});
+
+	it("reads the diff a stash holds", async () => {
+		const diffs = [{ filePath: "a.ts", hunks: [] }];
+		service.getStashShow.mockResolvedValue(diffs);
+		await expect(getStashDiff(3)).resolves.toEqual(diffs);
+		expect(service.getStashShow).toHaveBeenCalledWith(WORKTREE, 3);
+	});
+
+	it("answers no diff for a stash without an active worktree", async () => {
+		withoutWorktree();
+		await expect(getStashDiff(0)).resolves.toEqual([]);
+		expect(service.getStashShow).not.toHaveBeenCalled();
+	});
+});
+
+describe("loadBranches", () => {
+	it("fetches first, then lists the branches of the project path", async () => {
+		branchLists.mockResolvedValue({ local: ["main"], remote: ["origin/x"] });
+		await loadBranches("/repos/p1");
+		expect(service.fetch).toHaveBeenCalledWith("/repos/p1");
+		expect(get(git).branches).toEqual(["main"]);
+		expect(get(git).remoteBranches).toEqual(["origin/x"]);
+		expect(get(git).isLoadingBranches).toBe(false);
+	});
+
+	it("lists the stale refs when the fetch fails", async () => {
+		service.fetch.mockRejectedValue(new Error("offline"));
+		await loadBranches("/repos/p1");
+		expect(get(git).branches).toEqual(["main"]);
+	});
+
+	it("stops loading when the listing fails", async () => {
+		branchLists.mockRejectedValue(new Error("boom"));
+		await loadBranches("/repos/p1");
+		expect(get(git).isLoadingBranches).toBe(false);
+		expect(get(git).branches).toEqual([]);
+	});
+});
+
+describe("remotes", () => {
+	it("reloads the configured remotes", async () => {
+		const remotes = [{ name: "origin", fetchUrl: "u", pushUrl: "u" }];
+		service.listRemotes.mockResolvedValue(remotes);
+		await refreshRemotes();
+		expect(get(git).remotes).toEqual(remotes);
+	});
+
+	it("keeps the remotes when the listing fails", async () => {
+		const remotes = [{ name: "origin", fetchUrl: "u", pushUrl: "u" }];
+		service.listRemotes.mockResolvedValue(remotes);
+		await refreshRemotes();
+		service.listRemotes.mockRejectedValue(new Error("boom"));
+		await expect(refreshRemotes()).resolves.toBeUndefined();
+		expect(get(git).remotes).toEqual(remotes);
+	});
+
+	it("does nothing without an active worktree", async () => {
+		withoutWorktree();
+		await refreshRemotes();
+		await editRemote({ kind: "remove", name: "up" });
+		expect(service.listRemotes).not.toHaveBeenCalled();
+		expect(service.removeRemote).not.toHaveBeenCalled();
+	});
+});
+
+describe("tags without a worktree or a known remote", () => {
+	it("does nothing without an active worktree", async () => {
+		withoutWorktree();
+		await refreshTags();
+		await refreshRemoteTags();
+		await createTag("v1", "", "");
+		await pushTag("v1");
+		await deleteRemoteTag("v1");
+		await deleteTag("v1");
+		expect(service.getTagList).not.toHaveBeenCalled();
+		expect(service.tagRemoteList).not.toHaveBeenCalled();
+		expect(service.tagCreate).not.toHaveBeenCalled();
+		expect(service.tagPush).not.toHaveBeenCalled();
+		expect(service.tagDeleteRemote).not.toHaveBeenCalled();
+		expect(service.tagDelete).not.toHaveBeenCalled();
+	});
+
+	it("keeps the remote tags unknown after a push while they were never read", async () => {
+		await pushTag("v1");
+		expect(get(git).remoteTags).toBeNull();
+	});
+
+	it("deletes a tag locally and rereads the tag list", async () => {
+		service.getTagList.mockResolvedValue([{ name: "v2" }]);
+		await deleteTag("v1");
+		expect(service.tagDelete).toHaveBeenCalledWith(WORKTREE, "v1");
+		expect(get(git).tags).toEqual([{ name: "v2" }]);
+	});
+});
+
+describe("branch and stash writes without a worktree", () => {
+	it("does nothing", async () => {
+		withoutWorktree();
+		await deleteBranch("b");
+		await deleteRemoteBranch("b");
+		await renameBranch("a", "b");
+		expect(service.deleteBranch).not.toHaveBeenCalled();
+		expect(service.deleteRemoteBranch).not.toHaveBeenCalled();
+		expect(service.renameBranch).not.toHaveBeenCalled();
+	});
+});
+
+describe("stashes", () => {
+	it("reloads the stash list", async () => {
+		const stashes = [{ index: 0, message: "wip" }];
+		service.getStashList.mockResolvedValue(stashes);
+		await refreshStashes();
+		expect(get(git).stashes).toEqual(stashes);
+	});
+
+	it("keeps the stash list when the read fails", async () => {
+		const stashes = [{ index: 0, message: "wip" }];
+		service.getStashList.mockResolvedValue(stashes);
+		await refreshStashes();
+		service.getStashList.mockRejectedValue(new Error("boom"));
+		await refreshStashes();
+		expect(get(git).stashes).toEqual(stashes);
+	});
+
+	it("leaves the graph stashes alone while the graph was never read", async () => {
+		service.getStashList.mockResolvedValue([]);
+		await refreshStashes();
+		expect(service.getGraphStashes).not.toHaveBeenCalled();
+	});
+
+	it("moves the graph stashes with the list once the graph was read", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		const moved = [graphRow("s")];
+		service.getGraphStashes.mockResolvedValue(moved);
+		service.getStashList.mockResolvedValue([]);
+		await refreshStashes();
+		expect(get(git).graphStashes).toEqual(moved);
+	});
+
+	it("does nothing without an active worktree", async () => {
+		withoutWorktree();
+		await refreshStashes();
+		expect(service.getStashList).not.toHaveBeenCalled();
+	});
+
+	it("stashes the selection and rereads the stashes and the status", async () => {
+		await pushStash("wip", true, false, ["a.ts"]);
+		expect(service.stashPush).toHaveBeenCalledWith(
+			WORKTREE,
+			"wip",
+			true,
+			false,
+			["a.ts"],
+		);
+		expect(service.getStashList).toHaveBeenCalledWith(WORKTREE);
+		expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+	});
+
+	it("stashes everything when no path is given", async () => {
+		await pushStash("wip", false, true);
+		expect(service.stashPush).toHaveBeenCalledWith(
+			WORKTREE,
+			"wip",
+			false,
+			true,
+			[],
+		);
+	});
+
+	it("pops a stash and rereads the stashes and the status", async () => {
+		await popStash(2);
+		expect(service.stashPop).toHaveBeenCalledWith(WORKTREE, 2);
+		expect(service.getStashList).toHaveBeenCalledWith(WORKTREE);
+		expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+	});
+
+	it("applies a stash and rereads only the status", async () => {
+		await applyStash(1);
+		expect(service.stashApply).toHaveBeenCalledWith(WORKTREE, 1);
+		expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+		expect(service.getStashList).not.toHaveBeenCalled();
+	});
+
+	it("drops, clears and renames, then rereads the stashes", async () => {
+		await dropStash(1);
+		expect(service.stashDrop).toHaveBeenLastCalledWith(WORKTREE, 1);
+		await clearStashes();
+		expect(service.stashClear).toHaveBeenLastCalledWith(WORKTREE);
+		await renameStash(0, "renamed");
+		expect(service.stashRename).toHaveBeenLastCalledWith(
+			WORKTREE,
+			0,
+			"renamed",
+		);
+		expect(service.getStashList).toHaveBeenCalledTimes(3);
+	});
+
+	it("publishes a refused stash write and rethrows it", async () => {
+		service.stashPop.mockRejectedValue(new Error("conflict"));
+		await expect(popStash(0)).rejects.toThrow("conflict");
+		expect(get(git).error).toEqual({ code: "unknown", raw: "Error: conflict" });
+	});
+});
+
+describe("stash and selection writes without an active worktree", () => {
+	const writes: [
+		string,
+		() => Promise<unknown>,
+		() => ReturnType<typeof vi.fn>,
+	][] = [
+		[
+			"pushStash",
+			() => pushStash("wip", false, false),
+			() => service.stashPush,
+		],
+		["stageFiles", () => stageFiles(["a.ts"]), () => service.stageFile],
+		["unstageFiles", () => unstageFiles(["a.ts"]), () => service.unstageFile],
+		["discardFiles", () => discardFiles(["a.ts"]), () => service.discardFile],
+		["popStash", () => popStash(0), () => service.stashPop],
+		["applyStash", () => applyStash(0), () => service.stashApply],
+		["dropStash", () => dropStash(0), () => service.stashDrop],
+		["clearStashes", () => clearStashes(), () => service.stashClear],
+		["renameStash", () => renameStash(0, "x"), () => service.stashRename],
+	];
+
+	it.each(writes)(
+		"%s does nothing and reads nothing back",
+		async (_n, run, call) => {
+			withoutWorktree();
+			await run();
+			expect(call()).not.toHaveBeenCalled();
+			expect(service.getSnapshot).not.toHaveBeenCalled();
+			expect(service.getStashList).not.toHaveBeenCalled();
+		},
+	);
+});
+
+describe("writes on a selection", () => {
+	it("stages the files one at a time, in order", async () => {
+		await stageFiles(["a.ts", "b.ts"]);
+		expect(service.stageFile.mock.calls).toEqual([
+			[WORKTREE, "a.ts"],
+			[WORKTREE, "b.ts"],
+		]);
+	});
+
+	it("unstages the files one at a time, in order", async () => {
+		await unstageFiles(["a.ts", "b.ts"]);
+		expect(service.unstageFile.mock.calls).toEqual([
+			[WORKTREE, "a.ts"],
+			[WORKTREE, "b.ts"],
+		]);
+	});
+
+	it("discards the files one at a time, in order", async () => {
+		await discardFiles(["a.ts", "b.ts"]);
+		expect(service.discardFile.mock.calls).toEqual([
+			[WORKTREE, "a.ts"],
+			[WORKTREE, "b.ts"],
+		]);
+	});
+
+	it("stops at the first file that fails and publishes the error", async () => {
+		service.stageFile.mockRejectedValueOnce(new Error("locked"));
+		await expect(stageFiles(["a.ts", "b.ts"])).rejects.toThrow("locked");
+		expect(service.stageFile).toHaveBeenCalledTimes(1);
+		expect(get(git).error).not.toBeNull();
+	});
+});
+
+const worktreeWrites: {
+	name: string;
+	run: () => Promise<unknown>;
+	call: () => ReturnType<typeof vi.fn>;
+	args: unknown[];
+}[] = [
+	{
+		name: "stageFile",
+		run: () => stageFile("a.ts"),
+		call: () => service.stageFile,
+		args: [WORKTREE, "a.ts"],
+	},
+	{
+		name: "unstageFile",
+		run: () => unstageFile("a.ts"),
+		call: () => service.unstageFile,
+		args: [WORKTREE, "a.ts"],
+	},
+	{
+		name: "stageAll",
+		run: () => stageAll(),
+		call: () => service.stageAll,
+		args: [WORKTREE],
+	},
+	{
+		name: "unstageAll",
+		run: () => unstageAll(),
+		call: () => service.unstageAll,
+		args: [WORKTREE],
+	},
+	{
+		name: "removeFile",
+		run: () => removeFile("a.ts"),
+		call: () => service.rmFile,
+		args: [WORKTREE, "a.ts"],
+	},
+	{
+		name: "discardFile",
+		run: () => discardFile("a.ts"),
+		call: () => service.discardFile,
+		args: [WORKTREE, "a.ts"],
+	},
+	{
+		name: "writeExclude",
+		run: () => writeExclude("dist\n"),
+		call: () => service.writeExclude,
+		args: [WORKTREE, "dist\n"],
+	},
+	{
+		name: "abortRebase",
+		run: () => abortRebase(),
+		call: () => service.rebaseAbort,
+		args: [WORKTREE],
+	},
+	{
+		name: "abortMerge",
+		run: () => abortMerge(),
+		call: () => service.mergeAbort,
+		args: [WORKTREE],
+	},
+	{
+		name: "abortCherryPick",
+		run: () => abortCherryPick(),
+		call: () => service.cherryPickAbort,
+		args: [WORKTREE],
+	},
+	{
+		name: "checkoutBranch",
+		run: () => checkoutBranch("feat"),
+		call: () => service.checkoutBranch,
+		args: [WORKTREE, "feat"],
+	},
+	{
+		name: "createBranch",
+		run: () => createBranch("feat", "main"),
+		call: () => service.createBranch,
+		args: [WORKTREE, "feat", "main"],
+	},
+	{
+		name: "revertCommit",
+		run: () => revertCommit("abc"),
+		call: () => service.revertCommit,
+		args: [WORKTREE, "abc"],
+	},
+	{
+		name: "resetToCommit",
+		run: () => resetToCommit("abc", "hard"),
+		call: () => service.resetToCommit,
+		args: [WORKTREE, "abc", "hard"],
+	},
+];
+
+describe("worktree writes", () => {
+	it.each(worktreeWrites)(
+		"$name runs in the active worktree and rereads its status",
+		async ({ run, call, args }) => {
+			await run();
+			expect(call()).toHaveBeenCalledWith(...args);
+			expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+		},
+	);
+
+	it.each(worktreeWrites)(
+		"$name does nothing without an active worktree",
+		async ({ run, call }) => {
+			withoutWorktree();
+			await run();
+			expect(call()).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(worktreeWrites)(
+		"$name publishes a failure and rethrows it",
+		async ({ run, call }) => {
+			call().mockRejectedValue(new Error("refused"));
+			await expect(run()).rejects.toThrow("refused");
+			expect(get(git).error).toEqual({
+				code: "unknown",
+				raw: "Error: refused",
+			});
+		},
+	);
+});
+
+const operationWrites: {
+	name: string;
+	run: () => Promise<unknown>;
+	call: () => ReturnType<typeof vi.fn>;
+	args: unknown[];
+}[] = [
+	{
+		name: "rebaseOnto",
+		run: () => rebaseOnto("main"),
+		call: () => service.rebase,
+		args: [WORKTREE, "main"],
+	},
+	{
+		name: "continueRebase",
+		run: () => continueRebase(),
+		call: () => service.rebaseContinue,
+		args: [WORKTREE],
+	},
+	{
+		name: "skipRebase",
+		run: () => skipRebase(),
+		call: () => service.rebaseSkip,
+		args: [WORKTREE],
+	},
+	{
+		name: "continueMerge",
+		run: () => continueMerge(),
+		call: () => service.mergeContinue,
+		args: [WORKTREE],
+	},
+	{
+		name: "cherryPickCommits",
+		run: () => cherryPickCommits(["a1", "b2"]),
+		call: () => service.cherryPick,
+		args: [WORKTREE, ["a1", "b2"]],
+	},
+	{
+		name: "continueCherryPick",
+		run: () => continueCherryPick(),
+		call: () => service.cherryPickContinue,
+		args: [WORKTREE],
+	},
+	{
+		name: "skipCherryPick",
+		run: () => skipCherryPick(),
+		call: () => service.cherryPickSkip,
+		args: [WORKTREE],
+	},
+];
+
+describe("operations that can stop on conflicts", () => {
+	it.each(operationWrites)(
+		"$name hands back the result it was given",
+		async ({ run, call, args }) => {
+			const result = conflicted();
+			call().mockResolvedValue(result);
+			await expect(run()).resolves.toBe(result);
+			expect(call()).toHaveBeenCalledWith(...args);
+			expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+			expect(get(git).error).toBeNull();
+		},
+	);
+
+	it.each(operationWrites)(
+		"$name answers null without an active worktree",
+		async ({ run, call }) => {
+			withoutWorktree();
+			await expect(run()).resolves.toBeNull();
+			expect(call()).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(operationWrites)(
+		"$name publishes a failure and rethrows it",
+		async ({ run, call }) => {
+			call().mockRejectedValue(new Error("refused"));
+			await expect(run()).rejects.toThrow("refused");
+			expect(get(git).error).toEqual({
+				code: "unknown",
+				raw: "Error: refused",
+			});
+		},
+	);
+
+	it("cherry-picks nothing when no commit is given", async () => {
+		await expect(cherryPickCommits([])).resolves.toBeNull();
+		expect(service.cherryPick).not.toHaveBeenCalled();
+	});
+});
+
+describe("clearGitData", () => {
+	it("empties what was read from the worktree and keeps the commit draft", async () => {
+		service.getSnapshot.mockResolvedValue({
+			version: 1,
+			status: {
+				isGitRepo: true,
+				status: { "a.txt": "modified" },
+				changedPaths: { staged: [], unstaged: ["a.txt"] },
+			},
+			currentBranch: "main",
+			remoteStatus: null,
+			operationState: null,
+		});
+		await refreshStatus();
+		setCommitMessage("kept");
+		expect(get(git).statusWorktree).toBe(WORKTREE);
+		clearGitData();
+		expect(get(git).status).toEqual({});
+		expect(get(git).statusWorktree).toBeNull();
+		expect(get(git).currentBranch).toBe("");
+		expect(get(git).error).toBeNull();
+		expect(get(commitDraft).message).toBe("kept");
+	});
+});
+
+const snapshotOf = (
+	status: Record<string, string> = {},
+	overrides: Record<string, unknown> = {},
+) => ({
+	version: 1,
+	status: {
+		isGitRepo: true,
+		status,
+		changedPaths: { staged: [], unstaged: [] },
+	},
+	currentBranch: "main",
+	remoteStatus: null,
+	operationState: null,
+	...overrides,
+});
+
+function deferred<T>() {
+	let resolve: (value: T) => void = () => {};
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+const operationStateOf = (conflictedFiles: string[]) => ({
+	kind: "merge",
+	conflictedFiles,
+	structuralFiles: [],
+	head: "",
+	current: 0,
+	total: 0,
+});
+
+async function useInstances(ids: string[], activeId: string) {
+	listInstances.mockResolvedValue(ids.map((id) => instance(id, "p1")));
+	projects.set([project("p1", { activeInstanceId: activeId })]);
+	activeProjectId.set("p1");
+	await loadInstances("p1");
+}
+
+function activateInstance(id: string) {
+	projects.set([project("p1", { activeInstanceId: id })]);
+}
+
+const worktreeOf = (id: string) => `/worktrees/p1/${id}`;
+
+describe("gitFileCounts on untracked files only", () => {
+	it("leaves a modified file out of the unstaged count when git did not list it", async () => {
+		service.getSnapshot.mockResolvedValue(snapshotOf({ "m.txt": "modified" }));
+		await refreshStatus();
+		expect(get(gitFileCounts)).toEqual({ staged: 0, unstaged: 0, total: 0 });
+	});
+});
+
+describe("gitHasConflicts", () => {
+	it("is false on a clean worktree with no operation in progress", async () => {
+		service.getSnapshot.mockResolvedValue(snapshotOf({ "m.txt": "modified" }));
+		await refreshStatus();
+		expect(get(gitHasConflicts)).toBe(false);
+	});
+
+	it("is false before anything was read", () => {
+		expect(get(gitHasConflicts)).toBe(false);
+	});
+
+	it("is true when the status lists a conflicted file", async () => {
+		service.getSnapshot.mockResolvedValue(snapshotOf({ "a.ts": "conflicted" }));
+		await refreshStatus();
+		expect(get(gitHasConflicts)).toBe(true);
+	});
+
+	it("is true when an interrupted operation holds a single conflicted file", async () => {
+		service.getSnapshot.mockResolvedValue(
+			snapshotOf({}, { operationState: operationStateOf(["a.ts"]) }),
+		);
+		await refreshStatus();
+		expect(get(gitHasConflicts)).toBe(true);
+	});
+
+	it("is false when the operation has no conflicted file left", async () => {
+		service.getSnapshot.mockResolvedValue(
+			snapshotOf({}, { operationState: operationStateOf([]) }),
+		);
+		await refreshStatus();
+		expect(get(gitHasConflicts)).toBe(false);
+	});
+});
+
+describe("a successful write", () => {
+	it("takes down the banner of an earlier failure", async () => {
+		service.commit.mockRejectedValueOnce({ code: "hook_rejected", raw: "x" });
+		await expect(commitChanges("msg")).rejects.toBeDefined();
+		expect(get(git).error).not.toBeNull();
+		await pushTag("v1");
+		expect(get(git).error).toBeNull();
+	});
+});
+
+describe("refreshStatus without a worktree", () => {
+	it("still answers with a promise and reads nothing", async () => {
+		withoutWorktree();
+		const answer = refreshStatus();
+		expect(answer).toBeInstanceOf(Promise);
+		await answer;
+		expect(service.getSnapshot).not.toHaveBeenCalled();
+	});
+});
+
+describe("refreshStatus in flight", () => {
+	afterEach(() => setDiffsWanted(false));
+
+	it("shows the loading state while a visible refresh runs", async () => {
+		service.commit.mockRejectedValueOnce({ code: "hook_rejected", raw: "x" });
+		await expect(commitChanges("msg")).rejects.toBeDefined();
+		const snapshot = deferred<null>();
+		service.getSnapshot.mockReturnValue(snapshot.promise);
+		const pending = refreshStatus();
+		expect(get(git).isLoading).toBe(true);
+		expect(get(git).error).toBeNull();
+		snapshot.resolve(null);
+		await pending;
+		expect(get(git).isLoading).toBe(false);
+	});
+
+	it("stays quiet while a silent refresh runs", async () => {
+		const snapshot = deferred<null>();
+		service.getSnapshot.mockReturnValue(snapshot.promise);
+		const pending = refreshStatus(true);
+		expect(get(git).isLoading).toBe(false);
+		snapshot.resolve(null);
+		await pending;
+	});
+
+	it("does not notify anyone when a poll finds nothing changed", async () => {
+		await refreshStatus(true);
+		let notifications = 0;
+		const unsubscribe = git.subscribe(() => {
+			notifications += 1;
+		});
+		notifications = 0;
+		await refreshStatus(true);
+		unsubscribe();
+		expect(notifications).toBe(0);
+	});
+
+	it("asks for the versions it already holds on the same worktree", async () => {
+		setDiffsWanted(true);
+		service.getSnapshot.mockResolvedValue(snapshotOf({}, { version: 5 }));
+		service.getDiffs.mockResolvedValue({
+			version: "d1",
+			unstaged: [],
+			staged: [],
+		});
+		await refreshStatus();
+		await refreshStatus();
+		expect(service.getSnapshot).toHaveBeenLastCalledWith(WORKTREE, 5);
+		expect(service.getDiffs).toHaveBeenLastCalledWith(WORKTREE, "d1");
+	});
+
+	it("does not read the diffs while nothing shows them", async () => {
+		service.getSnapshot.mockResolvedValue(snapshotOf());
+		await refreshStatus();
+		expect(service.getDiffs).not.toHaveBeenCalled();
+	});
+
+	it("asks from scratch when the last read came from another worktree", async () => {
+		await useInstances(["sa", "sb"], "sa");
+		setDiffsWanted(true);
+		const snapshot = deferred<ReturnType<typeof snapshotOf>>();
+		service.getSnapshot.mockReturnValue(snapshot.promise);
+		service.getDiffs.mockResolvedValue({
+			version: "dA",
+			unstaged: [],
+			staged: [],
+		});
+		const stale = refreshStatus();
+		activateInstance("sb");
+		snapshot.resolve(snapshotOf({}, { version: 7 }));
+		await stale;
+		service.getSnapshot.mockResolvedValue(null);
+		await refreshStatus();
+		expect(service.getSnapshot).toHaveBeenLastCalledWith(worktreeOf("sb"), "");
+		expect(service.getDiffs).toHaveBeenLastCalledWith(worktreeOf("sb"), "");
+	});
+
+	it("publishes both diff lists and their version, and keeps them on a quiet poll", async () => {
+		setDiffsWanted(true);
+		const unstaged = [{ filePath: "u.ts", hunks: [] }];
+		const staged = [{ filePath: "s.ts", hunks: [] }];
+		service.getSnapshot.mockResolvedValue(snapshotOf());
+		service.getDiffs.mockResolvedValue({ version: "v9", unstaged, staged });
+		await refreshStatus();
+		expect(get(git).unstagedDiffs).toEqual(unstaged);
+		expect(get(git).stagedDiffs).toEqual(staged);
+		expect(get(git).diffVersion).toBe("v9");
+		service.getDiffs.mockResolvedValue(null);
+		await refreshStatus();
+		expect(get(git).stagedDiffs).toEqual(staged);
+		expect(get(git).diffVersion).toBe("v9");
+	});
+
+	it("keeps the version when the git view is reported open twice", async () => {
+		setDiffsWanted(true);
+		service.getSnapshot.mockResolvedValue(snapshotOf());
+		service.getDiffs.mockResolvedValue({
+			version: "v1",
+			unstaged: [],
+			staged: [],
+		});
+		await refreshStatus();
+		setDiffsWanted(true);
+		expect(get(git).diffVersion).toBe("v1");
+	});
+
+	it("publishes a failed read and stops the loading state", async () => {
+		service.getSnapshot.mockRejectedValue(new Error("boom"));
+		await refreshStatus();
+		expect(get(git).isLoading).toBe(false);
+		expect(get(git).error).toEqual({ code: "unknown", raw: "Error: boom" });
+	});
+
+	it("survives a diff read that fails after the snapshot did", async () => {
+		setDiffsWanted(true);
+		service.getSnapshot.mockRejectedValue(new Error("snapshot"));
+		service.getDiffs.mockRejectedValue(new Error("diffs"));
+		await refreshStatus();
+		expect(get(git).error).toEqual({
+			code: "unknown",
+			raw: "Error: snapshot",
+		});
+	});
+
+	it("does not reload the graph for a write that left the snapshot unchanged", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		service.getGraph.mockClear();
+		await stageFile("a.ts");
+		expect(service.getGraph).not.toHaveBeenCalled();
+	});
+});
+
+describe("pages landing after the worktree is gone", () => {
+	it("does not ask for another log page", async () => {
+		const page = deferred<{ hash: string; message: string }[]>();
+		service.getLog.mockReturnValue(page.promise);
+		const pending = refreshLog();
+		withoutWorktree();
+		page.resolve(
+			Array.from({ length: 50 }, (_, i) => ({
+				hash: `c${i}`,
+				message: `commit ${i}`,
+			})),
+		);
+		await pending;
+		expect(get(git).logHasMore).toBe(true);
+		service.getLog.mockClear();
+		await loadMoreLog();
+		expect(service.getLog).not.toHaveBeenCalled();
+	});
+
+	it("does not ask for another graph page", async () => {
+		const page = deferred<ReturnType<typeof graphRow>[]>();
+		service.getGraph.mockReturnValue(page.promise);
+		const pending = refreshGraph();
+		withoutWorktree();
+		page.resolve(Array.from({ length: 20 }, (_, i) => graphRow(`a${i}`)));
+		await pending;
+		expect(get(git).graphHasMore).toBe(true);
+		service.getGraph.mockClear();
+		await loadMoreGraph();
+		expect(service.getGraph).not.toHaveBeenCalled();
+	});
+});
+
+describe("a log reload that fails", () => {
+	it("stays quiet when a single commit is already listed", async () => {
+		service.getLog.mockResolvedValue([{ hash: "c0", message: "one" }]);
+		await refreshLog();
+		service.getLog.mockRejectedValue(new Error("no log"));
+		await refreshLog();
+		expect(get(git).error).toBeNull();
+	});
+});
+
+describe("the graph of a project with no active instance", () => {
+	const page = (prefix: string) =>
+		Array.from({ length: 20 }, (_, i) => graphRow(`${prefix}${i}`));
+
+	beforeEach(() => {
+		projects.set([project("pz")]);
+		activeProjectId.set("pz");
+		expect(get(activeInstance)).toBeNull();
+		service.getGraph.mockResolvedValue(page("a"));
+	});
+
+	it("reads the first page from the project path", async () => {
+		await refreshGraph();
+		expect(service.getGraph).toHaveBeenCalledWith("/repos/pz", 20, 0);
+		expect(get(git).graph).toHaveLength(20);
+	});
+
+	it("appends the next page and settles", async () => {
+		await refreshGraph();
+		service.getGraph.mockResolvedValue(page("b"));
+		await loadMoreGraph();
+		expect(service.getGraph).toHaveBeenLastCalledWith("/repos/pz", 20, 20);
+		expect(get(git).graph).toHaveLength(40);
+		expect(get(git).graphPaging).toBe("idle");
+	});
+
+	it("loads everything from the project path", async () => {
+		await loadAllGraph();
+		expect(service.getGraph).toHaveBeenCalledWith("/repos/pz", 1_000_000, 0);
+	});
+
+	it("keeps the graph in step once it was read", async () => {
+		await refreshGraph();
+		service.getGraph.mockClear();
+		await syncGraph();
+		expect(service.getGraph).toHaveBeenCalledWith("/repos/pz", 20, 0);
+	});
+});
+
+describe("graph paging", () => {
+	const page = (prefix: string) =>
+		Array.from({ length: 20 }, (_, i) => graphRow(`${prefix}${i}`));
+
+	beforeEach(async () => {
+		service.getGraph.mockResolvedValue(page("a"));
+		await refreshGraph();
+	});
+
+	it("counts a page that brings a single new commit", async () => {
+		service.getGraph.mockResolvedValue([...page("a").slice(1), graphRow("z")]);
+		await loadMoreGraph();
+		expect(get(git).graph).toHaveLength(21);
+		expect(get(git).graph[20].hash).toBe("z");
+		expect(get(git).graphHasMore).toBe(true);
+	});
+
+	it("leaves the list itself untouched on a page of known commits", async () => {
+		const before = get(git).graph;
+		service.getGraph.mockResolvedValue(page("a"));
+		await loadMoreGraph();
+		expect(get(git).graph).toBe(before);
+	});
+
+	it("keeps the graph in step after loading everything", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await loadAllGraph();
+		service.getGraph.mockClear();
+		await pushBranch();
+		expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 0);
+	});
+
+	it("arms the scroll when a sync fills a graph that was empty", async () => {
+		service.getGraph.mockResolvedValue([]);
+		await refreshGraph();
+		service.getGraph.mockResolvedValue(page("b"));
+		await syncGraph();
+		expect(get(git).graphHasMore).toBe(true);
+	});
+
+	it("leaves the scroll as it was once rows are listed", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		expect(get(git).graphHasMore).toBe(false);
+		service.getGraph.mockResolvedValue(page("b"));
+		await syncGraph();
+		expect(get(git).graphHasMore).toBe(false);
+	});
+});
+
+describe("the writes reread what they changed", () => {
+	const rereadingWrites: {
+		name: string;
+		run: () => Promise<unknown>;
+		rereads: ("status" | "log" | "graph" | "branches" | "tags")[];
+	}[] = [
+		{
+			name: "commitChanges",
+			run: () => commitChanges("feat: x"),
+			rereads: ["status", "log", "graph"],
+		},
+		{
+			name: "amendLastCommit",
+			run: () => amendLastCommit("feat: x"),
+			rereads: ["status", "log", "graph"],
+		},
+		{
+			name: "recoverFromGitError",
+			run: () => recoverFromGitError("removeLock"),
+			rereads: ["status"],
+		},
+		{
+			name: "cherryPickCommits",
+			run: () => cherryPickCommits(["a1"]),
+			rereads: ["status", "log"],
+		},
+		{
+			name: "continueCherryPick",
+			run: () => continueCherryPick(),
+			rereads: ["status", "log"],
+		},
+		{
+			name: "skipCherryPick",
+			run: () => skipCherryPick(),
+			rereads: ["status", "log"],
+		},
+		{
+			name: "abortCherryPick",
+			run: () => abortCherryPick(),
+			rereads: ["status", "log"],
+		},
+		{
+			name: "deleteBranch",
+			run: () => deleteBranch("topic"),
+			rereads: ["status", "graph", "branches"],
+		},
+		{
+			name: "deleteRemoteBranch",
+			run: () => deleteRemoteBranch("topic"),
+			rereads: ["status", "graph", "branches"],
+		},
+		{
+			name: "createTag",
+			run: () => createTag("v1", ""),
+			rereads: ["graph", "tags"],
+		},
+		{
+			name: "deleteRemoteTag",
+			run: () => deleteRemoteTag("v1"),
+			rereads: ["tags"],
+		},
+		{
+			name: "stageFiles",
+			run: () => stageFiles(["a.ts"]),
+			rereads: ["status"],
+		},
+		{
+			name: "unstageFiles",
+			run: () => unstageFiles(["a.ts"]),
+			rereads: ["status"],
+		},
+		{
+			name: "discardFiles",
+			run: () => discardFiles(["a.ts"]),
+			rereads: ["status"],
+		},
+	];
+
+	it.each(rereadingWrites)(
+		"$name rereads $rereads",
+		async ({ run, rereads }) => {
+			service.getGraph.mockResolvedValue([graphRow("a")]);
+			await refreshGraph();
+			for (const fn of [
+				service.getGraph,
+				service.getSnapshot,
+				service.getLog,
+				service.getTagList,
+				branchLists,
+			]) {
+				fn.mockClear();
+			}
+			await run();
+			if (rereads.includes("status")) {
+				expect(service.getSnapshot).toHaveBeenCalledWith(WORKTREE, "");
+			}
+			if (rereads.includes("log")) {
+				expect(service.getLog).toHaveBeenCalledWith(WORKTREE, 50, 0);
+			}
+			if (rereads.includes("graph")) {
+				expect(service.getGraph).toHaveBeenCalledWith(WORKTREE, 20, 0);
+			}
+			if (rereads.includes("branches")) {
+				expect(branchLists).toHaveBeenCalledWith(WORKTREE);
+			}
+			if (rereads.includes("tags")) {
+				expect(service.getTagList).toHaveBeenCalledWith(WORKTREE);
+			}
+		},
+	);
+
+	it("deleteRemoteTag asks the remote to delete the tag", async () => {
+		await deleteRemoteTag("v1");
+		expect(service.tagDeleteRemote).toHaveBeenCalledWith(
+			WORKTREE,
+			"origin",
+			"v1",
+		);
+	});
+
+	it("sets the upstream on request even when the branch already has one", async () => {
+		service.getSnapshot.mockResolvedValue(
+			snapshotOf(
+				{},
+				{ remoteStatus: { hasUpstream: true, ahead: 0, behind: 0 } },
+			),
+		);
+		await refreshStatus();
+		await recoverFromGitError("setUpstream");
+		expect(service.push).toHaveBeenCalledWith(
+			WORKTREE,
+			true,
+			"main",
+			false,
+			"normal",
+		);
+	});
+});
+
+describe("loadBranches in flight", () => {
+	it("shows the loading state until the lists arrive", async () => {
+		const lists = deferred<{ local: string[]; remote: string[] }>();
+		branchLists.mockReturnValue(lists.promise);
+		const pending = loadBranches("/repos/p1", { fetch: false });
+		expect(get(git).isLoadingBranches).toBe(true);
+		lists.resolve({ local: [], remote: [] });
+		await pending;
+		expect(get(git).isLoadingBranches).toBe(false);
+	});
+});
+
+describe("the commit draft", () => {
+	it("keeps the subject when the body is typed", () => {
+		setCommitMessage("subject");
+		setCommitBody("body");
+		expect(get(commitDraft)).toEqual({ message: "subject", body: "body" });
+	});
+
+	it("is emptied by a reset of the store", () => {
+		setCommitMessage("subject");
+		setCommitBody("body");
+		resetGitStore();
+		expect(get(commitDraft)).toEqual({ message: "", body: "" });
+	});
+});
+
+describe("clearing what was read", () => {
+	it("stops keeping the graph in step", async () => {
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshGraph();
+		clearGitData();
+		service.getGraph.mockClear();
+		await syncGraph();
+		expect(service.getGraph).not.toHaveBeenCalled();
+	});
+
+	it("is not undone by leaving and coming back", async () => {
+		await useInstances(["ca", "cb"], "ca");
+		service.getSnapshot.mockResolvedValue(snapshotOf({ "a.txt": "modified" }));
+		await refreshStatus();
+		activateInstance("cb");
+		activateInstance("ca");
+		expect(get(git).status).toEqual({ "a.txt": "modified" });
+		clearGitData();
+		activateInstance("cb");
+		activateInstance("ca");
+		expect(get(git).statusWorktree).toBeNull();
+		expect(get(git).status).toEqual({});
+	});
+});
+
+describe("the worktree cache", () => {
+	const cacheIds = Array.from({ length: 10 }, (_, i) => `k${i}`);
+
+	async function readOn(id: string) {
+		activateInstance(id);
+		await refreshStatus();
+	}
+
+	async function emptyCache() {
+		await useInstances(["i1", ...cacheIds], "i1");
+		for (const id of ["i1", ...cacheIds]) {
+			activateInstance(id);
+			clearGitData();
+		}
+	}
+
+	beforeEach(async () => {
+		service.getSnapshot.mockResolvedValue(snapshotOf({ "a.txt": "modified" }));
+		await emptyCache();
+	});
+
+	it("lets the least recently left worktree go once the bound is passed", async () => {
+		for (const id of cacheIds.slice(0, 9)) await readOn(id);
+		activateInstance("k9");
+		activateInstance("k0");
+		expect(get(git).statusWorktree).toBeNull();
+		activateInstance("k1");
+		expect(get(git).statusWorktree).toBe(worktreeOf("k1"));
+	});
+
+	it("counts a worktree that was visited again as the most recent", async () => {
+		for (const id of cacheIds.slice(0, 8)) await readOn(id);
+		activateInstance("k8");
+		activateInstance("k0");
+		expect(get(git).statusWorktree).toBe(worktreeOf("k0"));
+		await readOn("k8");
+		activateInstance("k9");
+		activateInstance("k1");
+		expect(get(git).statusWorktree).toBeNull();
+		activateInstance("k0");
+		expect(get(git).statusWorktree).toBe(worktreeOf("k0"));
+	});
+
+	it("does not keep a worktree whose status was never read", async () => {
+		await useInstances(["ka", "kb"], "ka");
+		service.getLog.mockResolvedValue([{ hash: "c0", message: "one" }]);
+		await refreshLog();
+		activateInstance("kb");
+		activateInstance("ka");
+		expect(get(git).log).toEqual([]);
+	});
+
+	it("gives back the graph a worktree was left with", async () => {
+		await useInstances(["ga", "gb"], "ga");
+		service.getGraph.mockResolvedValue([graphRow("a")]);
+		await refreshStatus();
+		await refreshGraph();
+		activateInstance("gb");
+		activateInstance("ga");
+		service.getGraph.mockClear();
+		await syncGraph();
+		expect(service.getGraph).toHaveBeenCalledWith(worktreeOf("ga"), 20, 0);
+		activateInstance("gb");
+		service.getGraph.mockClear();
+		await syncGraph();
+		expect(service.getGraph).not.toHaveBeenCalled();
+	});
+
+	it("gives a worktree back after a moment with no instance at all", async () => {
+		await useInstances(["na"], "na");
+		await refreshStatus();
+		withoutWorktree();
+		projects.set([project("p1", { activeInstanceId: "na" })]);
+		activeProjectId.set("p1");
+		expect(get(git).statusWorktree).toBe(worktreeOf("na"));
+	});
+
+	it("keeps what was read when the instance is republished unchanged", async () => {
+		await useInstances(["ra"], "ra");
+		service.getLog.mockResolvedValue([{ hash: "c0", message: "one" }]);
+		await refreshLog();
+		listInstances.mockResolvedValue([instance("ra", "p1", { createdAt: 1 })]);
+		await loadInstances("p1");
+		expect(get(git).log).toHaveLength(1);
 	});
 });

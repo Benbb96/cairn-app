@@ -149,6 +149,13 @@ describe("matchesServerQuery", () => {
 		expect(matchesServerQuery(python, "pyright")).toBe(true);
 	});
 
+	it("searches the id when the name does not carry it", () => {
+		const server = { id: "zed-ls", name: "Other", extensions: [".zed"] };
+		expect(matchesServerQuery(server, "d-ls")).toBe(true);
+		expect(matchesServerQuery(server, "ZED-LS")).toBe(true);
+		expect(matchesServerQuery(server, "nothing")).toBe(false);
+	});
+
 	it("searches the extensions, with or without the dot", () => {
 		expect(matchesServerQuery(python, ".py")).toBe(true);
 		expect(matchesServerQuery(python, "py")).toBe(true);
@@ -191,5 +198,39 @@ describe("catalogue", () => {
 				expect(languageIdForPath(`file${extension}`)).not.toBeNull();
 			}
 		}
+	});
+});
+
+describe("user servers on edge paths", () => {
+	afterEach(() => setCustomServers([]));
+
+	it("keeps the catalogue language id for a server that declares none", () => {
+		setCustomServers([{ id: "deno", name: "Deno", extensions: [".ts"] }]);
+		expect(languageIdForPath("src/main.ts")).toBe("typescript");
+	});
+
+	it("takes a dotfile for a file with no extension, whatever a server claims", () => {
+		setCustomServers([
+			{
+				id: "env",
+				name: "Env",
+				extensions: [".env", ""],
+				languageIds: ["env"],
+			},
+		]);
+		expect(serverForPath(".env")).toBeNull();
+		expect(serverForPath("Makefile")).toBeNull();
+		expect(languageIdForPath(".env")).toBeNull();
+		expect(languageIdForPath("Makefile")).toBeNull();
+	});
+});
+
+describe("matchesServerQuery extension anchoring", () => {
+	const server = { id: "zed", name: "Zed", extensions: [".tsx"] };
+
+	it("anchors a typed extension on its dot rather than matching inside one", () => {
+		expect(matchesServerQuery(server, "sx")).toBe(false);
+		expect(matchesServerQuery(server, ".sx")).toBe(false);
+		expect(matchesServerQuery(server, "tsx")).toBe(true);
 	});
 });

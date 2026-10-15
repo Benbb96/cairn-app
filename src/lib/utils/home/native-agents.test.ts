@@ -14,6 +14,11 @@ describe("agentSlug", () => {
 		expect(agentSlug("a // b __ c")).toBe("a-b-c");
 	});
 
+	it("never starts with a dash either", () => {
+		expect(agentSlug("--name")).toBe("name");
+		expect(agentSlug("  !x")).toBe("x");
+	});
+
 	it("never leaves a trailing dash, which would name a file oddly", () => {
 		expect(agentSlug("trailing!!")).toBe("trailing");
 		expect(agentSlug("!!!")).toBe("");

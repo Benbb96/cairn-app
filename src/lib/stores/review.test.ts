@@ -1,8 +1,10 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewHunk } from "$lib/types/review";
+import { emptyReviewState } from "$lib/types/review";
 
 const getDiffHunks = vi.fn<(...a: unknown[]) => unknown>();
 const getDiffUnified = vi.fn<(...a: unknown[]) => unknown>();
@@ -16,9 +18,10 @@ vi.mock("$lib/services/review-service", () => ({
 }));
 
 const runOneshot = vi.fn<(...a: unknown[]) => unknown>();
+const stopOneshot = vi.fn<(...a: unknown[]) => unknown>();
 vi.mock("$lib/services/oneshot-service", () => ({
 	runOneshot: (...a: unknown[]) => runOneshot(...a),
-	stopOneshot: vi.fn().mockResolvedValue(undefined),
+	stopOneshot: (...a: unknown[]) => stopOneshot(...a),
 }));
 
 const forgeSubmitReview = vi.fn<(...a: unknown[]) => unknown>();
@@ -28,19 +31,40 @@ vi.mock("$lib/services/integration-service", () => ({
 
 const {
 	addComment,
+	cancelCommentDraft,
+	cancelGuide,
+	commentDrafting,
 	deleteComment,
 	dismissRemark,
+	draftCommentFor,
+	editComment,
+	findRemark,
 	generateGuide,
+	guideGenerating,
+	hunksFor,
+	loadReview,
+	markPublished,
 	markChapterSeen,
 	markHunkSeen,
 	openReview,
 	pendingComments,
 	progressFor,
 	publishReview,
+	requestReviewAction,
+	reviewAction,
+	reviewErrors,
+	reviewHunks,
+	reviewMarkdown,
+	reviewStates,
 	setCurrentPosition,
+	setDiffMode,
+	setDiscussionFilter,
+	setDiscussionsOpen,
 	setMergeRequestId,
+	setSelectedPath,
 	stateFor,
 } = await import("./review");
+const { runProjectTeardowns } = await import("./project-teardown");
 
 const scope = { projectId: "p1", instanceId: "i1", worktreePath: "/wt" };
 
@@ -105,6 +129,7 @@ async function generate() {
 
 beforeEach(async () => {
 	vi.clearAllMocks();
+	stopOneshot.mockResolvedValue(undefined);
 	loadReviewState.mockResolvedValue(null);
 	getDiffHunks.mockResolvedValue(HUNKS);
 	// Each test starts from a clean slate for this instance.
@@ -301,7 +326,10 @@ describe("publishReview", () => {
 
 	it("refuses to submit with no merge request to submit to", async () => {
 		setMergeRequestId(scope, "");
-		await expect(publishReview(scope, "comment", "hi")).rejects.toThrow();
+		await expect(publishReview(scope, "comment", "hi")).rejects.toThrow(
+			"No merge request to submit this review to.",
+		);
+		expect(forgeSubmitReview).not.toHaveBeenCalled();
 	});
 
 	it("marks what the forge accepted", async () => {
@@ -366,5 +394,534 @@ describe("publishReview", () => {
 			published: 0,
 			failed: 1,
 		});
+	});
+});
+
+describe("loadReview", () => {
+	const loneScope = { projectId: "p9", instanceId: "i9", worktreePath: "/wt9" };
+
+	it("puts the stored reading state in place without a diff", async () => {
+		const stored = {
+			...emptyReviewState(),
+			isDiffMode: true,
+			selectedPath: "src/a.ts",
+		};
+		loadReviewState.mockResolvedValue(stored);
+		getDiffHunks.mockClear();
+		await loadReview(loneScope);
+		expect(stateFor(loneScope)).toEqual(stored);
+		expect(getDiffHunks).not.toHaveBeenCalled();
+	});
+
+	it("leaves the defaults when nothing was ever stored", async () => {
+		const noneScope = { ...loneScope, instanceId: "i10" };
+		loadReviewState.mockResolvedValue(null);
+		await loadReview(noneScope);
+		expect(loadReviewState).toHaveBeenCalledWith("p9", "i10");
+		expect(stateFor(noneScope)).toEqual(emptyReviewState());
+	});
+
+	it("does not read the disk again once the state is in memory", async () => {
+		loadReviewState.mockClear();
+		await loadReview(scope);
+		expect(loadReviewState).not.toHaveBeenCalled();
+	});
+
+	it("keeps what a concurrent load put in memory while it was reading", async () => {
+		const racedScope = { ...loneScope, instanceId: "i11" };
+		let release: (value: unknown) => void = () => {};
+		loadReviewState.mockReturnValueOnce(
+			new Promise((resolve) => {
+				release = resolve;
+			}),
+		);
+		const pending = loadReview(racedScope);
+		loadReviewState.mockResolvedValueOnce({
+			...emptyReviewState(),
+			selectedPath: "winner.ts",
+		});
+		await openReview(racedScope, "main", "feature");
+		release({ ...emptyReviewState(), selectedPath: "late.ts" });
+		await pending;
+		expect(stateFor(racedScope).selectedPath).toBe("winner.ts");
+	});
+});
+
+describe("cancelling a run", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("stops the generation in flight under its run id", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-29T10:00:00Z"));
+		getDiffUnified.mockResolvedValue({ text: "diff", truncated: false });
+		getDiffHunks.mockResolvedValue(HUNKS);
+		let reject: (error: Error) => void = () => {};
+		runOneshot.mockReturnValue(
+			new Promise((_, rej) => {
+				reject = rej;
+			}),
+		);
+		const running = generateGuide(scope, {
+			base: "main",
+			head: "feature",
+			baseSha: "b",
+			headSha: "h",
+		});
+		const runId = `guide-p1:i1-${Date.now()}`;
+		expect(get(guideGenerating)["p1:i1"]).toBe(runId);
+		await cancelGuide(scope);
+		expect(stopOneshot).toHaveBeenCalledWith(runId);
+		reject(new Error("cancelled"));
+		await running;
+		expect(get(guideGenerating)["p1:i1"]).toBe("");
+		expect(get(reviewErrors)["p1:i1"]).toBe("");
+	});
+
+	it("reports a failure that is not a cancellation", async () => {
+		getDiffUnified.mockResolvedValue({ text: "diff", truncated: false });
+		getDiffHunks.mockResolvedValue(HUNKS);
+		runOneshot.mockRejectedValue(new Error("model down"));
+		await generateGuide(scope, {
+			base: "main",
+			head: "feature",
+			baseSha: "b",
+			headSha: "h",
+		});
+		expect(get(reviewErrors)["p1:i1"]).toBe("model down");
+	});
+
+	it("stops nothing when no generation is running", async () => {
+		await cancelGuide(scope);
+		expect(stopOneshot).not.toHaveBeenCalled();
+	});
+
+	it("stops the comment draft in flight under its run id", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-29T10:00:00Z"));
+		let resolve: (value: unknown) => void = () => {};
+		runOneshot.mockReturnValue(
+			new Promise((res) => {
+				resolve = res;
+			}),
+		);
+		const remark = {
+			id: "c1r1",
+			kind: "issue" as const,
+			path: "src/a.ts",
+			side: "new" as const,
+			line: 2,
+			title: "Unvalidated input",
+			body: "It goes straight to the API.",
+			status: "open" as const,
+		};
+		const drafting = draftCommentFor(scope, remark, "2: x");
+		const runId = `draft-p1:i1-${Date.now()}`;
+		expect(get(commentDrafting)["p1:i1"]).toBe(runId);
+		await cancelCommentDraft(scope);
+		expect(stopOneshot).toHaveBeenCalledWith(runId);
+		resolve({ comment: "Validate it." });
+		await drafting;
+		expect(get(commentDrafting)["p1:i1"]).toBe("");
+	});
+
+	it("stops no draft when none is running", async () => {
+		await cancelCommentDraft(scope);
+		expect(stopOneshot).not.toHaveBeenCalled();
+	});
+});
+
+describe("draftCommentFor", () => {
+	const remark = {
+		id: "c1r1",
+		kind: "issue" as const,
+		path: "src/a.ts",
+		side: "new" as const,
+		line: 2,
+		title: "Unvalidated input",
+		body: "It goes straight to the API.",
+		status: "open" as const,
+	};
+
+	it("returns the comment the model answered, run in the worktree", async () => {
+		runOneshot.mockResolvedValue({ comment: "Validate it." });
+		const comment = await draftCommentFor(scope, remark, "2: x", {
+			provider: "codex",
+			model: "m",
+			binaryPath: "/bin/codex",
+		});
+		expect(comment).toBe("Validate it.");
+		const call = runOneshot.mock.calls[0];
+		expect(call[0]).toBe("/wt");
+		expect(call[2]).toEqual({
+			type: "object",
+			required: ["comment"],
+			properties: { comment: { type: "string" } },
+		});
+		expect(call.slice(4)).toEqual(["codex", "m", "/bin/codex"]);
+		expect(String(call[1])).toContain("Unvalidated input");
+	});
+
+	it("returns an empty comment when the answer carries no text", async () => {
+		runOneshot.mockResolvedValue({ comment: 4 });
+		expect(await draftCommentFor(scope, remark, "2: x")).toBe("");
+	});
+
+	it("clears the pending run when the model fails", async () => {
+		runOneshot.mockRejectedValue(new Error("boom"));
+		await expect(draftCommentFor(scope, remark, "2: x")).rejects.toThrow(
+			"boom",
+		);
+		expect(get(commentDrafting)["p1:i1"]).toBe("");
+	});
+});
+
+describe("remarks and comments lookups", () => {
+	beforeEach(generate);
+
+	it("finds a remark by its id", () => {
+		expect(findRemark(scope, "c1r1")).toMatchObject({
+			id: "c1r1",
+			title: "Unvalidated input",
+		});
+	});
+
+	it("finds nothing for an unknown id", () => {
+		expect(findRemark(scope, "c9r9")).toBeNull();
+	});
+
+	it("finds nothing without a guide", async () => {
+		await openReview(scope, "main", "feature");
+		expect(findRemark(scope, "c1r1")).toBeNull();
+	});
+
+	it("rewrites the body of the comment asked for only", () => {
+		const first = addComment(scope, {
+			path: "src/a.ts",
+			side: "new",
+			line: 2,
+			body: "one",
+		});
+		const second = addComment(scope, {
+			path: "src/b.ts",
+			side: "new",
+			line: 2,
+			body: "two",
+		});
+		editComment(scope, second, "two, reworded");
+		expect(stateFor(scope).comments.map((c) => [c.id, c.body])).toEqual([
+			[first, "one"],
+			[second, "two, reworded"],
+		]);
+	});
+
+	it("deletes a comment written from no remark and leaves remarks alone", () => {
+		const id = addComment(scope, {
+			path: "src/a.ts",
+			side: "new",
+			line: 2,
+			body: "free",
+		});
+		deleteComment(scope, id);
+		expect(stateFor(scope).comments).toEqual([]);
+		expect(stateFor(scope).guide?.chapters[0].remarks[0].status).toBe("open");
+	});
+
+	it("leaves the other remarks untouched when one is dismissed", () => {
+		dismissRemark(scope, "c1r1");
+		dismissRemark(scope, "c9r9");
+		expect(stateFor(scope).guide?.chapters[0].remarks).toHaveLength(1);
+		expect(stateFor(scope).guide?.chapters[0].remarks[0].status).toBe(
+			"dismissed",
+		);
+	});
+});
+
+describe("marking without a guide or a match", () => {
+	it("ignores a chapter mark when there is no guide", () => {
+		markChapterSeen(scope, "c1");
+		expect(stateFor(scope)).toEqual(emptyReviewState());
+	});
+
+	it("ignores a remark change when there is no guide", () => {
+		dismissRemark(scope, "c1r1");
+		expect(stateFor(scope)).toEqual(emptyReviewState());
+	});
+
+	it("records a read hunk even when there is no guide", () => {
+		markHunkSeen(scope, "aaa");
+		expect(stateFor(scope).seenHunks).toEqual(["aaa"]);
+		expect(stateFor(scope).guide).toBeNull();
+		markHunkSeen(scope, "aaa", false);
+		expect(stateFor(scope).seenHunks).toEqual([]);
+	});
+
+	it("ignores a chapter mark for an unknown chapter", async () => {
+		await generate();
+		markChapterSeen(scope, "c9");
+		expect(stateFor(scope).seenHunks).toEqual([]);
+		expect(stateFor(scope).guide?.chapters.map((c) => c.isSeen)).toEqual([
+			false,
+			false,
+		]);
+	});
+
+	it("un-reads a chapter when one of its hunks is set back to unread", async () => {
+		await generate();
+		markHunkSeen(scope, "aaa");
+		markHunkSeen(scope, "aaa", false);
+		expect(stateFor(scope).seenHunks).toEqual([]);
+		expect(stateFor(scope).guide?.chapters[0].isSeen).toBe(false);
+	});
+});
+
+describe("reading state setters", () => {
+	it("remembers the diff mode", () => {
+		setDiffMode(scope, true);
+		expect(stateFor(scope).isDiffMode).toBe(true);
+		setDiffMode(scope, false);
+		expect(stateFor(scope).isDiffMode).toBe(false);
+	});
+
+	it("remembers the discussion filter", () => {
+		setDiscussionFilter(scope, "open");
+		expect(stateFor(scope).discussionFilter).toBe("open");
+	});
+
+	it("remembers the file being read", () => {
+		setSelectedPath(scope, "src/b.ts");
+		expect(stateFor(scope).selectedPath).toBe("src/b.ts");
+	});
+
+	it("remembers whether the discussions panel is open", () => {
+		setDiscussionsOpen(scope, false);
+		expect(stateFor(scope).isDiscussionsOpen).toBe(false);
+		setDiscussionsOpen(scope, true);
+		expect(stateFor(scope).isDiscussionsOpen).toBe(true);
+	});
+});
+
+describe("publishReview with nothing to send", () => {
+	beforeEach(() => {
+		setMergeRequestId(scope, "mr1");
+	});
+
+	it("does not call the forge for an empty plain comment", async () => {
+		expect(await publishReview(scope, "comment", "   ")).toEqual({
+			published: 0,
+			failed: 0,
+		});
+		expect(forgeSubmitReview).not.toHaveBeenCalled();
+	});
+
+	it("still submits a verdict with no comment", async () => {
+		forgeSubmitReview.mockResolvedValue({ published: {}, failed: [] });
+		await publishReview(scope, "approve", "");
+		expect(forgeSubmitReview).toHaveBeenCalledWith(
+			"p1",
+			"mr1",
+			[],
+			"approve",
+			"",
+		);
+	});
+});
+
+describe("reviewMarkdown", () => {
+	it("renders the comments of the instance with the verdict", () => {
+		addComment(scope, {
+			path: "src/a.ts",
+			side: "new",
+			line: 2,
+			body: "Validate it.",
+		});
+		expect(reviewMarkdown(scope, "changes", "Needs work.")).toBe(
+			"Needs work.\n\nVerdict: changes\n\n### src/a.ts:2\n\nValidate it.",
+		);
+	});
+});
+
+describe("requestReviewAction", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("publishes the action with the moment it was asked", () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-29T10:00:00Z"));
+		requestReviewAction("review.next");
+		expect(get(reviewAction)).toEqual({
+			id: "review.next",
+			at: new Date("2026-08-29T10:00:00Z").getTime(),
+		});
+	});
+});
+
+describe("the reading state of an instance that was never opened", () => {
+	let instanceCount = 0;
+	let freshScope = scope;
+	let freshKey = "";
+
+	beforeEach(() => {
+		instanceCount += 1;
+		freshScope = {
+			projectId: "p7",
+			instanceId: `i${instanceCount}`,
+			worktreePath: "/wt7",
+		};
+		freshKey = `p7:i${instanceCount}`;
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("has no hunks", () => {
+		expect(hunksFor(freshScope)).toEqual([]);
+	});
+
+	it("builds a change on the empty state", () => {
+		setDiffMode(freshScope, true);
+		expect(stateFor(freshScope)).toEqual({
+			...emptyReviewState(),
+			isDiffMode: true,
+		});
+	});
+
+	it("stays empty when a chapter is marked with no guide", () => {
+		markChapterSeen(freshScope, "c1");
+		expect(get(reviewStates)[freshKey]).toEqual(emptyReviewState());
+	});
+
+	it("stays empty when a remark is dismissed with no guide", () => {
+		dismissRemark(freshScope, "c1r1");
+		expect(get(reviewStates)[freshKey]).toEqual(emptyReviewState());
+	});
+
+	it("is not given a state by loading one that was never stored", async () => {
+		loadReviewState.mockResolvedValue(null);
+		await loadReview(freshScope);
+		expect(get(reviewStates)[freshKey]).toBeUndefined();
+	});
+
+	it("writes a change to disk once the debounce delay has passed", () => {
+		vi.useFakeTimers();
+		setDiffMode(freshScope, true);
+		vi.advanceTimersByTime(499);
+		expect(saveReviewState).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+		expect(saveReviewState).toHaveBeenCalledWith("p7", freshScope.instanceId, {
+			...emptyReviewState(),
+			isDiffMode: true,
+		});
+	});
+
+	it("restarts the delay on each change and writes once", () => {
+		vi.useFakeTimers();
+		setDiffMode(freshScope, true);
+		vi.advanceTimersByTime(300);
+		setSelectedPath(freshScope, "src/a.ts");
+		vi.advanceTimersByTime(300);
+		expect(saveReviewState).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(200);
+		expect(saveReviewState).toHaveBeenCalledTimes(1);
+		expect(saveReviewState).toHaveBeenCalledWith("p7", freshScope.instanceId, {
+			...emptyReviewState(),
+			isDiffMode: true,
+			selectedPath: "src/a.ts",
+		});
+	});
+
+	it("writes the state an opened review settled on", async () => {
+		vi.useFakeTimers();
+		loadReviewState.mockResolvedValue(null);
+		await openReview(freshScope, "main", "feature");
+		vi.advanceTimersByTime(500);
+		expect(saveReviewState).toHaveBeenCalledWith(
+			"p7",
+			freshScope.instanceId,
+			emptyReviewState(),
+		);
+	});
+});
+
+describe("the hunks kept for an instance", () => {
+	it("holds the hunks the diff answered with once the review is open", () => {
+		expect(get(reviewHunks)["p1:i1"]).toEqual(HUNKS);
+	});
+
+	it("holds an empty list when the backend answers with nothing", async () => {
+		getDiffHunks.mockResolvedValue(undefined);
+		await openReview(scope, "main", "feature");
+		expect(get(reviewHunks)["p1:i1"]).toEqual([]);
+	});
+
+	it("takes the hunks a guide generation read", async () => {
+		getDiffUnified.mockResolvedValue({ text: "diff", truncated: false });
+		getDiffHunks.mockResolvedValue([HUNKS[0]]);
+		runOneshot.mockResolvedValue(ANSWER);
+		await generateGuide(scope, {
+			base: "main",
+			head: "feature",
+			baseSha: "b",
+			headSha: "h",
+		});
+		expect(get(reviewHunks)["p1:i1"]).toEqual([HUNKS[0]]);
+	});
+
+	it("generates a guide when the backend answers with no hunks", async () => {
+		getDiffUnified.mockResolvedValue({ text: "diff", truncated: false });
+		getDiffHunks.mockResolvedValue(undefined);
+		runOneshot.mockResolvedValue(ANSWER);
+		await generateGuide(scope, {
+			base: "main",
+			head: "feature",
+			baseSha: "b",
+			headSha: "h",
+		});
+		expect(get(reviewErrors)["p1:i1"]).toBe("");
+		expect(get(reviewHunks)["p1:i1"]).toEqual([]);
+	});
+});
+
+describe("addComment ids", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("ends with six characters of randomness", () => {
+		vi.spyOn(Math, "random").mockReturnValue(0.123456789012345);
+		const id = addComment(scope, {
+			path: "src/a.ts",
+			side: "new",
+			line: 2,
+			body: "x",
+		});
+		expect(id).toMatch(/^rc-\d+-4fzzzx$/);
+	});
+});
+
+describe("markPublished", () => {
+	it("leaves a comment the forge did not accept without a publishedAs", () => {
+		const accepted = addComment(scope, {
+			path: "src/a.ts",
+			side: "new",
+			line: 2,
+			body: "one",
+		});
+		addComment(scope, { path: "src/b.ts", side: "new", line: 2, body: "two" });
+		markPublished(scope, { [accepted]: "forge-1" });
+		const [first, second] = stateFor(scope).comments;
+		expect(first.publishedAs).toBe("forge-1");
+		expect(Object.keys(second)).not.toContain("publishedAs");
+	});
+});
+
+describe("removing a project", () => {
+	it("forgets the review state and hunks of its instances", async () => {
+		await runProjectTeardowns("p1");
+		expect(get(reviewStates)["p1:i1"]).toBeUndefined();
+		expect(get(reviewHunks)["p1:i1"]).toBeUndefined();
 	});
 });

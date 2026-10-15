@@ -226,7 +226,13 @@ describe("ConversationHistoryPanel", () => {
 			mount({
 				projectConversations: [conversation("mine", { cli: "opencode" })],
 			});
-			expect(rowNamed("mine").querySelector(".row-mark svg")).not.toBeNull();
+			const paths = Array.from(
+				rowNamed("mine").querySelectorAll(".row-mark svg path"),
+			).map((p) => p.getAttribute("d"));
+			expect(paths).toEqual([
+				"M384 416H128V96H384V416ZM320 160H192V352H320V160Z",
+				"M320 224V352H192V224H320Z",
+			]);
 		});
 
 		/** The logo says which CLI it is; spelling the name out again is noise. */
@@ -273,7 +279,9 @@ describe("ConversationHistoryPanel", () => {
 			mount({ projectConversations: [conversation("mine")] });
 			const menu = rowNamed("mine").querySelector<HTMLElement>(".row-menu");
 			expect(menu).not.toBeNull();
-			expect(getComputedStyle(menu as HTMLElement).opacity).not.toBe("0");
+			expect(
+				Number(getComputedStyle(menu as HTMLElement).opacity),
+			).toBeGreaterThan(0);
 		});
 	});
 

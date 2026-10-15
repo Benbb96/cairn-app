@@ -4,6 +4,7 @@
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomCommand } from "$lib/services/custom-command-service";
+import { runProjectTeardowns } from "$lib/stores/project-teardown";
 import { instance, project } from "../../test/fixtures";
 
 const allocatePort = vi.hoisted(() => vi.fn());
@@ -46,11 +47,18 @@ import {
 	commandRunKey,
 	commandRuns,
 	confirmPendingLaunch,
+	forgetProject,
 	launchCommand,
 	pendingLaunch,
 	requestCommandLaunch,
 	stopCommand,
 } from "./command-run";
+import { terminalSessions } from "./terminal";
+
+const exitHandler = onTerminalExit.mock.calls[0][0] as (exit: {
+	id: string;
+	exitCode: number | null;
+}) => void;
 
 const PROJECT = project("p1");
 const INSTANCE = instance("i1", "p1");
@@ -86,6 +94,7 @@ beforeEach(() => {
 	removeTerminal.mockResolvedValue(undefined);
 	commandRuns.set({});
 	pendingLaunch.set(null);
+	terminalSessions.set({});
 });
 
 describe("commandRunKey", () => {
@@ -101,7 +110,12 @@ describe("commandRunKey", () => {
 describe("launchCommand", () => {
 	it("opens a terminal for the command", async () => {
 		await launchCommand(command(), PROJECT, INSTANCE);
-		expect(addCommandTerminal).toHaveBeenCalled();
+		expect(addCommandTerminal).toHaveBeenCalledTimes(1);
+		expect(addCommandTerminal.mock.calls[0][3]).toMatchObject({
+			title: "Build",
+			commandId: "c1",
+			icon: "play",
+		});
 	});
 
 	it("records the run so the badge can show it", async () => {
@@ -142,6 +156,21 @@ describe("launchCommand", () => {
 		await launchCommand(command(), PROJECT, INSTANCE);
 		const meta = addCommandTerminal.mock.calls[0][3];
 		expect(meta).toMatchObject({ title: "Build", commandId: "c1" });
+	});
+
+	it("titles and tags the terminal with the port allocated to the command", async () => {
+		getCommandState.mockResolvedValue({ ports: {} });
+		allocatePort.mockResolvedValue(3002);
+		await launchCommand(
+			command({ steps: ["vite --port {{port:3000}}"] }),
+			PROJECT,
+			INSTANCE,
+		);
+		expect(addCommandTerminal.mock.calls[0][3]).toMatchObject({
+			title: "Build :3002",
+			port: 3002,
+		});
+		expect(runs()[KEY].ports).toEqual([{ base: 3000, port: 3002 }]);
 	});
 
 	it("shows the terminal, since that is where the output goes", async () => {
@@ -192,7 +221,14 @@ describe("launchCommand", () => {
 describe("requestCommandLaunch", () => {
 	it("runs a plain command straight away", async () => {
 		await requestCommandLaunch(command(), PROJECT, INSTANCE);
-		expect(addCommandTerminal).toHaveBeenCalled();
+		expect(addCommandTerminal).toHaveBeenCalledWith(
+			"p1",
+			"i1",
+			INSTANCE.worktreePath,
+			expect.anything(),
+			expect.any(String),
+			expect.anything(),
+		);
 		expect(get(pendingLaunch)).toBeNull();
 	});
 
@@ -235,7 +271,14 @@ describe("confirmPendingLaunch", () => {
 	it("runs the launch the user confirmed", async () => {
 		await requestCommandLaunch(command({ confirm: true }), PROJECT, INSTANCE);
 		await confirmPendingLaunch();
-		expect(addCommandTerminal).toHaveBeenCalled();
+		expect(addCommandTerminal).toHaveBeenCalledWith(
+			"p1",
+			"i1",
+			INSTANCE.worktreePath,
+			expect.anything(),
+			expect.any(String),
+			expect.anything(),
+		);
 		expect(runs()[KEY]).toBeDefined();
 	});
 
@@ -273,5 +316,160 @@ describe("stopCommand", () => {
 	it("does nothing for a run that is not going", async () => {
 		await stopCommand(KEY);
 		expect(removeTerminal).not.toHaveBeenCalled();
+	});
+});
+
+describe("forgetProject", () => {
+	it("drops the runs of the removed project and keeps the others", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+		addCommandTerminal.mockResolvedValue("term-2");
+		await launchCommand(command(), project("p2"), instance("i2", "p2"));
+		forgetProject("p1");
+		expect(Object.keys(runs())).toEqual([commandRunKey("p2", "i2", "c1")]);
+	});
+
+	it("drops a parked launch of the removed project", async () => {
+		await requestCommandLaunch(command({ confirm: true }), PROJECT, INSTANCE);
+		forgetProject("p1");
+		expect(get(pendingLaunch)).toBeNull();
+	});
+
+	it("keeps a parked launch of another project", async () => {
+		await requestCommandLaunch(command({ confirm: true }), PROJECT, INSTANCE);
+		forgetProject("p2");
+		expect(get(pendingLaunch)?.project.id).toBe("p1");
+	});
+});
+
+describe("when a terminal exits", () => {
+	it("registers its handler with the terminal manager", () => {
+		expect(exitHandler).toBeTypeOf("function");
+	});
+
+	it("drops the run of the terminal and leaves it open", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		exitHandler({ id: "term-1", exitCode: 1 });
+
+		expect(runs()).toEqual({});
+		expect(removeTerminal).not.toHaveBeenCalled();
+	});
+
+	it("keeps the terminal of a failed command that asked to close itself", async () => {
+		await launchCommand(command({ autoClose: true }), PROJECT, INSTANCE);
+
+		exitHandler({ id: "term-1", exitCode: 2 });
+
+		expect(removeTerminal).not.toHaveBeenCalled();
+		expect(runs()).toEqual({});
+	});
+
+	it("closes the terminal of a command that asked to close itself on a clean exit", async () => {
+		await launchCommand(command({ autoClose: true }), PROJECT, INSTANCE);
+
+		exitHandler({ id: "term-1", exitCode: 0 });
+
+		expect(removeTerminal).toHaveBeenCalledWith("p1", "i1", "term-1");
+	});
+
+	it("leaves the runs alone when the terminal belongs to no command", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		exitHandler({ id: "other", exitCode: 0 });
+
+		expect(Object.keys(runs())).toEqual([KEY]);
+	});
+});
+
+describe("when the terminal sessions change", () => {
+	const session = (id: string) => ({ id, title: id });
+
+	it("drops the run whose terminal was closed by hand", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		terminalSessions.set({ "p1:i1": [session("someone-else")] });
+
+		expect(runs()).toEqual({});
+	});
+
+	it("keeps the run whose terminal is still open", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		terminalSessions.set({ "p1:i1": [session("term-1")] });
+
+		expect(Object.keys(runs())).toEqual([KEY]);
+	});
+
+	it("drops only the runs whose terminal is gone", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+		addCommandTerminal.mockResolvedValue("term-2");
+		await launchCommand(command({ id: "c2" }), PROJECT, INSTANCE);
+
+		terminalSessions.set({ "p1:i1": [session("term-2")] });
+
+		expect(Object.keys(runs())).toEqual([commandRunKey("p1", "i1", "c2")]);
+	});
+});
+
+describe("allocating ports", () => {
+	const portCommand = () => command({ steps: ["vite --port {{port:3000}}"] });
+
+	it("touches neither the saved state nor the allocator for a command without ports", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		expect(getCommandState).not.toHaveBeenCalled();
+		expect(allocatePort).not.toHaveBeenCalled();
+		expect(saveCommandState).not.toHaveBeenCalled();
+	});
+
+	it("asks for a fresh port when the instance never had one", async () => {
+		getCommandState.mockResolvedValue({ ports: {} });
+
+		await launchCommand(portCommand(), PROJECT, INSTANCE);
+
+		expect(allocatePort).toHaveBeenCalledWith(3000, null, []);
+	});
+
+	it("asks to keep the port the instance had last time", async () => {
+		getCommandState.mockResolvedValue({ ports: { "c1:3000": 3005 } });
+
+		await launchCommand(portCommand(), PROJECT, INSTANCE);
+
+		expect(allocatePort).toHaveBeenCalledWith(3000, 3005, []);
+	});
+
+	it("saves the allocated port for the next run", async () => {
+		getCommandState.mockResolvedValue({ ports: {} });
+		allocatePort.mockResolvedValue(3002);
+
+		await launchCommand(portCommand(), PROJECT, INSTANCE);
+
+		expect(saveCommandState).toHaveBeenCalledWith("p1", "i1", {
+			ports: { "c1:3000": 3002 },
+		});
+	});
+});
+
+describe("ticket variables of an instance without key or url", () => {
+	it("expands them to the ticket id and to nothing", async () => {
+		await launchCommand(
+			command({ steps: ["echo key=[{{ticket.key}}] url=[{{ticket.url}}]"] }),
+			PROJECT,
+			INSTANCE,
+		);
+
+		const script = addCommandTerminal.mock.calls[0][4] as string;
+		expect(script).toContain(`key=[${INSTANCE.ticket.id}]`);
+		expect(script).toContain("url=['']");
+	});
+});
+
+describe("project removal", () => {
+	it("forgets the runs of a removed project", async () => {
+		await launchCommand(command(), PROJECT, INSTANCE);
+
+		await runProjectTeardowns("p1");
+
+		expect(runs()).toEqual({});
 	});
 });

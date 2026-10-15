@@ -312,6 +312,15 @@ describe("ManageInstances", () => {
 			expect(document.querySelectorAll(".modal-backdrop").length).toBe(2);
 		});
 
+		it("proposes the first copy number as the title", async () => {
+			mount();
+			await openMenu(rows()[1]);
+			await userEvent.click(menuItem(/duplicate|dupliquer/i));
+			await settle();
+			const field = document.querySelector(".dup-input") as HTMLInputElement;
+			expect(field.value).toBe("Login (1)");
+		});
+
 		it("duplicates the instance once confirmed", async () => {
 			mount();
 			await openMenu(rows()[1]);

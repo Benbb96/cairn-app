@@ -8,8 +8,11 @@ import {
 	buildMrDescriptionPrompt,
 	buildReviewCommentPrompt,
 	buildReviewGuidePrompt,
+	buildTicketPlanPrompt,
 	buildTicketStartPrompt,
 	renderPromptTemplate,
+	type TicketPlanProject,
+	ticketValues,
 } from "./prompts";
 
 describe("renderPromptTemplate", () => {
@@ -85,6 +88,144 @@ describe("buildReviewGuidePrompt", () => {
 	});
 });
 
+describe("buildReviewGuidePrompt context block", () => {
+	const assignments = {
+		reviewGuide: {
+			providerId: "",
+			model: "",
+			promptTemplate: "[{{context}}]",
+		},
+	};
+	const input = {
+		base: "main",
+		head: "feature",
+		diff: "d",
+		truncated: false,
+		language: "en",
+	};
+
+	it("is empty without a merge request or a ticket", () => {
+		expect(buildReviewGuidePrompt(input, assignments)).toBe("[]");
+		expect(
+			buildReviewGuidePrompt({ ...input, mrTitle: "  " }, assignments),
+		).toBe("[]");
+	});
+
+	it("wraps a single part in line breaks", () => {
+		expect(
+			buildReviewGuidePrompt({ ...input, mrTitle: " Add login " }, assignments),
+		).toBe("[\nMerge request: Add login\n]");
+	});
+
+	it("separates the parts with a blank line", () => {
+		expect(
+			buildReviewGuidePrompt(
+				{
+					...input,
+					mrTitle: "Add login",
+					mrDescription: " It adds login. ",
+					ticket: { key: "CAI-1", title: "Login" },
+				},
+				assignments,
+			),
+		).toBe(
+			"[\nMerge request: Add login\n\nDescription:\nIt adds login.\n\nTicket CAI-1: Login\n]",
+		);
+	});
+});
+
+describe("ticketValues", () => {
+	it("is empty strings without a ticket", () => {
+		const empty = {
+			"ticket.key": "",
+			"ticket.title": "",
+			"ticket.url": "",
+			ticket: "",
+		};
+		expect(ticketValues(null)).toStrictEqual(empty);
+		expect(ticketValues(undefined)).toStrictEqual(empty);
+	});
+
+	it("carries the ticket fields and a sentence naming it", () => {
+		expect(
+			ticketValues({ key: "CAI-1", title: "Login", url: "https://x/CAI-1" }),
+		).toStrictEqual({
+			"ticket.key": "CAI-1",
+			"ticket.title": "Login",
+			"ticket.url": "https://x/CAI-1",
+			ticket: " The branch works on ticket CAI-1: Login.",
+		});
+	});
+});
+
+describe("buildReviewGuidePrompt truncation note", () => {
+	const HEAD =
+		"\nThis diff was too large to include whole: it was cut on hunk boundaries.";
+	const TAIL =
+		"Give these files a chapter of their own saying they could not be read, rather than guessing what they hold or leaving them out of the tour.\n";
+	const assignments = {
+		reviewGuide: {
+			providerId: "",
+			model: "",
+			promptTemplate: "[{{truncated}}]",
+		},
+	};
+	const input = {
+		base: "main",
+		head: "feature",
+		diff: "d",
+		truncated: true,
+		language: "en",
+	};
+
+	it("is empty when the diff was not cut", () => {
+		expect(
+			buildReviewGuidePrompt(
+				{ ...input, truncated: false, omitted: ["a.ts"] },
+				assignments,
+			),
+		).toBe("[]");
+	});
+
+	it("names no file when none was reported", () => {
+		expect(buildReviewGuidePrompt(input, assignments)).toBe(`[${HEAD}${TAIL}]`);
+		expect(buildReviewGuidePrompt({ ...input, omitted: [] }, assignments)).toBe(
+			`[${HEAD}${TAIL}]`,
+		);
+	});
+
+	it("lists every omitted file when there are few", () => {
+		expect(
+			buildReviewGuidePrompt(
+				{ ...input, omitted: ["a.ts", "b.ts"] },
+				assignments,
+			),
+		).toBe(
+			`[${HEAD}\nThe files left out, entirely or in part:\n- a.ts\n- b.ts\n${TAIL}]`,
+		);
+	});
+
+	it("lists forty files exactly without a remainder line", () => {
+		const omitted = Array.from({ length: 40 }, (_, i) => `f${i}.ts`);
+		const prompt = buildReviewGuidePrompt({ ...input, omitted }, assignments);
+		expect(prompt).toContain("- f39.ts\n");
+		expect(prompt).not.toContain("more");
+	});
+
+	it("counts a single file past the cap", () => {
+		const omitted = Array.from({ length: 41 }, (_, i) => `f${i}.ts`);
+		const prompt = buildReviewGuidePrompt({ ...input, omitted }, assignments);
+		expect(prompt).toContain("- f39.ts\n- and 1 more\n");
+	});
+
+	it("caps the list at forty and counts the rest", () => {
+		const omitted = Array.from({ length: 42 }, (_, i) => `f${i}.ts`);
+		const prompt = buildReviewGuidePrompt({ ...input, omitted }, assignments);
+		expect(prompt).toContain("- f39.ts\n- and 2 more\n");
+		expect(prompt).not.toContain("f40.ts");
+	});
+});
+
 describe("buildReviewCommentPrompt", () => {
 	it("carries the anchor, the excerpt and the remark", () => {
 		const prompt = buildReviewCommentPrompt({
@@ -135,6 +276,78 @@ describe("buildTicketStartPrompt", () => {
 	});
 });
 
+describe("buildTicketStartPrompt without optional parts", () => {
+	it("says there is no description and leaves out labels and link", () => {
+		expect(
+			buildTicketStartPrompt({
+				key: "#4",
+				title: "Add dark mode",
+				description: "  \n ",
+				url: "",
+				labels: [],
+			}),
+		).toBe(
+			[
+				"Start working on ticket #4: Add dark mode",
+				"",
+				"Description:",
+				"(none)",
+				"",
+				"Read the ticket, explore the worktree, and propose a plan before changing code. Ask when the acceptance criteria are unclear.",
+			].join("\n"),
+		);
+	});
+});
+
+describe("buildTicketPlanPrompt", () => {
+	const projects: TicketPlanProject[] = [
+		{
+			name: "Alpha",
+			tickets: [
+				{
+					key: "A-1",
+					title: "Fix login",
+					status: "Open",
+					labels: ["bug", "ux"],
+					assignees: [
+						{ login: "ada", displayName: "Ada" },
+						{ login: "bob", displayName: "Bob" },
+					],
+				},
+				{ key: "A-2", title: "Bare", status: "", labels: [], assignees: [] },
+			],
+		},
+		{ name: "Beta", tickets: [] },
+	];
+	const custom = {
+		ticketPlan: {
+			providerId: "",
+			model: "",
+			promptTemplate: "{{language}}\n{{tickets}}",
+		},
+	};
+
+	it("renders the backlog grouped by project with status, labels and assignees", () => {
+		expect(buildTicketPlanPrompt(projects, "fr", custom)).toBe(
+			[
+				"fr",
+				"## Alpha",
+				"- A-1: Fix login [Open, bug, ux] (Ada, Bob)",
+				"- A-2: Bare",
+				"",
+				"## Beta",
+				"(no open ticket)",
+			].join("\n"),
+		);
+	});
+
+	it("falls back to the default template", () => {
+		const prompt = buildTicketPlanPrompt(projects, "en");
+		expect(prompt).toContain("- A-1: Fix login [Open, bug, ux] (Ada, Bob)");
+		expect(prompt).not.toContain("{{");
+	});
+});
+
 describe("buildBranchNamePrompt", () => {
 	it("gives the model the ticket and asks for the slug alone", () => {
 		const prompt = buildBranchNamePrompt({
@@ -170,5 +383,33 @@ describe("buildBranchNamePrompt", () => {
 		});
 		expect(prompt).toContain("a".repeat(2000));
 		expect(prompt).not.toContain("a".repeat(2001));
+	});
+});
+
+describe("buildBranchNamePrompt placeholders", () => {
+	const assignments = {
+		branchName: {
+			providerId: "",
+			model: "",
+			promptTemplate: "[{{ticket.kind}}|{{ticket.description}}]",
+		},
+	};
+
+	it("blanks the kind and the description a ticket does not have", () => {
+		expect(
+			buildBranchNamePrompt(
+				{ key: "X-1", title: "t", kind: null, description: "" },
+				assignments,
+			),
+		).toBe("[|]");
+	});
+
+	it("passes the kind and frames a description", () => {
+		expect(
+			buildBranchNamePrompt(
+				{ key: "X-1", title: "t", kind: "Bug", description: " why " },
+				assignments,
+			),
+		).toBe("[Bug|\nDescription:\nwhy\n]");
 	});
 });

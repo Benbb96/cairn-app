@@ -197,7 +197,7 @@ describe("EnvImport", () => {
 			const options = Array.from(document.querySelectorAll('[role="option"]'));
 			await userEvent.click(options[options.length - 1] as HTMLElement);
 			await userEvent.click(confirm());
-			expect(onImport.mock.calls[0][0].scope).toBeTruthy();
+			expect(onImport.mock.calls[0][0].scope).toBe("instance");
 		});
 
 		it("closes without importing anything", async () => {

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { activeProjectId } from "$lib/stores/project";
 import { activeStep, gitLeftTab, showTool } from "$lib/stores/ui";
 import {
+	currentProjectViewState,
 	initViewStates,
 	snapshotCurrentProject,
 	updateProjectViewState,
@@ -75,10 +76,63 @@ describe("view state", () => {
 		).toBe(1);
 	});
 
+	it("patches nothing when no project is active", () => {
+		activeProjectId.set(null);
+		expect(
+			countNotifications(() => updateProjectViewState({ gitLogSearch: "fix" })),
+		).toBe(0);
+		expect(get(viewStates)).toEqual({});
+	});
+
+	it("serves the default view state when no project is active", () => {
+		activeProjectId.set(null);
+		expect(get(currentProjectViewState)).toMatchObject({
+			activeStep: "files",
+			gitLeftTab: "changes",
+			terminalActive: false,
+			lastCli: "",
+			gitLogSearch: "",
+		});
+	});
+
+	it("serves the default view state of a project never snapshotted", () => {
+		expect(get(currentProjectViewState)).toMatchObject({
+			activeStep: "files",
+			gitLogSearch: "",
+		});
+		expect(get(viewStates).p).toBeUndefined();
+	});
+
+	it("serves the stored view state of the active project", () => {
+		activeStep.set("git");
+		snapshotCurrentProject();
+		expect(get(currentProjectViewState).activeStep).toBe("git");
+	});
+
 	it("snapshots nothing when no project is active", () => {
 		activeProjectId.set(null);
 		expect(countNotifications(() => snapshotCurrentProject())).toBe(0);
 		expect(get(viewStates)).toEqual({});
+	});
+
+	it("fills the fields no ui store owns from the defaults on a first snapshot", () => {
+		snapshotCurrentProject();
+		expect(get(viewStates).p).toMatchObject({
+			gitChangesSearch: "",
+			gitLogSearch: "",
+			gitStagedSearch: "",
+		});
+	});
+
+	it("starts from the defaults when patching a project never snapshotted", () => {
+		updateProjectViewState({ gitLogSearch: "fix" });
+		expect(get(viewStates).p).toMatchObject({
+			activeStep: "files",
+			gitLeftTab: "changes",
+			terminalActive: false,
+			gitChangesSearch: "",
+			gitLogSearch: "fix",
+		});
 	});
 
 	it("keeps each project on its own state", () => {

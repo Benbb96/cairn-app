@@ -76,6 +76,63 @@ describe("diff parsing: gutter marks", () => {
 	});
 });
 
+describe("diff parsing: edge cases", () => {
+	it("marks consecutive additions all as added", async () => {
+		shellAnswers(`@@ -1,1 +1,3 @@\n ctx\n+a\n+b`);
+		const { lineMap } = await diffOf();
+		expect([...lineMap]).toEqual([
+			[2, "added"],
+			[3, "added"],
+		]);
+	});
+
+	it("marks a file deleted whole on line one", async () => {
+		shellAnswers(`@@ -1,2 +0,0 @@\n-a\n-b`);
+		const { lineMap } = await diffOf();
+		expect([...lineMap]).toEqual([[1, "deleted"]]);
+	});
+
+	it("keeps an existing mark when a deletion lands on the same line", async () => {
+		shellAnswers(`@@ -1,0 +1,1 @@\n+a\n@@ -3,1 +0,0 @@\n-b`);
+		const { lineMap } = await diffOf();
+		expect(lineMap.get(1)).toBe("added");
+	});
+
+	it("marks a deletion that ends the diff", async () => {
+		shellAnswers(`@@ -1,2 +1,1 @@\n a\n-b`);
+		const { lineMap } = await diffOf();
+		expect(lineMap.get(2)).toBe("deleted");
+	});
+
+	it("closes a pending deletion at the next hunk header", async () => {
+		shellAnswers(`@@ -1,2 +1,1 @@\n a\n-b\n@@ -9,1 +9,1 @@\n+x`);
+		const { lineMap } = await diffOf();
+		expect(lineMap.get(2)).toBe("deleted");
+		expect(lineMap.get(9)).toBe("added");
+	});
+
+	it("keeps a hunk that holds a single line when another follows", async () => {
+		shellAnswers(`@@ -1,1 +1,1 @@\n+a\n@@ -5,1 +6,1 @@\n+b`);
+		const { hunks } = await diffOf();
+		expect(hunks.map((h) => h.newStart)).toEqual([1, 6]);
+	});
+
+	it("drops a trailing hunk header with no lines", async () => {
+		shellAnswers(`@@ -1,1 +1,1 @@\n+a\n@@ -5,0 +5,0 @@`);
+		const { hunks } = await diffOf();
+		expect(hunks).toHaveLength(1);
+	});
+
+	it("drops a file header line met after a hunk", async () => {
+		shellAnswers(`@@ -1,1 +1,1 @@\n-old\n+new\n--- a/y.ts\n+++ b/y.ts`);
+		const { hunks } = await diffOf();
+		expect(hunks[0].lines).toEqual([
+			{ type: "-", content: "old" },
+			{ type: "+", content: "new" },
+		]);
+	});
+});
+
 describe("diff parsing: hunks", () => {
 	it("reads the line numbers off the hunk header", async () => {
 		shellAnswers(`@@ -10,3 +20,4 @@\n ctx\n+added`);
@@ -184,6 +241,13 @@ describe("gitStagedFileDiff", () => {
 		await gitStagedFileDiff("/repo", "a.ts");
 		const call = mockInvoke.mock.calls[0][1] as { args: string[] };
 		expect(call.args).toContain("--cached");
+	});
+
+	it("parses the staged diff it reads", async () => {
+		shellAnswers(`@@ -1,1 +1,1 @@\n-a\n+b`);
+		const { hunks, lineMap } = await gitStagedFileDiff("/repo", "a.ts");
+		expect(lineMap.get(1)).toBe("modified");
+		expect(hunks).toHaveLength(1);
 	});
 });
 

@@ -59,6 +59,11 @@ describe("spliceStashes", () => {
 		expect(hashes(spliceStashes(history, [stash]))).toEqual(["c", "b", "a"]);
 	});
 
+	it("leaves out a stash that has no parent at all", () => {
+		const orphan = commit("s0", [], ["stash@{0}"]);
+		expect(hashes(spliceStashes(history, [orphan]))).toEqual(["c", "b", "a"]);
+	});
+
 	it("returns the list untouched without stashes", () => {
 		expect(spliceStashes(history, [])).toBe(history);
 	});

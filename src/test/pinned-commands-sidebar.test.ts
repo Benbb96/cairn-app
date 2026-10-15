@@ -222,7 +222,8 @@ describe("PinnedCommandsSidebar", () => {
 			mount({ globalPinned: [command("deploy")] });
 			expect(runningDots()).toHaveLength(0);
 			await userEvent.click(itemFor("deploy"));
-			expect(requestCommandLaunch).toHaveBeenCalled();
+			expect(requestCommandLaunch).toHaveBeenCalledTimes(1);
+			expect(requestCommandLaunch.mock.calls[0][0].id).toBe("deploy");
 		});
 
 		it("ignores a run from another project", () => {
@@ -298,7 +299,8 @@ describe("PinnedCommandsSidebar", () => {
 			const stop = menuItemNamed(/stop|arrêter/i);
 			expect(stop).toBeTruthy();
 			await userEvent.click(stop as HTMLElement);
-			expect(stopCommand).toHaveBeenCalled();
+			expect(stopCommand).toHaveBeenCalledTimes(1);
+			expect(stopCommand.mock.calls[0][0]).toContain("deploy");
 		});
 
 		it("offers no stop for a command that is not running", async () => {
@@ -398,7 +400,8 @@ describe("PinnedCommandsSidebar", () => {
 			mount({ globalPinned: [command("build")] });
 			await userEvent.click(itemFor("build"));
 			expect(reorderCommand).not.toHaveBeenCalled();
-			expect(requestCommandLaunch).toHaveBeenCalled();
+			expect(requestCommandLaunch).toHaveBeenCalledTimes(1);
+			expect(requestCommandLaunch.mock.calls[0][0].id).toBe("build");
 		});
 	});
 });

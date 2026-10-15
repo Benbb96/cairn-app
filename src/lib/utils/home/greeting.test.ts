@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGreetingPools } from "$lib/i18n";
 import { pickGreeting, pickTagline } from "./greeting";
 
@@ -10,7 +10,18 @@ const pools = getGreetingPools();
 /** Monday through Friday at a fixed hour, so only the hour bucket varies. */
 const weekday = (hour: number) => new Date(2024, 0, 3, hour, 0);
 
+/** A draw that walks evenly across [0, 1), so a pool is covered whole. */
+function sweepRandom(steps: number) {
+	let call = 0;
+	vi.spyOn(Math, "random").mockImplementation(() => call++ / steps);
+}
+
+beforeEach(() => {
+	vi.spyOn(Math, "random").mockReturnValue(0);
+});
+
 afterEach(() => {
+	vi.useRealTimers();
 	vi.restoreAllMocks();
 });
 
@@ -62,14 +73,13 @@ describe("pickGreeting", () => {
 	});
 
 	it("picks within the bucket, using the whole pool over many draws", () => {
+		sweepRandom(200);
 		const seen = new Set<string>();
 		for (let i = 0; i < 200; i++) seen.add(pickGreeting(weekday(9)));
-		expect(seen.size).toBeGreaterThan(1);
-		for (const greeting of seen) expect(pools.morning).toContain(greeting);
+		expect([...seen].sort()).toEqual([...new Set(pools.morning)].sort());
 	});
 
 	it("takes the first of a pool when the draw lands at zero", () => {
-		vi.spyOn(Math, "random").mockReturnValue(0);
 		expect(pickGreeting(weekday(9))).toBe(pools.morning[0]);
 	});
 
@@ -79,24 +89,28 @@ describe("pickGreeting", () => {
 	});
 
 	it("reads the clock itself when given no date", () => {
-		expect(typeof pickGreeting()).toBe("string");
-		expect(pickGreeting().length).toBeGreaterThan(0);
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2024, 0, 3, 9, 0));
+		expect(pickGreeting()).toBe(pools.morning[0]);
+		vi.setSystemTime(new Date(2024, 0, 3, 14, 0));
+		expect(pickGreeting()).toBe(pools.afternoon[0]);
 	});
 });
 
 describe("pickTagline", () => {
 	it("picks from the splash pool", () => {
-		expect(pools.splashes).toContain(pickTagline());
+		expect(pickTagline()).toBe(pools.splashes[0]);
 	});
 
 	it("varies across visits rather than returning a fixed line", () => {
+		sweepRandom(200);
 		const seen = new Set<string>();
 		for (let i = 0; i < 200; i++) seen.add(pickTagline());
-		expect(seen.size).toBeGreaterThan(1);
+		expect([...seen].sort()).toEqual([...new Set(pools.splashes)].sort());
 	});
 
-	it("takes the first splash when the draw lands at zero", () => {
-		vi.spyOn(Math, "random").mockReturnValue(0);
-		expect(pickTagline()).toBe(pools.splashes[0]);
+	it("takes the last splash when the draw lands just under one", () => {
+		vi.spyOn(Math, "random").mockReturnValue(0.999999);
+		expect(pickTagline()).toBe(pools.splashes[pools.splashes.length - 1]);
 	});
 });

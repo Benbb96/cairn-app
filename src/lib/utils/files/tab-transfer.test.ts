@@ -40,6 +40,26 @@ describe("tab transfer", () => {
 		expect(payload.version).toBe("etag-1");
 	});
 
+	it("defaults what a tab does not carry yet", () => {
+		const payload = tabToPayload(
+			tab({ lineEndings: undefined, version: undefined }),
+			scope,
+		);
+		expect(payload.lineEndings).toBe("LF");
+		expect(payload.version).toBeNull();
+		expect(payload.pinned).toBe(false);
+		expect(payload.conflicted).toBe(false);
+	});
+
+	it("carries the pinned and conflicted flags of a tab", () => {
+		const payload = tabToPayload(
+			tab({ pinned: true, conflicted: true }),
+			scope,
+		);
+		expect(payload.pinned).toBe(true);
+		expect(payload.conflicted).toBe(true);
+	});
+
 	it("keeps unsaved edits dirty on the other side", () => {
 		const payload = tabToPayload(tab({ doc: docFromString("edited") }), scope);
 		const received = payloadToTab(payload, "/w");

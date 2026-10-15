@@ -166,6 +166,12 @@ describe("highlightPathMatch", () => {
 		expect(result).toContain("<mark>f</mark>");
 	});
 
+	it("marks only the matched letters of a scattered match, in order", () => {
+		expect(highlightPathMatch("src/foo.ts", "sf")).toBe(
+			"<mark>s</mark>rc/<mark>f</mark>oo.ts",
+		);
+	});
+
 	it("escapes HTML in path", () => {
 		expect(highlightPathMatch("a<b>.ts", "")).toBe("a&lt;b&gt;.ts");
 	});

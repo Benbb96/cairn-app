@@ -192,7 +192,11 @@ describe("SyntaxThemeEditor", () => {
 			await tick();
 			await userEvent.click(saveButton());
 			const saved = onSave.mock.calls[0][0].tokens;
-			expect(saved[SYNTAX_TOKEN_KEYS[1]].bold).toBeFalsy();
+			const defaults = defaultSyntaxTokens("default");
+			for (const key of SYNTAX_TOKEN_KEYS.filter((k) => k !== first())) {
+				expect(saved[key]).toEqual(defaults[key]);
+			}
+			expect(saved[first()].bold).toBe(!defaults[first()].bold);
 		});
 
 		it("puts one token back to its default", async () => {

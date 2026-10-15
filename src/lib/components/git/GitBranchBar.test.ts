@@ -150,7 +150,8 @@ describe("GitBranchBar", () => {
 
 		it("says the branch is up to date when it has not diverged", () => {
 			mount();
-			expect(syncLabel()).toBeTruthy();
+			expect(syncLabel()).toBe("Up to date");
+			expect(document.querySelector(".sync-clean.muted")).toBeNull();
 		});
 
 		it("says the branch has no upstream rather than claiming it is in sync", async () => {
@@ -416,7 +417,7 @@ describe("GitBranchBar", () => {
 		it("pushes on request", async () => {
 			mount();
 			await userEvent.click(pushBtn());
-			expect(pushBranch).toHaveBeenCalled();
+			expect(pushBranch).toHaveBeenCalledWith(false, false, "normal");
 		});
 
 		/** A push does not touch the worktree, so nothing is reloaded after it. */

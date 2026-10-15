@@ -45,6 +45,18 @@ describe("findLinkCandidates", () => {
 		]);
 	});
 
+	it("ends a bare path before the full stop closing the sentence", () => {
+		const text = "Look at package.json.";
+		const [c] = findLinkCandidates(text);
+		expect(text.slice(c.start, c.end)).toBe("package.json");
+	});
+
+	it("returns candidates in reading order whatever their kind", () => {
+		expect(
+			findLinkCandidates("a/x.ts https://u.io b/y.ts").map((c) => c.kind),
+		).toEqual(["path", "url", "path"]);
+	});
+
 	it("ignores plain words and numbers", () => {
 		expect(paths("done in 3.14 seconds, all good")).toEqual([]);
 	});
@@ -75,6 +87,10 @@ describe("resolveLinkPath", () => {
 		expect(resolveLinkPath("src/a.ts", null)).toBeNull();
 	});
 
+	it("keeps a relative base relative", () => {
+		expect(resolveLinkPath("a.ts", "wt/sub")).toBe("wt/sub/a.ts");
+	});
+
 	it("refuses to climb above the root", () => {
 		expect(resolveLinkPath("/../a.ts", "/wt")).toBeNull();
 	});
@@ -94,6 +110,49 @@ describe("readLogicalLine", () => {
 		const [c] = findLinkCandidates(line.text);
 		expect(line.cells[c.start]).toEqual({ x: 4, y: 1 });
 		expect(line.cells[c.end - 1]).toEqual({ x: 4, y: 3 });
+		term.dispose();
+	});
+
+	it("reads a wide character once, skipping its trailing cell", async () => {
+		const term = await written(20, "a\u65e5b");
+		const line = readLogicalLine(term.buffer.active, 0);
+		expect(line.text.trimEnd()).toBe("a\u65e5b");
+		expect(line.cells.slice(0, 3)).toEqual([
+			{ x: 1, y: 1 },
+			{ x: 2, y: 1 },
+			{ x: 4, y: 1 },
+		]);
+		term.dispose();
+	});
+
+	it("keeps the unwritten cells of a row as spaces", async () => {
+		const term = await written(20, "a\x1b[2Cb");
+		const line = readLogicalLine(term.buffer.active, 0);
+		expect(line.text.trimEnd()).toBe("a  b");
+		expect(line.cells.slice(0, 4).map((cell) => cell.x)).toEqual([1, 2, 3, 4]);
+		term.dispose();
+	});
+
+	it("starts at the first row when that row is itself a continuation", () => {
+		const row = {
+			isWrapped: true,
+			length: 2,
+			getCell: (x: number) => ({
+				getWidth: () => 1,
+				getChars: () => "ab"[x],
+			}),
+		};
+		const buffer = { getLine: (y: number) => (y === 0 ? row : undefined) };
+		const line = readLogicalLine(buffer as never, 0);
+		expect(line.text).toBe("ab");
+	});
+
+	it("returns an empty line for a row the buffer does not hold", async () => {
+		const term = await written(20, "first");
+		expect(readLogicalLine(term.buffer.active, 99)).toEqual({
+			text: "",
+			cells: [],
+		});
 		term.dispose();
 	});
 

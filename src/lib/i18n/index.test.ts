@@ -42,6 +42,7 @@ describe("t", () => {
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 		expect(t("nope.missing" as Parameters<typeof t>[0])).toBe("nope.missing");
 		expect(spy).toHaveBeenCalledOnce();
+		expect(spy).toHaveBeenCalledWith(expect.stringContaining("nope.missing"));
 		spy.mockRestore();
 	});
 });

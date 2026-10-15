@@ -242,7 +242,9 @@ describe("ExportModal", () => {
 	it("warns about what another format cannot express", async () => {
 		mount();
 		await pickTarget(1);
-		expect(warning()).toBeTruthy();
+		expect(warning()?.replace(/\s+/g, " ").trim()).toBe(
+			"Not expressible in this format: Line width, Quotes, Semicolons",
+		);
 	});
 
 	it("warns about nothing a format covers entirely", async () => {

@@ -655,7 +655,11 @@ describe("ReviewGuide", () => {
 			await settle();
 			await new Promise((r) => requestAnimationFrame(() => r(null)));
 			expect(composer()).not.toBeNull();
-			expect(into).toHaveBeenCalled();
+			expect(into).toHaveBeenCalledWith({
+				block: "nearest",
+				behavior: "smooth",
+			});
+			expect(into.mock.contexts).toContain(composer());
 		});
 
 		it("marks the remark the composer was opened from", async () => {

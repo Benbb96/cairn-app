@@ -98,6 +98,36 @@ describe("titleFromPrompt", () => {
 		expect(title.endsWith("word")).toBe(true);
 	});
 
+	it("keeps a prompt that fits whole, even with a late space", () => {
+		const text = `${"x".repeat(50)} word`;
+		expect(titleFromPrompt(text)).toBe(`X${"x".repeat(49)} word`);
+	});
+
+	it("keeps a prompt of exactly the maximum length whole", () => {
+		const text = `${"a".repeat(70)} ${"b".repeat(TITLE_MAX - 71)}`;
+		expect(text).toHaveLength(TITLE_MAX);
+		expect(titleFromPrompt(text)).toBe(`A${text.slice(1)}`);
+	});
+
+	it("drops the word cut in half when the last space is past the middle", () => {
+		const text = `${"word ".repeat(15)}longwordtail`;
+		expect(titleFromPrompt(text)).toBe(`Word${" word".repeat(14)}`);
+	});
+
+	it("cuts mid-word when the last space is at the middle", () => {
+		const text = `${"a".repeat(TITLE_MAX / 2)} ${"b".repeat(60)}`;
+		expect(titleFromPrompt(text)).toBe(
+			`A${"a".repeat(TITLE_MAX / 2 - 1)} ${"b".repeat(TITLE_MAX / 2 - 1)}`,
+		);
+	});
+
+	it("cuts mid-word when the last space is before the middle", () => {
+		const text = `${"a".repeat(30)} ${"b".repeat(70)}`;
+		expect(titleFromPrompt(text)).toBe(
+			`A${"a".repeat(29)} ${"b".repeat(TITLE_MAX - 31)}`,
+		);
+	});
+
 	it("is empty for a prompt that is only filler", () => {
 		expect(titleFromPrompt("  please,  ")).toBe("");
 	});

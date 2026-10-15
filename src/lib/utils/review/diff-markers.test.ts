@@ -6,6 +6,7 @@ import type { Discussion } from "$lib/types/integrations";
 import {
 	diffMarkersFor,
 	excerptAround,
+	guideMarkersFor,
 	normalizeAnchorPath,
 	openDiscussionCount,
 } from "./diff-markers";
@@ -79,5 +80,90 @@ describe("excerptAround", () => {
 		expect(excerptAround(content, 1, 1)).toBe("1: a\n2: b");
 		expect(excerptAround(content, 5, 1)).toBe("4: d\n5: e");
 		expect(excerptAround(content, 3, 1)).toBe("2: b\n3: c\n4: d");
+	});
+});
+
+describe("guideMarkersFor", () => {
+	const remark = (
+		line: number,
+		overrides: Partial<Parameters<typeof guideMarkersFor>[0][number]> = {},
+	) => ({
+		path: "a.ts",
+		side: "new" as const,
+		line,
+		kind: "issue" as const,
+		status: "open",
+		...overrides,
+	});
+	const comment = (line: number, path = "a.ts") => ({
+		path,
+		side: "new" as const,
+		line,
+	});
+
+	it("turns a remark into a marker of its kind", () => {
+		expect(guideMarkersFor([remark(4)], [], "a.ts", [])).toEqual([
+			{ line: 4, side: "new", count: 1, isResolved: false, kind: "issue" },
+		]);
+	});
+
+	it("ignores the comments of other files", () => {
+		expect(
+			guideMarkersFor(
+				[],
+				[comment(2, "b.ts"), comment(3, "./a.ts")],
+				"a.ts",
+				[],
+			),
+		).toEqual([
+			{ line: 3, side: "new", count: 1, isResolved: false, kind: "comment" },
+		]);
+	});
+
+	it("ignores dismissed remarks and the remarks of other files", () => {
+		expect(
+			guideMarkersFor(
+				[remark(4, { status: "dismissed" }), remark(5, { path: "b.ts" })],
+				[],
+				"a.ts",
+				[],
+			),
+		).toEqual([]);
+	});
+
+	it("counts two remarks of the same kind on one line once more", () => {
+		const markers = guideMarkersFor([remark(4), remark(4)], [], "a.ts", []);
+		expect(markers).toEqual([
+			{ line: 4, side: "new", count: 2, isResolved: false, kind: "issue" },
+		]);
+	});
+
+	it("keeps the first kind when another lands on the same line", () => {
+		const markers = guideMarkersFor(
+			[remark(4, { kind: "question" })],
+			[comment(4)],
+			"a.ts",
+			[],
+		);
+		expect(markers).toEqual([
+			{ line: 4, side: "new", count: 1, isResolved: false, kind: "comment" },
+		]);
+	});
+
+	it("leaves a line already carrying a discussion to it", () => {
+		const taken = [
+			{
+				line: 4,
+				side: "new" as const,
+				count: 1,
+				isResolved: false,
+				kind: "discussion" as const,
+			},
+		];
+		expect(
+			guideMarkersFor([remark(4), remark(6)], [comment(4)], "a.ts", taken),
+		).toEqual([
+			{ line: 6, side: "new", count: 1, isResolved: false, kind: "issue" },
+		]);
 	});
 });
