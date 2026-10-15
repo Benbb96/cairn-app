@@ -39,10 +39,31 @@ Built with [Tauri v2](https://tauri.app) (Rust backend) and
 
 ## Getting started
 
+### Fresh Ubuntu / Debian
+
 ```bash
-bun install
-bun run tauri dev        # full app with the Tauri shell
+sudo apt update
+sudo apt install -y build-essential curl wget file git unzip xdg-utils pkg-config \
+  libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev
+
+curl -fsSL https://bun.sh/install | bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+exec "$SHELL"            # or open a new terminal so bun is on PATH
 ```
+
+### Run
+
+```bash
+git clone <repository-url> cairn && cd cairn
+bun install
+cp env.example .env      # required by tauri:dev, runs on ~/.cairn-dev
+bun run tauri:dev        # full app with the Tauri shell
+```
+
+`tauri:dev` builds the `cairn` launcher first (`scripts/build-cli-launcher.sh`),
+so the first run compiles the whole Rust tree and takes a few minutes. Without
+`.env`, use `bun run tauri dev` instead.
 
 `bun run dev` starts the frontend alone on `http://localhost:1420`; anything
 that calls into Rust is unavailable there.
