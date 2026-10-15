@@ -10,6 +10,20 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "A long Markdown file no longer shows raw tables and code blocks further down until you click in it: they render as you scroll.",
+					"fr": "Un long fichier Markdown n'affiche plus de tableaux et de blocs de code bruts plus bas tant qu'on n'a pas cliqué dedans : ils s'affichent au défilement."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "In a Markdown file, the git gutter no longer drops its marker on tables and code blocks: the colored bar now runs unbroken across them.",
+					"fr": "Dans un fichier Markdown, la gouttière git ne perd plus son marqueur sur les tableaux et les blocs de code : la barre colorée les traverse sans coupure."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "Installing or updating a language server now runs through the package manager that already owns it (for example the npm of your nvm node) instead of the system one, which failed with permission or engine errors.",
 					"fr": "Installer ou mettre à jour un serveur de langage passe maintenant par le gestionnaire de paquets qui le possède déjà (par exemple le npm de votre node nvm) plutôt que par celui du système, qui échouait avec des erreurs de permission ou de version de moteur."
 				}

@@ -839,7 +839,10 @@ export function collectBlockRanges(state: EditorState): Range<Decoration>[] {
 const blockField = StateField.define<DecorationSet>({
 	create: (state) => Decoration.set(collectBlockRanges(state), true),
 	update(value, tr) {
-		if (!tr.docChanged && !tr.selection) return value.map(tr.changes);
+		const isTreeUnchanged = syntaxTree(tr.startState) === syntaxTree(tr.state);
+		if (!tr.docChanged && !tr.selection && isTreeUnchanged) {
+			return value.map(tr.changes);
+		}
 		return Decoration.set(collectBlockRanges(tr.state), true);
 	},
 	provide: (field) => EditorView.decorations.from(field),

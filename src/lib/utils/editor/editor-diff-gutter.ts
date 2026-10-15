@@ -167,6 +167,24 @@ function chunkPayload(base: Text, doc: Text, chunk: Chunk): GutterChunk {
 	return { lineStart: start, lineEnd: end, anchorLine: start, before, after };
 }
 
+/** A block widget swallows several lines: modified wins, then added, then deleted. */
+function kindOverRange(
+	doc: Text,
+	lineKinds: Map<number, DiffKind>,
+	from: number,
+	to: number,
+): DiffKind | undefined {
+	const first = doc.lineAt(from).number;
+	const last = doc.lineAt(Math.min(to, doc.length)).number;
+	let found: DiffKind | undefined;
+	for (let ln = first; ln <= last; ln++) {
+		const kind = lineKinds.get(ln);
+		if (kind === "modified") return kind;
+		if (kind === "added" || (kind && !found)) found = kind;
+	}
+	return found;
+}
+
 /** The gutter plus the state it reads; a click reports the chunk it hit. */
 export function buildDiffGutter(opts: {
 	onChunkClick?: (chunk: GutterChunk) => void;
@@ -180,16 +198,29 @@ export function buildDiffGutter(opts: {
 				const kind = view.state.field(diffField).lineKinds.get(ln);
 				return kind ? new DiffMarker(kind) : null;
 			},
+			widgetMarker(view, _widget, block) {
+				const kind = kindOverRange(
+					view.state.doc,
+					view.state.field(diffField).lineKinds,
+					block.from,
+					block.to,
+				);
+				return kind ? new DiffMarker(kind) : null;
+			},
 			lineMarkerChange: (update) =>
 				update.startState.field(diffField) !== update.state.field(diffField),
 			initialSpacer: () => new DiffMarker("added"),
 			domEventHandlers: {
 				mousedown(view, line) {
 					const doc = view.state.doc;
-					const ln = doc.lineAt(line.from).number;
 					const { base, chunks, lineKinds } = view.state.field(diffField);
-					if (!lineKinds.has(ln)) return false;
-					const chunk = chunks.find((c) => chunkCoversLine(doc, c, ln));
+					if (!kindOverRange(doc, lineKinds, line.from, line.to)) return false;
+					const first = doc.lineAt(line.from).number;
+					const last = doc.lineAt(Math.min(line.to, doc.length)).number;
+					const chunk = chunks.find((c) => {
+						const range = chunkLineRange(doc, c);
+						return range.start <= last && range.end >= first;
+					});
 					if (!chunk) return false;
 					opts.onChunkClick?.(chunkPayload(base, doc, chunk));
 					return true;

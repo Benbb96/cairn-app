@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Benjamin Bonneton and the Cairn Foundry contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ import {
 	revertChunkAtLine,
 	setDiffBase,
 } from "./editor-diff-gutter";
+import { buildMarkdownWysiwyg } from "./editor-markdown-wysiwyg";
 
 const views: EditorView[] = [];
 
@@ -168,6 +170,28 @@ describe("gutter markers", () => {
 			"cm-diff-marker cm-diff-added",
 			"cm-diff-marker cm-diff-modified",
 		]);
+	});
+
+	it("marks a rendered table whose changed row is inside the block", () => {
+		const doc = "text\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nend";
+		const view = new EditorView({
+			state: EditorState.create({
+				doc,
+				extensions: [
+					markdown({ base: markdownLanguage }),
+					buildMarkdownWysiwyg(),
+					buildDiffGutter({}),
+				],
+				selection: { anchor: doc.length },
+			}),
+			parent: document.body,
+		});
+		views.push(view);
+		view.dispatch({ effects: setDiffBase.of(doc.replace("| 2 |", "| x |")) });
+		const markers = [...view.dom.querySelectorAll(".cm-diff-marker")].map(
+			(m) => m.className,
+		);
+		expect(markers).toContain("cm-diff-marker cm-diff-modified");
 	});
 
 	it("reports the clicked chunk with both sides", () => {

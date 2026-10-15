@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { forceParsing } from "@codemirror/language";
 import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -1306,6 +1307,25 @@ describe("the wysiwyg extension in a mounted view", () => {
 
 		view?.dispatch({ selection: { anchor: table.length } });
 		expect(view?.dom.querySelector(".cm-md-table")).toBeTruthy();
+	});
+
+	it("decorates a table beyond the first parsed region once the parser reaches it", () => {
+		const filler = "paragraph of filler text\n\n".repeat(20000);
+		mount(`${filler}| a | b |\n| - | - |\n| x | y |\n\ntail`, 0);
+		const countTables = () => {
+			let count = 0;
+			for (const source of view?.state.facet(EditorView.decorations) ?? []) {
+				if (typeof source === "function") continue;
+				const cursor = source.iter();
+				for (; cursor.value; cursor.next()) {
+					if (cursor.value.spec.block) count++;
+				}
+			}
+			return count;
+		};
+		expect(countTables()).toBe(0);
+		forceParsing(view as EditorView, view?.state.doc.length, 5000);
+		expect(countTables()).toBe(1);
 	});
 
 	it("draws a table once an edit completes it", () => {
