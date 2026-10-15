@@ -14,8 +14,26 @@ const MIN_SCALE = 0.2;
 const MAX_SCALE = 8;
 const ZOOM_STEP = 1.15;
 
+export interface MermaidZoomView {
+	scale: number;
+	x: number;
+	y: number;
+}
+
+export interface MermaidZoomOptions {
+	/** A plain wheel pans the diagram instead of scrolling the page behind it; zooming stays on the modifier. */
+	wheelPans?: boolean;
+	onChange?: (view: MermaidZoomView) => void;
+}
+
 export interface MermaidZoom {
 	reset(): void;
+	zoomBy(factor: number): void;
+	/** Scales the diagram to the surface, centered, leaving `margin` pixels around it. */
+	fit(margin?: number): void;
+	actualSize(): void;
+	panTo(x: number, y: number): void;
+	getView(): MermaidZoomView;
 	destroy(): void;
 }
 
@@ -31,6 +49,7 @@ function clamp(value: number, min: number, max: number): number {
 export function attachMermaidZoom(
 	surface: HTMLElement,
 	stage: HTMLElement,
+	options: MermaidZoomOptions = {},
 ): MermaidZoom {
 	let scale = 1;
 	let x = 0;
@@ -42,6 +61,7 @@ export function attachMermaidZoom(
 
 	function apply(): void {
 		stage.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+		options.onChange?.({ scale, x, y });
 	}
 
 	function zoomAt(factor: number, clientX: number, clientY: number): void {
@@ -60,7 +80,14 @@ export function attachMermaidZoom(
 	function onWheel(event: WheelEvent): void {
 		// A plain wheel scrolls the document; zooming is the modifier gesture,
 		// which is also what a trackpad pinch sends.
-		if (!event.ctrlKey && !event.metaKey) return;
+		if (!event.ctrlKey && !event.metaKey) {
+			if (!options.wheelPans) return;
+			event.preventDefault();
+			x -= event.deltaX;
+			y -= event.deltaY;
+			apply();
+			return;
+		}
 		event.preventDefault();
 		zoomAt(
 			event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
@@ -102,6 +129,44 @@ export function attachMermaidZoom(
 		apply();
 	}
 
+	function zoomBy(factor: number): void {
+		const rect = surface.getBoundingClientRect();
+		zoomAt(factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+	}
+
+	function fit(margin = 0): void {
+		const width = stage.offsetWidth;
+		const height = stage.offsetHeight;
+		if (!width || !height) return;
+		const availableWidth = surface.clientWidth - margin * 2;
+		const availableHeight = surface.clientHeight - margin * 2;
+		if (availableWidth <= 0 || availableHeight <= 0) return;
+		scale = clamp(
+			Math.min(availableWidth / width, availableHeight / height),
+			MIN_SCALE,
+			MAX_SCALE,
+		);
+		x = (surface.clientWidth - width * scale) / 2;
+		y = (surface.clientHeight - height * scale) / 2;
+		apply();
+	}
+
+	function actualSize(): void {
+		const ratio = 1 / scale;
+		const centerX = surface.clientWidth / 2;
+		const centerY = surface.clientHeight / 2;
+		x = centerX - (centerX - x) * ratio;
+		y = centerY - (centerY - y) * ratio;
+		scale = 1;
+		apply();
+	}
+
+	function panTo(nextX: number, nextY: number): void {
+		x = nextX;
+		y = nextY;
+		apply();
+	}
+
 	function onDoubleClick(event: MouseEvent): void {
 		event.preventDefault();
 		reset();
@@ -117,6 +182,11 @@ export function attachMermaidZoom(
 
 	return {
 		reset,
+		zoomBy,
+		fit,
+		actualSize,
+		panTo,
+		getView: () => ({ scale, x, y }),
 		destroy(): void {
 			surface.removeEventListener("wheel", onWheel);
 			surface.removeEventListener("pointerdown", onPointerDown);

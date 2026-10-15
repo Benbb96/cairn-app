@@ -5,6 +5,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { forceParsing } from "@codemirror/language";
 import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
+import { minimapOpaqueRanges } from "@replit/codemirror-minimap";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
 	afterEach,
@@ -27,6 +28,7 @@ import {
 	findHeadingLine,
 	isOpenableLink,
 	linkHref,
+	MERMAID_OPEN_EVENT,
 	MermaidWidget,
 	parseHtmlImage,
 	parseLinkTarget,
@@ -1037,7 +1039,9 @@ describe("fillTableCell node layout", () => {
 describe("MermaidWidget structure", () => {
 	function buildDom() {
 		vi.mocked(renderMermaid).mockResolvedValue(undefined);
-		return new MermaidWidget("graph TD;").toDOM();
+		return new MermaidWidget("graph TD;").toDOM(
+			new EditorView({ state: stateOf("x") }),
+		);
 	}
 
 	it("wraps the stage in a surface and offers a reset button", () => {
@@ -1047,7 +1051,8 @@ describe("MermaidWidget structure", () => {
 		expect(surface?.querySelector(".cm-md-mermaid-stage")).toBeTruthy();
 
 		const reset = dom.querySelector<HTMLButtonElement>(".cm-md-mermaid-reset");
-		expect(reset?.parentElement).toBe(dom);
+		expect(reset?.parentElement?.className).toBe("cm-md-mermaid-actions");
+		expect(reset?.parentElement?.parentElement).toBe(dom);
 		expect(reset?.type).toBe("button");
 		expect(reset?.title).toBe("Reset zoom");
 		expect(reset?.getAttribute("aria-label")).toBe("Reset zoom");
@@ -1064,6 +1069,37 @@ describe("MermaidWidget structure", () => {
 		await vi.waitFor(() => expect(attachMermaidZoom).toHaveBeenCalled());
 		dom.querySelector<HTMLButtonElement>(".cm-md-mermaid-reset")?.click();
 		expect(reset).toHaveBeenCalledTimes(1);
+	});
+
+	it("announces the diagram's source to the editor host from the expand button", () => {
+		const dom = buildDom();
+		const received: string[] = [];
+		document.body.appendChild(dom);
+		document.body.addEventListener(MERMAID_OPEN_EVENT, (event) =>
+			received.push((event as CustomEvent<{ source: string }>).detail.source),
+		);
+		dom
+			.querySelector<HTMLButtonElement>(
+				'[aria-label="Open the diagram full screen"]',
+			)
+			?.click();
+		dom.remove();
+		expect(received).toEqual(["graph TD;"]);
+	});
+
+	it("keeps a press on the action buttons away from the editor", () => {
+		const dom = buildDom();
+		const reachedEditor = vi.fn();
+		const host = document.createElement("div");
+		host.addEventListener("mousedown", reachedEditor);
+		host.appendChild(dom);
+		const press = new MouseEvent("mousedown", {
+			bubbles: true,
+			cancelable: true,
+		});
+		dom.querySelector(".cm-md-mermaid-action")?.dispatchEvent(press);
+		expect(reachedEditor).not.toHaveBeenCalled();
+		expect(press.defaultPrevented).toBe(true);
 	});
 
 	it("is equal to another widget of the same source only", () => {
@@ -1432,5 +1468,86 @@ describe("the wysiwyg extension in a mounted view", () => {
 		window.dispatchEvent(new KeyboardEvent("keydown", { shiftKey: true }));
 		expect(dom.classList.contains("cm-md-link-armed")).toBe(false);
 		window.dispatchEvent(new KeyboardEvent("keyup"));
+	});
+});
+
+describe("minimap opaque ranges", () => {
+	function opaqueRangesOf(doc: string): Array<[number, number]> {
+		const state = EditorState.create({
+			doc,
+			extensions: [
+				markdown({ base: markdownLanguage }),
+				buildMarkdownWysiwyg(),
+			],
+			selection: { anchor: doc.length },
+		});
+		forceParsing(new EditorView({ state }), state.doc.length, 1000);
+		const found: Array<[number, number]> = [];
+		for (const set of state.facet(minimapOpaqueRanges)) {
+			set.between(0, state.doc.length, (from, to) => {
+				found.push([from, to]);
+			});
+		}
+		return found;
+	}
+
+	it("reports a rendered mermaid block as one range", () => {
+		const doc = "```mermaid\ngraph TD;\n A-->B\n```\n\ntext after";
+		expect(opaqueRangesOf(doc)).toEqual([[0, doc.indexOf("\n\ntext")]]);
+	});
+
+	it("leaves other code blocks to the minimap's own text", () => {
+		expect(opaqueRangesOf("```ts\nconst a = 1;\n```\n\ntext after")).toEqual(
+			[],
+		);
+	});
+});
+
+describe("mermaid source toggle", () => {
+	const doc = "```mermaid\ngraph TD;\n A-->B\n```\n\ntext after";
+
+	function mount() {
+		const parent = document.createElement("div");
+		document.body.appendChild(parent);
+		const view = new EditorView({
+			state: EditorState.create({
+				doc,
+				extensions: [
+					markdown({ base: markdownLanguage }),
+					buildMarkdownWysiwyg(),
+				],
+			}),
+			parent,
+		});
+		forceParsing(view, view.state.doc.length, 1000);
+		view.dispatch({});
+		return view;
+	}
+
+	function press(view: EditorView, label: string) {
+		view.dom
+			.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
+			?.click();
+	}
+
+	it("swaps the rendering for the source and back from the buttons", () => {
+		const view = mount();
+		expect(view.dom.querySelector(".cm-md-mermaid")).toBeTruthy();
+
+		press(view, "Show the source");
+		expect(view.dom.querySelector(".cm-md-mermaid")).toBeNull();
+		expect(view.dom.querySelector(".cm-md-mermaid-sourcebar")).toBeTruthy();
+
+		press(view, "Show the diagram");
+		expect(view.dom.querySelector(".cm-md-mermaid")).toBeTruthy();
+		expect(view.dom.querySelector(".cm-md-mermaid-sourcebar")).toBeNull();
+		view.destroy();
+	});
+
+	it("keeps the diagram rendered while the caret sits inside it", () => {
+		const view = mount();
+		view.dispatch({ selection: { anchor: 14 } });
+		expect(view.dom.querySelector(".cm-md-mermaid")).toBeTruthy();
+		view.destroy();
 	});
 });

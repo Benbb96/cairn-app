@@ -37,6 +37,15 @@ export const ICONS: Record<string, IconDef> = {
 		solid: false,
 		body: '<path class="ic-plus-v" d="M12 5v14"/><path class="ic-plus-h" d="M5 12h14"/>',
 	},
+	minus: { solid: false, body: '<path d="M5 12h14"/>' },
+	maximize: {
+		solid: false,
+		body: '<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>',
+	},
+	fit: {
+		solid: false,
+		body: '<rect x="7" y="7" width="10" height="10" rx="1"/><path d="M4 8V5a1 1 0 011-1h3"/><path d="M20 8V5a1 1 0 00-1-1h-3"/><path d="M4 16v3a1 1 0 001 1h3"/><path d="M20 16v3a1 1 0 01-1 1h-3"/>',
+	},
 	x: {
 		solid: false,
 		body: '<path class="ic-x-a" d="M6 6l12 12"/><path class="ic-x-b" d="M18 6L6 18"/>',

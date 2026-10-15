@@ -226,4 +226,78 @@ describe("attachMermaidZoom", () => {
 		expect(event.defaultPrevented).toBe(false);
 		expect(stage.style.transform).toBe(zoomed);
 	});
+
+	describe("viewer controls", () => {
+		function size(el: HTMLElement, props: Record<string, number>) {
+			for (const [key, value] of Object.entries(props)) {
+				Object.defineProperty(el, key, { value, configurable: true });
+			}
+		}
+
+		beforeEach(() => {
+			size(surface, { clientWidth: 800, clientHeight: 600 });
+			size(stage, { offsetWidth: 400, offsetHeight: 200 });
+			surface.getBoundingClientRect = () =>
+				({ left: 0, top: 0, width: 800, height: 600 }) as DOMRect;
+		});
+
+		it("fits the diagram to the surface and centers it", () => {
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.fit(0);
+			expect(transform()).toEqual({ x: 0, y: 100, scale: 2 });
+			expect(zoom.getView()).toEqual({ x: 0, y: 100, scale: 2 });
+		});
+
+		it("keeps a margin around a fitted diagram", () => {
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.fit(50);
+			expect(transform().scale).toBe(1.75);
+		});
+
+		it("does not fit a diagram that has no size yet", () => {
+			size(stage, { offsetWidth: 0, offsetHeight: 0 });
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.fit(0);
+			expect(transform()).toEqual({ x: 0, y: 0, scale: 1 });
+		});
+
+		it("zooms around the center of the surface", () => {
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.zoomBy(2);
+			expect(transform()).toEqual({ x: -400, y: -300, scale: 2 });
+		});
+
+		it("goes back to actual size around the center", () => {
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.fit(0);
+			zoom.actualSize();
+			expect(transform()).toEqual({ x: 200, y: 200, scale: 1 });
+		});
+
+		it("moves the diagram to an absolute offset", () => {
+			const zoom = attachMermaidZoom(surface, stage);
+			zoom.panTo(-30, 12);
+			expect(transform()).toEqual({ x: -30, y: 12, scale: 1 });
+		});
+
+		it("reports every change of view", () => {
+			const onChange = vi.fn();
+			const zoom = attachMermaidZoom(surface, stage, { onChange });
+			zoom.panTo(5, 6);
+			expect(onChange).toHaveBeenLastCalledWith({ x: 5, y: 6, scale: 1 });
+		});
+
+		it("pans on a plain wheel when the viewer asks for it", () => {
+			attachMermaidZoom(surface, stage, { wheelPans: true });
+			const event = wheel(30, { deltaX: 10 });
+			expect(event.defaultPrevented).toBe(true);
+			expect(transform()).toEqual({ x: -10, y: -30, scale: 1 });
+		});
+
+		it("still zooms on a modified wheel in viewer mode", () => {
+			attachMermaidZoom(surface, stage, { wheelPans: true });
+			wheel(-1, { ctrlKey: true });
+			expect(transform().scale).toBeCloseTo(MERMAID_ZOOM_LIMITS.ZOOM_STEP, 10);
+		});
+	});
 });

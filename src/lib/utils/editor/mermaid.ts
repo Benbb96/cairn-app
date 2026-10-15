@@ -54,3 +54,17 @@ export async function renderMermaid(
 		host.classList.add("cm-md-mermaid-error");
 	}
 }
+
+/**
+ * Gives the rendered svg the size its viewBox declares. The library emits
+ * `width="100%"` plus a `max-width`, which leaves the diagram's natural size to
+ * the container; a viewer that fits and zooms needs it fixed.
+ */
+export function pinSvgToViewBox(host: HTMLElement): void {
+	const svg = host.querySelector("svg");
+	const viewBox = svg?.viewBox.baseVal;
+	if (!svg || !viewBox?.width || !viewBox.height) return;
+	svg.setAttribute("width", String(viewBox.width));
+	svg.setAttribute("height", String(viewBox.height));
+	svg.style.maxWidth = "none";
+}

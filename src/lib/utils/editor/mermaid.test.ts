@@ -17,6 +17,31 @@ vi.mock("mermaid", () => ({
 	},
 }));
 
+describe("pinSvgToViewBox", () => {
+	it("gives the svg the size of its viewBox and lifts the max-width", async () => {
+		const { pinSvgToViewBox } = await import("./mermaid");
+		const host = document.createElement("div");
+		host.innerHTML =
+			'<svg width="100%" viewBox="0 0 320 180" style="max-width: 320px"></svg>';
+		Object.defineProperty(host.querySelector("svg"), "viewBox", {
+			value: { baseVal: { width: 320, height: 180 } },
+		});
+		pinSvgToViewBox(host);
+		const svg = host.querySelector("svg");
+		expect(svg?.getAttribute("width")).toBe("320");
+		expect(svg?.getAttribute("height")).toBe("180");
+		expect(svg?.style.maxWidth).toBe("none");
+	});
+
+	it("leaves a host without a sized svg alone", async () => {
+		const { pinSvgToViewBox } = await import("./mermaid");
+		const host = document.createElement("div");
+		host.textContent = "parse error";
+		pinSvgToViewBox(host);
+		expect(host.textContent).toBe("parse error");
+	});
+});
+
 describe("renderMermaid", () => {
 	let renderMermaid: typeof import("./mermaid").renderMermaid;
 	let host: HTMLElement;

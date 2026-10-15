@@ -1,0 +1,136 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 3f0c98aba65c44b0ff033dd299649985cfc7951c..7a8cf4b196b07eee87e07b53a56db80b291c7e7b 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -305,6 +305,16 @@ class LineBasedState {
+     }
+ }
+ 
++/**
++ * Ranges the editor draws as one opaque block (a rendered widget replacing its
++ * source). The minimap treats them like folds: one placeholder instead of the
++ * hidden lines.
++ */
++const minimapOpaqueRanges = /*@__PURE__*/state.Facet.define({ combine: (values) => values });
++function opaqueChanged(tr) {
++    return tr.startState.facet(minimapOpaqueRanges) !== tr.state.facet(minimapOpaqueRanges);
++}
++
+ function computeLinesState(state) {
+     var _a;
+     if (!state.facet(Config).enabled) {
+@@ -312,7 +322,7 @@ function computeLinesState(state) {
+     }
+     const lines = [];
+     const lineCursor = state.doc.iterLines();
+-    const foldedRangeCursor = language.foldedRanges(state).iter();
++    const foldedRangeCursor = state.RangeSet.join([language.foldedRanges(state), ...state.facet(minimapOpaqueRanges)]).iter();
+     let textOffset = 0;
+     lineCursor.next();
+     while (!lineCursor.done) {
+@@ -364,7 +374,7 @@ function computeLinesState(state) {
+ const LinesState = state.StateField.define({
+     create: (state) => computeLinesState(state),
+     update: (current, tr) => {
+-        if (foldsChanged([tr]) || tr.docChanged) {
++        if (foldsChanged([tr]) || opaqueChanged(tr) || tr.docChanged) {
+             return computeLinesState(tr.state);
+         }
+         return current;
+@@ -372,7 +382,7 @@ const LinesState = state.StateField.define({
+ });
+ /** Returns if the folds have changed in this update */
+ function foldsChanged(transactions) {
+-    return transactions.find((tr) => tr.effects.find((ef) => ef.is(language.foldEffect) || ef.is(language.unfoldEffect)));
++    return transactions.find((tr) => opaqueChanged(tr) || tr.effects.find((ef) => ef.is(language.foldEffect) || ef.is(language.unfoldEffect)));
+ }
+ 
+ class DiagnosticState extends LineBasedState {
+@@ -1187,4 +1197,5 @@ const showMinimap = state.Facet.define({
+     },
+ });
+ 
++exports.minimapOpaqueRanges = minimapOpaqueRanges;
+ exports.showMinimap = showMinimap;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 393a113d1fae76b668a10a4a6277babd0658211d..1311692af87b134c2b4ca2d1039af0de57e9bddb 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,4 +1,4 @@
+-import { Facet } from '@codemirror/state';
++import { Facet, RangeSet, RangeValue } from '@codemirror/state';
+ import { DOMEventMap, EditorView } from '@codemirror/view';
+ 
+ type Line = number;
+@@ -47,4 +47,10 @@ interface MinimapConfig extends Omit<Options, "enabled"> {
+  */
+ declare const showMinimap: Facet<MinimapConfig | null, MinimapConfig | null>;
+ 
+-export { MinimapConfig, showMinimap };
++/**
++ * Ranges drawn as one opaque block by the editor; the minimap shows them as a
++ * single placeholder, like a fold.
++ */
++declare const minimapOpaqueRanges: Facet<RangeSet<RangeValue>, readonly RangeSet<RangeValue>[]>;
++
++export { MinimapConfig, minimapOpaqueRanges, showMinimap };
+diff --git a/dist/index.js b/dist/index.js
+index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..c9299c703de919bc72de155cced396ee09edaeb6 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,4 +1,4 @@
+-import { Facet, combineConfig, StateField } from '@codemirror/state';
++import { Facet, combineConfig, StateField, RangeSet } from '@codemirror/state';
+ import { EditorView, ViewPlugin } from '@codemirror/view';
+ import crelt from 'crelt';
+ import { setDiagnosticsEffect, diagnosticCount, forEachDiagnostic } from '@codemirror/lint';
+@@ -297,6 +297,16 @@ class LineBasedState {
+     }
+ }
+ 
++/**
++ * Ranges the editor draws as one opaque block (a rendered widget replacing its
++ * source). The minimap treats them like folds: one placeholder instead of the
++ * hidden lines.
++ */
++const minimapOpaqueRanges = /*@__PURE__*/Facet.define({ combine: (values) => values });
++function opaqueChanged(tr) {
++    return tr.startState.facet(minimapOpaqueRanges) !== tr.state.facet(minimapOpaqueRanges);
++}
++
+ function computeLinesState(state) {
+     var _a;
+     if (!state.facet(Config).enabled) {
+@@ -304,7 +314,7 @@ function computeLinesState(state) {
+     }
+     const lines = [];
+     const lineCursor = state.doc.iterLines();
+-    const foldedRangeCursor = foldedRanges(state).iter();
++    const foldedRangeCursor = RangeSet.join([foldedRanges(state), ...state.facet(minimapOpaqueRanges)]).iter();
+     let textOffset = 0;
+     lineCursor.next();
+     while (!lineCursor.done) {
+@@ -356,7 +366,7 @@ function computeLinesState(state) {
+ const LinesState = /*@__PURE__*/StateField.define({
+     create: (state) => computeLinesState(state),
+     update: (current, tr) => {
+-        if (foldsChanged([tr]) || tr.docChanged) {
++        if (foldsChanged([tr]) || opaqueChanged(tr) || tr.docChanged) {
+             return computeLinesState(tr.state);
+         }
+         return current;
+@@ -364,7 +374,7 @@ const LinesState = /*@__PURE__*/StateField.define({
+ });
+ /** Returns if the folds have changed in this update */
+ function foldsChanged(transactions) {
+-    return transactions.find((tr) => tr.effects.find((ef) => ef.is(foldEffect) || ef.is(unfoldEffect)));
++    return transactions.find((tr) => opaqueChanged(tr) || tr.effects.find((ef) => ef.is(foldEffect) || ef.is(unfoldEffect)));
+ }
+ 
+ class DiagnosticState extends LineBasedState {
+@@ -1179,4 +1189,4 @@ const showMinimap = /*@__PURE__*/Facet.define({
+     },
+ });
+ 
+-export { showMinimap };
++export { minimapOpaqueRanges, showMinimap };

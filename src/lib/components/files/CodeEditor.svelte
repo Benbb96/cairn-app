@@ -64,8 +64,8 @@
   import { buildFontSizeTheme, buildMinimap, buildShortcutKeymap, focusKeepingScroll, searchMatchLines, SHORTCUT_COMMANDS, unselectableGutters } from '$lib/utils/editor/editor-extensions';
   import { buildConflictResolver, conflictLines } from '$lib/utils/editor/editor-conflict';
   import { buildStickyScroll, stickyScrollTheme } from '$lib/utils/editor/editor-sticky-scroll';
-  import { buildMarkdownWysiwyg, setMarkdownDocPath } from '$lib/utils/editor/editor-markdown-wysiwyg';
-  import { buildMermaidDoc } from '$lib/utils/editor/editor-mermaid-doc';
+  import { buildMarkdownWysiwyg, MERMAID_OPEN_EVENT, setMarkdownDocPath } from '$lib/utils/editor/editor-markdown-wysiwyg';
+  import MermaidViewer from './MermaidViewer.svelte';
   import { EDITOR_DEFAULTS, FOLD_MARKERS } from '$lib/utils/editor/editor-config';
 
   export let content: Text = Text.empty;
@@ -345,9 +345,6 @@
     const data = jsLang?.language.data;
 
     const exts: Extension[] = [lang];
-    if (language === 'mermaid') {
-      exts.push(buildMermaidDoc());
-    }
     if (language === 'markdown') {
       exts.push(buildMarkdownWysiwyg({ onOpenFile: (path, anchor) => onOpenLink?.(path, anchor) }));
     }
@@ -529,6 +526,7 @@
 
   function swapDocument() {
     lastEmitted = null;
+    mermaidSource = null;
     const cached = savedState;
     view.setState(cached ?? EditorState.create({ doc: content, extensions: buildExtensions() }));
     view.dispatch({ effects: [
@@ -661,6 +659,25 @@
     view.dispatch(setDiagnostics(view.state, toEditorDiagnostics(view.state.doc, lspDiagnostics)));
   }
 
+  /** The diagram opened full screen from a markdown file; it covers the whole editor until closed. */
+  let mermaidSource: string | null = null;
+
+  $: if (hidden) mermaidSource = null;
+
+  function openMermaid(event: Event) {
+    mermaidSource = (event as CustomEvent<{ source: string }>).detail.source;
+  }
+
+  function closeMermaid() {
+    mermaidSource = null;
+    view?.focus();
+  }
+
+  onMount(() => {
+    container.addEventListener(MERMAID_OPEN_EVENT, openMermaid);
+    return () => container.removeEventListener(MERMAID_OPEN_EVENT, openMermaid);
+  });
+
   onDestroy(() => { view?.destroy(); });
 </script>
 
@@ -670,6 +687,12 @@
 />
 
 <div bind:this={container} class="editor-mount" class:editor-mount-hidden={hidden}></div>
+
+{#if mermaidSource !== null}
+  <div class="mermaid-overlay">
+    <MermaidViewer source={mermaidSource} onClose={closeMermaid}/>
+  </div>
+{/if}
 
 {#if ctxMenu}
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -752,6 +775,7 @@
     overflow: hidden;
   }
   .editor-mount-hidden { display: none; }
+  .mermaid-overlay { position: absolute; inset: 0; z-index: 2; }
   .editor-mount :global(.cm-editor) { height: 100%; }
   .editor-mount :global(.cm-scroller) {
     overflow: auto;

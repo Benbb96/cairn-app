@@ -8,6 +8,20 @@
 		},
 		"changes": [
 			{
+				"kind": "added",
+				"text": {
+					"en": "Mermaid viewer: a diagram can be opened full screen over the whole editor, from the button on a rendered diagram in a Markdown file. A .mmd file now opens directly in the same viewer, with zoom, fit to view, actual size, an overview of the whole graph to jump around, copy of the source and export to SVG.",
+					"fr": "Visualiseur Mermaid : un diagramme s'ouvre en plein écran sur toute la zone de l'éditeur, depuis le bouton d'un diagramme rendu dans un fichier Markdown. Un fichier .mmd s'ouvre désormais directement dans ce même visualiseur, avec zoom, ajustement à la vue, taille réelle, un aperçu de tout le graphe pour s'y déplacer, la copie de la source et l'export en SVG."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The editor minimap no longer draws the source lines of a rendered Mermaid diagram: each diagram shows as a single block, so the minimap matches what the editor displays.",
+					"fr": "La minimap de l'éditeur ne dessine plus les lignes de source d'un diagramme Mermaid rendu : chaque diagramme apparaît comme un seul bloc, et la minimap correspond à ce que l'éditeur affiche."
+				}
+			},
+			{
 				"kind": "fixed",
 				"text": {
 					"en": "Long lines of a rendered Markdown file now wrap instead of adding a horizontal scrollbar that only appears after scrolling down.",

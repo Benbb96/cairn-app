@@ -97,5 +97,8 @@
     "@codemirror/view": "6.43.9",
     "@codemirror/language": "6.12.4",
     "@codemirror/state": "6.7.1"
+  },
+  "patchedDependencies": {
+    "@replit/codemirror-minimap@0.5.2": "patches/@replit%2Fcodemirror-minimap@0.5.2.patch"
   }
 }

@@ -23,6 +23,7 @@
   import { isBinaryPath, type GitStatusMap, type BlameEntry, type FileNode } from '$lib/services/file-service';
   import type { GutterChunk } from '$lib/utils/editor/editor-diff-gutter';
   import BinaryPreview from './BinaryPreview.svelte';
+  import MermaidViewer from './MermaidViewer.svelte';
   import { previewKindFromPath } from '$lib/utils/files/files-preview';
   import { absolutePathOf, breadcrumbSegments, basename, parentPathOf, isExternalPath } from '$lib/utils/files/files-tree';
   import type { Tab } from '$lib/utils/files/files-persistence';
@@ -90,6 +91,7 @@
   export let moveTabIcon = 'external';
 
   let svgPreview = true;
+  let mermaidPreview = true;
   let showLineHistory = false;
 
   let lineHistoryPath: string | undefined;
@@ -102,6 +104,7 @@
     showLineHistory = false;
   }
 
+  $: isMermaidTab = activeTab !== null && activeLang === 'mermaid';
   $: isSvgTab = activeTab !== null && previewKindFromPath(activeTab.path) === 'svg';
   $: activeAbsPath = activeTab ? absolutePathOf(activeTab.path, worktreePath) : '';
 
@@ -309,6 +312,11 @@
             onCursorChange={onCursorChange}
             {searchLines}
           />
+      {#if activeTab && isMermaidTab && mermaidPreview}
+        <div class="editor-preview-overlay">
+          <MermaidViewer source={activeTab.doc.toString()} onShowSource={() => { mermaidPreview = false; }}/>
+        </div>
+      {/if}
       {#if activeTab && isSvgTab && svgPreview}
         <div class="editor-preview-overlay">
           <BinaryPreview path={activeAbsPath} kind="svg" source={activeTab.doc.toString()} />
@@ -323,6 +331,12 @@
       {#if isBinaryPath(activeTab.path)}
         <span class="statusbar-item">{previewKindFromPath(activeTab.path).toUpperCase()}</span>
       {:else}
+      {#if isMermaidTab}
+        <button class="statusbar-item statusbar-btn {mermaidPreview ? 'statusbar-active' : ''}" on:click={() => { mermaidPreview = !mermaidPreview; }} title={t('files.preview.toggle') as string}>
+          <Icon name="eye" size={11}/>
+        </button>
+        <span class="statusbar-sep">|</span>
+      {/if}
       {#if isSvgTab}
         <button class="statusbar-item statusbar-btn {svgPreview ? 'statusbar-active' : ''}" on:click={() => { svgPreview = !svgPreview; }} title={t('files.preview.toggle') as string}>
           <Icon name="eye" size={11}/>

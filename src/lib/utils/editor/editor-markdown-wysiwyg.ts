@@ -17,6 +17,7 @@ import {
 	type ViewUpdate,
 	WidgetType,
 } from "@codemirror/view";
+import { minimapOpaqueRanges } from "@replit/codemirror-minimap";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ICONS } from "$lib/components/icon-paths";
 import { t } from "$lib/i18n";
@@ -51,6 +52,31 @@ const markdownDocPath = StateField.define<string | null>({
 			if (effect.is(setMarkdownDocPath)) return effect.value;
 		}
 		return value;
+	},
+});
+
+/**
+ * A mermaid diagram shows its source only when asked: the caret crossing a
+ * rendered diagram must not tear it down, and the button that asks for the
+ * source must not depend on where the caret happens to be. Keyed by the
+ * position of the opening fence.
+ */
+const toggleMermaidSource = StateEffect.define<number>();
+
+const mermaidSourceBlocks = StateField.define<ReadonlySet<number>>({
+	create: () => new Set(),
+	update(value, tr) {
+		let next: Set<number> | null = null;
+		if (tr.docChanged && value.size > 0) {
+			next = new Set([...value].map((pos) => tr.changes.mapPos(pos, 1)));
+		}
+		for (const effect of tr.effects) {
+			if (!effect.is(toggleMermaidSource)) continue;
+			next ??= new Set(value);
+			if (next.has(effect.value)) next.delete(effect.value);
+			else next.add(effect.value);
+		}
+		return next ?? value;
 	},
 });
 
@@ -352,6 +378,9 @@ class ImageWidget extends WidgetType {
  */
 const MERMAID_VIEW_HEIGHT = 320;
 
+/** Bubbles from a rendered diagram to the editor host, which opens it full screen. */
+export const MERMAID_OPEN_EVENT = "cairn-mermaid-open";
+
 export class MermaidWidget extends WidgetType {
 	private zoom: MermaidZoom | null = null;
 
@@ -359,7 +388,7 @@ export class MermaidWidget extends WidgetType {
 		super();
 	}
 
-	toDOM(): HTMLElement {
+	toDOM(view: EditorView): HTMLElement {
 		const el = document.createElement("div");
 		el.className = "cm-md-mermaid";
 
@@ -370,13 +399,54 @@ export class MermaidWidget extends WidgetType {
 		surface.appendChild(stage);
 		el.appendChild(surface);
 
+		const actions = document.createElement("div");
+		actions.className = "cm-md-mermaid-actions";
+
+		const source = document.createElement("button");
+		source.className = "cm-md-mermaid-action";
+		source.type = "button";
+		const sourceLabel = t("files.mermaid.showSource") as string;
+		source.title = sourceLabel;
+		source.setAttribute("aria-label", sourceLabel);
+		source.innerHTML = iconSvg("file-code");
+		source.addEventListener("click", () =>
+			view.dispatch({
+				effects: toggleMermaidSource.of(view.posAtDOM(el)),
+			}),
+		);
+
+		const expand = document.createElement("button");
+		expand.className = "cm-md-mermaid-action";
+		expand.type = "button";
+		const expandLabel = t("files.mermaid.expand") as string;
+		expand.title = expandLabel;
+		expand.setAttribute("aria-label", expandLabel);
+		expand.innerHTML = iconSvg("maximize");
+		expand.addEventListener("click", () =>
+			expand.dispatchEvent(
+				new CustomEvent(MERMAID_OPEN_EVENT, {
+					bubbles: true,
+					detail: { source: this.source },
+				}),
+			),
+		);
+
 		const reset = document.createElement("button");
-		reset.className = "cm-md-mermaid-reset";
+		reset.className = "cm-md-mermaid-action cm-md-mermaid-reset";
 		reset.type = "button";
 		reset.title = "Reset zoom";
 		reset.setAttribute("aria-label", "Reset zoom");
 		reset.innerHTML = iconSvg("refresh");
-		el.appendChild(reset);
+
+		// CodeMirror moves the caret into the block on mousedown, which would
+		// reveal the source before the click lands.
+		actions.addEventListener("mousedown", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+		});
+
+		actions.append(source, expand, reset);
+		el.appendChild(actions);
 
 		void renderMermaid(stage, this.source).then(() => {
 			if (stage.classList.contains("cm-md-mermaid-error")) {
@@ -401,6 +471,40 @@ export class MermaidWidget extends WidgetType {
 
 	get estimatedHeight(): number {
 		return MERMAID_VIEW_HEIGHT;
+	}
+
+	ignoreEvent(): boolean {
+		return false;
+	}
+}
+
+/** Sits above a diagram whose source is open, and brings the rendering back. */
+class MermaidSourceBarWidget extends WidgetType {
+	toDOM(view: EditorView): HTMLElement {
+		const bar = document.createElement("div");
+		bar.className = "cm-md-mermaid-sourcebar";
+		const button = document.createElement("button");
+		button.className = "cm-md-mermaid-action";
+		button.type = "button";
+		const label = t("files.mermaid.showDiagram") as string;
+		button.title = label;
+		button.setAttribute("aria-label", label);
+		button.innerHTML = iconSvg("eye");
+		button.addEventListener("click", () =>
+			view.dispatch({
+				effects: toggleMermaidSource.of(view.posAtDOM(bar)),
+			}),
+		);
+		bar.addEventListener("mousedown", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+		});
+		bar.appendChild(button);
+		return bar;
+	}
+
+	eq(): boolean {
+		return true;
 	}
 
 	ignoreEvent(): boolean {
@@ -791,8 +895,6 @@ export function collectBlockRanges(state: EditorState): Range<Decoration>[] {
 			}
 
 			if (node.name === "FencedCode") {
-				if (isRevealedBlock(node.from, node.to)) return false;
-
 				const openLine = doc.lineAt(node.from);
 				const closeLine = doc.lineAt(node.to);
 				const info = node.node.getChild("CodeInfo");
@@ -802,6 +904,16 @@ export function collectBlockRanges(state: EditorState): Range<Decoration>[] {
 					.replace(/^\n/, "");
 
 				if (language.trim().toLowerCase() === "mermaid") {
+					if (state.field(mermaidSourceBlocks, false)?.has(node.from)) {
+						ranges.push(
+							Decoration.widget({
+								widget: new MermaidSourceBarWidget(),
+								block: true,
+								side: -1,
+							}).range(node.from),
+						);
+						return false;
+					}
 					if (body.trim()) {
 						ranges.push(
 							Decoration.replace({
@@ -812,6 +924,8 @@ export function collectBlockRanges(state: EditorState): Range<Decoration>[] {
 						return false;
 					}
 				}
+
+				if (isRevealedBlock(node.from, node.to)) return false;
 
 				ranges.push(
 					Decoration.replace({
@@ -840,7 +954,15 @@ const blockField = StateField.define<DecorationSet>({
 	create: (state) => Decoration.set(collectBlockRanges(state), true),
 	update(value, tr) {
 		const isTreeUnchanged = syntaxTree(tr.startState) === syntaxTree(tr.state);
-		if (!tr.docChanged && !tr.selection && isTreeUnchanged) {
+		const isSourceToggled = tr.effects.some((effect) =>
+			effect.is(toggleMermaidSource),
+		);
+		if (
+			!tr.docChanged &&
+			!tr.selection &&
+			isTreeUnchanged &&
+			!isSourceToggled
+		) {
 			return value.map(tr.changes);
 		}
 		return Decoration.set(collectBlockRanges(tr.state), true);
@@ -962,7 +1084,7 @@ const linkArmedOnShift = ViewPlugin.fromClass(
 	},
 );
 
-export const wysiwygTheme = EditorView.theme({
+const wysiwygTheme = EditorView.theme({
 	".cm-md-heading": {
 		fontFamily: "var(--font-ui)",
 		fontWeight: "600",
@@ -1022,10 +1144,21 @@ export const wysiwygTheme = EditorView.theme({
 		width: "fit-content",
 		padding: "12px",
 	},
-	".cm-md-mermaid-reset": {
+	".cm-md-mermaid-sourcebar": {
+		display: "flex",
+		justifyContent: "flex-end",
+		padding: "2px 0",
+	},
+	".cm-md-mermaid-actions": {
 		position: "absolute",
 		top: "6px",
 		right: "6px",
+		display: "flex",
+		gap: "4px",
+		opacity: "0",
+		transition: "opacity 120ms",
+	},
+	".cm-md-mermaid-action": {
 		display: "flex",
 		alignItems: "center",
 		padding: "4px",
@@ -1034,10 +1167,8 @@ export const wysiwygTheme = EditorView.theme({
 		background: "var(--bg-1)",
 		color: "var(--fg-2)",
 		cursor: "pointer",
-		opacity: "0",
-		transition: "opacity 120ms",
 	},
-	".cm-md-mermaid:hover .cm-md-mermaid-reset": { opacity: "1" },
+	".cm-md-mermaid:hover .cm-md-mermaid-actions": { opacity: "1" },
 	".cm-md-mermaid-failed .cm-md-mermaid-reset": { display: "none" },
 	".cm-md-mermaid-failed .cm-md-mermaid-surface": {
 		height: "auto",
@@ -1146,7 +1277,14 @@ export function buildMarkdownWysiwyg(
 ): Extension {
 	return [
 		markdownDocPath,
+		mermaidSourceBlocks,
 		blockField,
+		minimapOpaqueRanges.from(blockField, (blocks) =>
+			blocks.update({
+				filter: (_from, _to, value) =>
+					value.spec.widget instanceof MermaidWidget,
+			}),
+		),
 		wysiwygPlugin,
 		EditorView.lineWrapping,
 		buildLinkClickHandler(options),
