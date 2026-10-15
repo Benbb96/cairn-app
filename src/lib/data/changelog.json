@@ -8,6 +8,13 @@
 		},
 		"changes": [
 			{
+				"kind": "changed",
+				"text": {
+					"en": "The home screen keeps only its greeting: the random subtitle line under it is gone.",
+					"fr": "L'accueil ne garde que sa salutation : la ligne de sous-titre aléatoire en dessous a disparu."
+				}
+			},
+			{
 				"kind": "added",
 				"text": {
 					"en": "The \"+ Project\" dialog in the workspace tabs has an \"Open an existing project\" card: a searchable list of registered projects with their path and home folder, so one can be opened without going back home.",

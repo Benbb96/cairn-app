@@ -19,8 +19,3 @@ export function pickGreeting(now: Date = new Date()): string {
 	if (hour >= 18 && hour < 23) return pickRandom(pools.evening);
 	return pickRandom(pools.night);
 }
-
-/** A Minecraft-splash-style one-liner, picked fresh on every visit. */
-export function pickTagline(): string {
-	return pickRandom(getGreetingPools().splashes);
-}

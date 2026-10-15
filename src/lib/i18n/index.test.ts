@@ -51,7 +51,6 @@ describe("getGreetingPools", () => {
 	it("returns the English pools by default", () => {
 		const pools = getGreetingPools();
 		expect(pools.morning.length).toBeGreaterThan(0);
-		expect(pools.splashes.length).toBeGreaterThan(0);
 	});
 
 	it("returns the French pools when French is stored", () => {

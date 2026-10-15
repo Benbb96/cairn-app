@@ -11,7 +11,7 @@
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
   import { t } from '$lib/i18n';
-  import { pickGreeting, pickTagline } from '$lib/utils/home/greeting';
+  import { pickGreeting } from '$lib/utils/home/greeting';
   import { projects, unregisterProject, openProjects, activeProjectId, lastOpenedProjectId } from '$lib/stores/project';
   import { projectFolders } from '$lib/stores/project-folders';
   import { revealInFileManager } from '$lib/services/project-service';
@@ -42,7 +42,6 @@
   let prevWasSearching = false;
 
   const greeting = pickGreeting();
-  const tagline = pickTagline();
 
   $: {
     const isSearching = !!search.trim();
@@ -482,7 +481,7 @@
 
 <!-- hero + quick actions - hidden via CSS when searching to keep DOM stable -->
 <div class="home-hero" class:hidden={!!search}>
-  <h1>{greeting}<br/><em>{tagline}</em></h1>
+  <h1>{greeting}</h1>
 </div>
 
 <div class="home-actions" class:hidden={!!search}>

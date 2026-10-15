@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGreetingPools } from "$lib/i18n";
-import { pickGreeting, pickTagline } from "./greeting";
+import { pickGreeting } from "./greeting";
 
 const pools = getGreetingPools();
 
@@ -94,23 +94,5 @@ describe("pickGreeting", () => {
 		expect(pickGreeting()).toBe(pools.morning[0]);
 		vi.setSystemTime(new Date(2024, 0, 3, 14, 0));
 		expect(pickGreeting()).toBe(pools.afternoon[0]);
-	});
-});
-
-describe("pickTagline", () => {
-	it("picks from the splash pool", () => {
-		expect(pickTagline()).toBe(pools.splashes[0]);
-	});
-
-	it("varies across visits rather than returning a fixed line", () => {
-		sweepRandom(200);
-		const seen = new Set<string>();
-		for (let i = 0; i < 200; i++) seen.add(pickTagline());
-		expect([...seen].sort()).toEqual([...new Set(pools.splashes)].sort());
-	});
-
-	it("takes the last splash when the draw lands just under one", () => {
-		vi.spyOn(Math, "random").mockReturnValue(0.999999);
-		expect(pickTagline()).toBe(pools.splashes[pools.splashes.length - 1]);
 	});
 });

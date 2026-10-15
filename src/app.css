@@ -2140,10 +2140,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); curso
   color: var(--fg-0);
   max-width: 620px;
 }
-.home-hero h1 em {
-  font-style: italic;
-  color: var(--fg-2);
-}
 .home-hero .sub {
   color: var(--fg-2);
   font-size: 13px;

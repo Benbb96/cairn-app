@@ -13,7 +13,6 @@ export interface GreetingPools {
 	evening: string[];
 	night: string[];
 	weekend: string[];
-	splashes: string[];
 }
 
 export type Locale = keyof typeof dictionaries;
