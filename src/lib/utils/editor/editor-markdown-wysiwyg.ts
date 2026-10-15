@@ -1012,6 +1012,7 @@ export const wysiwygTheme = EditorView.theme({
 	".cm-md-mermaid-surface": {
 		height: `${MERMAID_VIEW_HEIGHT}px`,
 		overflow: "hidden",
+		overscrollBehavior: "auto",
 		cursor: "grab",
 		touchAction: "none",
 	},
@@ -1120,6 +1121,7 @@ export const wysiwygTheme = EditorView.theme({
 	".cm-md-table-wrap": {
 		padding: "4px 0",
 		overflowX: "auto",
+		overscrollBehaviorY: "auto",
 	},
 	".cm-md-table": {
 		borderCollapse: "collapse",
