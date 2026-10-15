@@ -4,8 +4,10 @@
 import { get } from "svelte/store";
 import { describe, expect, it } from "vitest";
 import {
+	AI_FEATURES,
 	ASSIST_CLI,
 	ASSIST_CLIS,
+	assistContext,
 	FEATURE_SCHEMAS,
 	resolveAiFeature,
 } from "./ai-features";
@@ -147,5 +149,112 @@ describe("the feature schemas", () => {
 	it("closes both shapes to extra fields", () => {
 		expect(FEATURE_SCHEMAS.commitMessage.additionalProperties).toBe(false);
 		expect(FEATURE_SCHEMAS.mrDescription.additionalProperties).toBe(false);
+	});
+});
+
+describe("how much of the project each assist needs", () => {
+	/**
+	 * The split is the whole point: an assist whose prompt tells the model to
+	 * run `git` needs its tools, one whose prompt already carries the diff does
+	 * not, and one that judges by house rules still wants to see them.
+	 */
+	it("keeps the git-reading assists on a full session", () => {
+		expect(assistContext("commitMessage")).toBe("repository");
+		expect(assistContext("mrDescription")).toBe("repository");
+	});
+
+	/** Their prompts work in the worktree, whatever runs them. */
+	it("keeps the assists that fix code on a full session", () => {
+		expect(assistContext("ciFix")).toBe("repository");
+		expect(assistContext("testFix")).toBe("repository");
+	});
+
+	it("runs the prompt-only assists with nothing of the project", () => {
+		expect(assistContext("branchName")).toBe("prompt");
+		expect(assistContext("reviewComment")).toBe("prompt");
+		expect(assistContext("ticketPlan")).toBe("prompt");
+	});
+
+	/**
+	 * The guide raises remarks against the conventions the repository writes
+	 * down; judging a diff without them raises the wrong ones.
+	 */
+	it("leaves the review guide the project's own rules", () => {
+		expect(assistContext("reviewGuide")).toBe("conventions");
+	});
+
+	/** A new assist has to say what it needs, rather than defaulting silently. */
+	it("answers for every feature in the registry", () => {
+		for (const feature of AI_FEATURES) {
+			expect(["repository", "conventions", "prompt"]).toContain(
+				feature.context,
+			);
+		}
+	});
+
+	/** An id nobody declared runs the full session: the safe answer. */
+	it("falls back to the full session for an unknown feature", () => {
+		expect(assistContext("nope" as never)).toBe("repository");
+	});
+
+	/**
+	 * An assist that reads the repository must keep its tools, so its prompt is
+	 * the only place that may ask the model to run a command.
+	 */
+	it("only lets a repository-reading assist ask for git", () => {
+		for (const feature of AI_FEATURES) {
+			if (/\bgit (diff|log)\b/.test(feature.defaultPromptTemplate)) {
+				expect(feature.context).toBe("repository");
+			}
+		}
+	});
+
+	/**
+	 * The registry answers for the template Cairn ships. A prompt rewritten on
+	 * the Features page can ask the model to go and read the repository, and a
+	 * lean run would deny it the tools without saying anything.
+	 */
+	it("runs the full session for a prompt the user rewrote", () => {
+		const edited = {
+			branchName: {
+				providerId: "",
+				model: "",
+				promptTemplate: "Read the files around it, then name it.",
+			},
+		};
+		expect(assistContext("branchName")).toBe("prompt");
+		expect(assistContext("branchName", edited)).toBe("repository");
+		expect(
+			resolveAiFeature("branchName", edited, installed(ASSIST_CLI)).context,
+		).toBe("repository");
+	});
+
+	it("ignores an assignment that only pins a provider or a model", () => {
+		const pinned = {
+			branchName: {
+				providerId: ASSIST_CLI,
+				model: "haiku",
+				promptTemplate: "",
+			},
+		};
+		expect(assistContext("branchName", pinned)).toBe("prompt");
+	});
+
+	it("ignores a template of whitespace", () => {
+		expect(
+			assistContext("branchName", {
+				branchName: { providerId: "", model: "", promptTemplate: "  " },
+			}),
+		).toBe("prompt");
+	});
+
+	it("carries the answer onto the resolved feature", () => {
+		expect(
+			resolveAiFeature("branchName", undefined, installed(ASSIST_CLI)).context,
+		).toBe("prompt");
+		expect(
+			resolveAiFeature("commitMessage", undefined, installed(ASSIST_CLI))
+				.context,
+		).toBe("repository");
 	});
 });
