@@ -90,7 +90,26 @@ fn build_gitignore_tree(root: &PathBuf, show_ignored: bool) -> Vec<FileNode> {
         }
     }
 
+    if !show_ignored {
+        drop_emptied_dirs(&mut tree.children, root);
+    }
     to_file_nodes(tree.children)
+}
+
+/// Removes directories whose content was entirely ignored (a nested `.gitignore` holding `*`):
+/// they are not ignored themselves, so the walk yields them, but they would open onto nothing.
+/// A directory that is empty on disk is kept.
+fn drop_emptied_dirs(children: &mut std::collections::BTreeMap<String, TreeBuilder>, root: &Path) {
+    children.retain(|_, node| {
+        if !node.is_dir {
+            return true;
+        }
+        drop_emptied_dirs(&mut node.children, root);
+        if !node.children.is_empty() {
+            return true;
+        }
+        fs::read_dir(root.join(&node.rel)).map_or(true, |mut entries| entries.next().is_none())
+    });
 }
 
 /// Turns the builder map into the serialized tree, directories first then case-insensitive by name.
@@ -1013,6 +1032,22 @@ mod tests {
 
         let shown = build_gitignore_tree(&tree.path, true);
         assert!(names(&shown).contains(&"ignored"));
+    }
+
+    #[test]
+    fn tree_hides_a_directory_whose_content_is_wholly_ignored() {
+        let tree = TempTree::new();
+        tree.mkdir(".git");
+        tree.write("out/.gitignore", "*\n");
+        tree.write("out/build.bin", "b");
+        tree.write("kept/a.txt", "a");
+        tree.mkdir("empty");
+
+        let hidden = build_gitignore_tree(&tree.path, false);
+        assert_eq!(names(&hidden), vec!["empty", "kept"]);
+
+        let shown = build_gitignore_tree(&tree.path, true);
+        assert!(names(&shown).contains(&"out"));
     }
 
     #[test]
