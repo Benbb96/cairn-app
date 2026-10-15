@@ -10,6 +10,7 @@
   const dispatch = createEventDispatcher<{
     close: void;
     choose: 'new' | 'open' | 'clone';
+    existing: void;
   }>();
 </script>
 
@@ -22,7 +23,7 @@
       <button class="icon-btn close" aria-label={t('common.close') as string} on:click={() => dispatch('close')}><Icon name="x" size={16}/></button>
     </div>
     <div class="modal-body">
-      <div class="home-actions" style="margin-bottom: 0">
+      <div class="home-actions" style="margin-bottom: 0; grid-template-columns: repeat(2, 1fr)">
         <div class="home-action primary" role="button" tabindex="0"
              on:click={() => dispatch('choose', 'new')}
              on:keydown={(e) => e.key === 'Enter' && dispatch('choose', 'new')}>
@@ -43,6 +44,13 @@
           <div class="aci"><Icon name="download" size={22}/></div>
           <div class="at">{t('home.projects.cloneFromRemote')}</div>
           <div class="ad">{t('home.projects.cloneFromRemoteDesc')}</div>
+        </div>
+        <div class="home-action" role="button" tabindex="0"
+             on:click={() => dispatch('existing')}
+             on:keydown={(e) => e.key === 'Enter' && dispatch('existing')}>
+          <div class="aci"><Icon name="search" size={22}/></div>
+          <div class="at">{t('addProject.existingTitle')}</div>
+          <div class="ad">{t('addProject.existingDesc')}</div>
         </div>
       </div>
     </div>

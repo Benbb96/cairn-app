@@ -8,6 +8,13 @@
 		},
 		"changes": [
 			{
+				"kind": "added",
+				"text": {
+					"en": "The \"+ Project\" dialog in the workspace tabs has an \"Open an existing project\" card: a searchable list of registered projects with their path and home folder, so one can be opened without going back home.",
+					"fr": "La fenêtre \"+ Projet\" des onglets du workspace a une carte \"Ouvrir un projet existant\" : une liste filtrable des projets enregistrés avec leur chemin et leur dossier d'accueil, pour en ouvrir un sans repasser par l'accueil."
+				}
+			},
+			{
 				"kind": "fixed",
 				"text": {
 					"en": "A long Markdown file no longer shows raw tables and code blocks further down until you click in it: they render as you scroll.",

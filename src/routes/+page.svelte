@@ -33,6 +33,7 @@
   import WelcomeTour from '$lib/components/WelcomeTour.svelte';
   import AddProject from '$lib/components/AddProject.svelte';
   import AddProjectChooser from '$lib/components/AddProjectChooser.svelte';
+  import ExistingProjectPicker from '$lib/components/ExistingProjectPicker.svelte';
   import type Workspace from '$lib/components/Workspace.svelte';
   import CreateInstance from '$lib/components/CreateInstance.svelte';
   import type { Ticket } from '$lib/types/integrations';
@@ -57,6 +58,7 @@
   let homeOpenSettingsTab: string | null = null;
   let homeOpenAddProjectMode: 'new' | 'open' | 'clone' | null = null;
   let isAddProjectChooserOpen = false;
+  let isExistingProjectPickerOpen = false;
   let workspaceAddProjectMode: 'new' | 'open' | 'clone' | null = null;
   let homeOpenAddProjectPath = '';
   let homeOpenAddProjectCloneUrl = '';
@@ -561,6 +563,14 @@
   <AddProjectChooser
     on:close={() => isAddProjectChooserOpen = false}
     on:choose={(e) => { workspaceAddProjectMode = e.detail; isAddProjectChooserOpen = false; }}
+    on:existing={() => { isAddProjectChooserOpen = false; isExistingProjectPickerOpen = true; }}
+  />
+{/if}
+
+{#if isExistingProjectPickerOpen}
+  <ExistingProjectPicker
+    on:close={() => isExistingProjectPickerOpen = false}
+    on:pick={(e) => { isExistingProjectPickerOpen = false; void handleOpenProject(e.detail); }}
   />
 {/if}
 

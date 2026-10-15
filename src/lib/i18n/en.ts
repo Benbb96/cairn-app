@@ -39,6 +39,8 @@ export const en = {
 
 	addProject: {
 		chooserTitle: "Add a project",
+		existingTitle: "Open an existing project",
+		existingDesc: "Pick a project already registered in Cairn.",
 		stepLabels: {
 			identity: "Identity",
 			location: "Location",
