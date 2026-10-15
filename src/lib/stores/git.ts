@@ -585,6 +585,14 @@ export async function pushBranch(
 	await Promise.all([refreshStatus(), syncGraph()]);
 }
 
+/** Creates a branch on the remote and tracks it, without leaving the current branch. */
+export async function publishBranch(branch: string): Promise<void> {
+	const wt = worktree();
+	if (!wt) return;
+	await mutate(() => gitService.push(wt, true, branch, false, "normal"));
+	await Promise.all([loadBranches(wt, { fetch: false }), refreshStatus()]);
+}
+
 /** Pulls; the result says whether it left conflicts behind. */
 export async function pullBranch(
 	mode: PullMode = "rebase",
@@ -703,8 +711,7 @@ export async function cherryPickCommits(
 	const wt = worktree();
 	if (!wt || commits.length === 0) return null;
 	const result = await mutate(() => gitService.cherryPick(wt, commits));
-	await refreshStatus();
-	await refreshLog();
+	await Promise.all([refreshStatus(), refreshLog(), syncGraph()]);
 	return result;
 }
 
@@ -713,8 +720,7 @@ export async function continueCherryPick(): Promise<GitOpResult | null> {
 	const wt = worktree();
 	if (!wt) return null;
 	const result = await mutate(() => gitService.cherryPickContinue(wt));
-	await refreshStatus();
-	await refreshLog();
+	await Promise.all([refreshStatus(), refreshLog(), syncGraph()]);
 	return result;
 }
 
@@ -723,8 +729,7 @@ export async function skipCherryPick(): Promise<GitOpResult | null> {
 	const wt = worktree();
 	if (!wt) return null;
 	const result = await mutate(() => gitService.cherryPickSkip(wt));
-	await refreshStatus();
-	await refreshLog();
+	await Promise.all([refreshStatus(), refreshLog(), syncGraph()]);
 	return result;
 }
 
@@ -733,8 +738,7 @@ export async function abortCherryPick(): Promise<void> {
 	const wt = worktree();
 	if (!wt) return;
 	await mutate(() => gitService.cherryPickAbort(wt));
-	await refreshStatus();
-	await refreshLog();
+	await Promise.all([refreshStatus(), refreshLog(), syncGraph()]);
 }
 
 /** URL of the origin remote, empty when there is none. */
@@ -1192,6 +1196,7 @@ export async function pushTag(name: string, remote = "origin"): Promise<void> {
 	if (!wt) return;
 	await mutate(() => gitService.tagPush(wt, remote, name));
 	markRemoteTag(name, true);
+	await syncGraph();
 }
 
 /** Deletes a tag on the remote, leaving the local one in place. */
@@ -1203,7 +1208,7 @@ export async function deleteRemoteTag(
 	if (!wt) return;
 	await mutate(() => gitService.tagDeleteRemote(wt, remote, name));
 	markRemoteTag(name, false);
-	await refreshTags();
+	await Promise.all([refreshTags(), syncGraph()]);
 }
 
 /** Stashes the changes, optionally limited to `paths`. */
@@ -1218,7 +1223,7 @@ export async function pushStash(
 	await mutate(() =>
 		gitService.stashPush(wt, message, includeUntracked, keepIndex, paths),
 	);
-	await Promise.all([refreshStashes(), refreshStatus()]);
+	await Promise.all([refreshStashes(), refreshStatus(), syncGraph()]);
 }
 
 /** Stages a selection, one file at a time so a single failure names the file. */
@@ -1262,7 +1267,7 @@ export async function popStash(index: number): Promise<void> {
 	const wt = worktree();
 	if (!wt) return;
 	await mutate(() => gitService.stashPop(wt, index));
-	await Promise.all([refreshStashes(), refreshStatus()]);
+	await Promise.all([refreshStashes(), refreshStatus(), syncGraph()]);
 }
 
 /** Applies a stash and keeps it in the list. */
@@ -1278,7 +1283,7 @@ export async function dropStash(index: number): Promise<void> {
 	const wt = worktree();
 	if (!wt) return;
 	await mutate(() => gitService.stashDrop(wt, index));
-	await refreshStashes();
+	await Promise.all([refreshStashes(), syncGraph()]);
 }
 
 /** Deletes every stash. */
@@ -1286,7 +1291,7 @@ export async function clearStashes(): Promise<void> {
 	const wt = worktree();
 	if (!wt) return;
 	await mutate(() => gitService.stashClear(wt));
-	await refreshStashes();
+	await Promise.all([refreshStashes(), syncGraph()]);
 }
 
 /** Changes a stash message, by rewriting it in place. */
@@ -1297,7 +1302,7 @@ export async function renameStash(
 	const wt = worktree();
 	if (!wt) return;
 	await mutate(() => gitService.stashRename(wt, index, message));
-	await refreshStashes();
+	await Promise.all([refreshStashes(), syncGraph()]);
 }
 
 /** Diff a stash holds, for the preview; nothing is applied. */

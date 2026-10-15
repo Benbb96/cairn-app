@@ -2083,6 +2083,15 @@ export const fr = {
 			force: "Ecrase la branche distante sans condition",
 		},
 		upToDate: "À jour",
+		pushConfirm: {
+			title: "Pousser vers le remote",
+			noRemoteBranch: (branch: string) =>
+				`La branche ${branch} n'existe pas encore sur le remote. Le push la crée et la définit comme amont.`,
+			noRemoteBase: (branch: string) =>
+				`La branche de base ${branch} n'existe pas sur le remote : une merge request ne peut pas la cibler.`,
+			publishBase: (branch: string) => `Créer aussi ${branch} sur le remote`,
+			confirm: "Pousser",
+		},
 		noUpstreamShort: "pas d'amont",
 		branchActions: "Actions de branche",
 		rebaseOnto: "Rebaser sur...",

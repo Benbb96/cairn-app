@@ -1491,7 +1491,7 @@ fn finish_op(worktree: &str, out: std::process::Output) -> Result<GitOpResult, G
         return Ok(GitOpResult { ok: true, has_conflicts: false, conflicted_files: Vec::new(), output });
     }
     let conflicts = conflicted_files(worktree);
-    if operation_kind(worktree) != "none" || !conflicts.is_empty() {
+    if !conflicts.is_empty() {
         return Ok(GitOpResult { ok: false, has_conflicts: true, conflicted_files: conflicts, output });
     }
     Err(GitError::from_output(output))

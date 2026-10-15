@@ -153,6 +153,34 @@
 					"en": "In the Git Changes tab, two modified files with the same name in different folders no longer swap places at regular intervals.",
 					"fr": "Dans l'onglet Changes de Git, deux fichiers modifiés de même nom dans des dossiers différents n'échangent plus leur position à intervalles réguliers."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Review: a base branch that does not exist in the repository now asks you to pick one instead of showing an empty or failing diff.",
+					"fr": "Review : une branche de base qui n'existe pas dans le dépôt demande d'en choisir une au lieu d'afficher un diff vide ou en erreur."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Continuing a merge, rebase or cherry-pick no longer does nothing silently when git refuses (pending changes, for instance): the error is shown.",
+					"fr": "Continuer un merge, un rebase ou un cherry-pick ne reste plus muet quand git refuse (changements en attente, par exemple) : l'erreur est affichée."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "Pushing a branch that does not exist on the remote, or whose base branch is missing there, now asks first and can create the base branch too.",
+					"fr": "Pousser une branche absente du remote, ou dont la branche de base y manque, demande d'abord confirmation et peut créer aussi la branche de base."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The git graph now refreshes after cherry-picks, stash changes and remote tag pushes or deletions.",
+					"fr": "Le graphe git se rafraîchit désormais après un cherry-pick, une modification de stash et le push ou la suppression d'un tag distant."
+				}
 			}
 		]
 	},

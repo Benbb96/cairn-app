@@ -74,10 +74,16 @@
    * Unset - or set to the branch itself, which older instances carry - it would
    * compare the branch with itself and show an empty diff with no explanation.
    */
-  $: isBaseUnusable = !mr && ((base ?? '').trim() === '' || base === instance?.branch);
+  $: areBranchesKnown = ($git.branches?.length ?? 0) + ($git.remoteBranches?.length ?? 0) > 0;
+  $: isBaseUnknown =
+    !mr &&
+    (base ?? '').trim() !== '' &&
+    areBranchesKnown &&
+    ![...$git.branches, ...$git.remoteBranches].some(b => b === base || b === `origin/${base}`);
+  $: isBaseUnusable = !mr && (((base ?? '').trim() === '' || base === instance?.branch) || isBaseUnknown);
 
   let branchesLoadedFor = '';
-  $: if (isBaseUnusable && $activeStep === 'review' && worktreePath && branchesLoadedFor !== worktreePath) {
+  $: if (!mr && $activeStep === 'review' && worktreePath && branchesLoadedFor !== worktreePath) {
     branchesLoadedFor = worktreePath;
     void loadBranches(worktreePath, { fetch: false });
   }

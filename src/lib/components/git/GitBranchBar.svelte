@@ -32,6 +32,7 @@
     fetchRemote,
     pullBranch,
     pushBranch,
+    publishBranch,
     resetToCommit,
   } from '$lib/stores/git';
   import { activeProject } from '$lib/stores/project';
@@ -169,11 +170,41 @@
     }
   }
 
-  async function doPush(mode: PushMode = 'normal') {
+  $: baseBranch = $activeInstance?.baseBranch ?? '';
+  $: isBaseOnlyLocal =
+    baseBranch !== '' &&
+    baseBranch !== state.currentBranch &&
+    (state.branches ?? []).includes(baseBranch) &&
+    !(state.remoteBranches ?? []).some((b) => b.endsWith(`/${baseBranch}`));
+
+  let pendingPushMode: PushMode | null = null;
+  let isBasePublished = true;
+
+  function requestPush(mode: PushMode = 'normal') {
+    if (busy) return;
+    isPushMenuOpen = false;
+    if (remote?.hasUpstream && !isBaseOnlyLocal) {
+      void doPush(mode);
+      return;
+    }
+    isBasePublished = isBaseOnlyLocal;
+    pendingPushMode = mode;
+  }
+
+  async function confirmPush() {
+    const mode = pendingPushMode;
+    if (!mode) return;
+    const publishBase = isBaseOnlyLocal && isBasePublished;
+    pendingPushMode = null;
+    await doPush(mode, publishBase);
+  }
+
+  async function doPush(mode: PushMode = 'normal', publishBase = false) {
     if (busy) return;
     isPushMenuOpen = false;
     pushing = true;
     try {
+      if (publishBase) await publishBranch(baseBranch);
       await pushBranch(false, false, mode);
       openTabIfConflicted();
     } finally {
@@ -428,7 +459,7 @@
         class="op-btn primary split-main"
         title={t('git.pushTitle') as string}
         disabled={busy || inOperation || !canPush}
-        on:click={() => doPush()}
+        on:click={() => requestPush()}
       >
         {#if pushing}
           <Spinner size={12} trackColor="oklch(1 0 0 / 0.3)" color="var(--accent-fg)" />
@@ -452,7 +483,7 @@
       {#if isPushMenuOpen}
         <div class="op-menu" role="menu">
           {#each PUSH_MODES as { mode, icon } (mode)}
-            <button role="menuitem" class:danger={mode === 'force'} on:click={() => doPush(mode)}>
+            <button role="menuitem" class:danger={mode === 'force'} on:click={() => requestPush(mode)}>
               <Icon name={icon} size={12} />
               <span class="op-menu-text">
                 <span class="op-menu-label">{t(`git.pushMode.${mode}`)}</span>
@@ -542,11 +573,60 @@
   </div>
 {/if}
 
+{#if pendingPushMode}
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    on:click={() => (pendingPushMode = null)}
+    on:keydown={(e) => e.key === 'Escape' && (pendingPushMode = null)}
+  >
+    <div class="modal reset-modal" on:click|stopPropagation role="presentation">
+      <div class="modal-head">
+        <div>
+          <div class="step-count">GIT</div>
+          <h3>{t('git.pushConfirm.title')}</h3>
+        </div>
+        <button class="icon-btn close" on:click={() => (pendingPushMode = null)} aria-label={t('common.close') as string}>
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+      <div class="modal-body push-confirm">
+        {#if !remote?.hasUpstream}
+          <p class="reset-confirm">{(t('git.pushConfirm.noRemoteBranch') as (b: string) => string)(state.currentBranch)}</p>
+        {/if}
+        {#if isBaseOnlyLocal}
+          <p class="reset-confirm">{(t('git.pushConfirm.noRemoteBase') as (b: string) => string)(baseBranch)}</p>
+          <label class="push-confirm-check">
+            <input type="checkbox" bind:checked={isBasePublished} />
+            {(t('git.pushConfirm.publishBase') as (b: string) => string)(baseBranch)}
+          </label>
+        {/if}
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button class="btn ghost" on:click={() => (pendingPushMode = null)}>{t('common.cancel')}</button>
+        <button class="btn primary" on:click={confirmPush}>{t('git.pushConfirm.confirm')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
 
   .mr-modal { width: min(560px, 92vw); }
 
   .reset-modal { width: min(420px, 92vw); }
+  .push-confirm { display: flex; flex-direction: column; gap: 10px; }
+  .push-confirm-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--fg-1);
+  }
   .reset-confirm {
     margin: 0;
     font-size: 12px;

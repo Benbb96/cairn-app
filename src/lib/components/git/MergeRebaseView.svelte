@@ -149,6 +149,8 @@
     try {
       await fn();
       dispatch('filesChanged');
+    } catch {
+      // The failure is already in the git error banner.
     } finally {
       running = false;
     }

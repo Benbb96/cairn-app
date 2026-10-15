@@ -20,6 +20,8 @@ interface GitState {
 	currentBranch: string;
 	remoteStatus: RemoteStatus | null;
 	operationState: GitOperationState | null;
+	branches?: string[];
+	remoteBranches?: string[];
 }
 
 const gitState = writable<GitState>({
@@ -33,6 +35,7 @@ const loadBranches = vi.fn();
 const fetchRemote = vi.fn();
 const pullBranch = vi.fn();
 const pushBranch = vi.fn();
+const publishBranch = vi.fn();
 
 vi.mock("$lib/stores/git", () => ({
 	// `set` and `update` are exposed too: the component reads the store through
@@ -42,6 +45,7 @@ vi.mock("$lib/stores/git", () => ({
 	fetchRemote: (...a: unknown[]) => fetchRemote(...a),
 	pullBranch: (...a: unknown[]) => pullBranch(...a),
 	pushBranch: (...a: unknown[]) => pushBranch(...a),
+	publishBranch: (...a: unknown[]) => publishBranch(...a),
 }));
 
 const activeInstanceStore = writable<unknown>(null);
@@ -117,7 +121,13 @@ async function setGit(patch: Partial<GitState>) {
 }
 
 beforeEach(() => {
-	for (const fn of [loadBranches, fetchRemote, pullBranch, pushBranch]) {
+	for (const fn of [
+		loadBranches,
+		fetchRemote,
+		pullBranch,
+		pushBranch,
+		publishBranch,
+	]) {
 		fn.mockReset();
 		fn.mockResolvedValue(undefined);
 	}
@@ -399,6 +409,42 @@ describe("GitBranchBar", () => {
 			const { onOpenMergeRebase } = mount();
 			await userEvent.click(pullBtn());
 			expect(onOpenMergeRebase).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("pushing a branch the remote does not know", () => {
+		const confirmBtn = () =>
+			document.querySelector(".modal-foot .btn.primary") as HTMLButtonElement;
+
+		it("asks before creating the remote branch", async () => {
+			await setGit({
+				remoteStatus: { hasUpstream: false, ahead: 0, behind: 0, remote: "" },
+			});
+			mount();
+			await userEvent.click(pushBtn());
+			expect(pushBranch).not.toHaveBeenCalled();
+			await userEvent.click(confirmBtn());
+			expect(pushBranch).toHaveBeenCalledWith(false, false, "normal");
+			expect(publishBranch).not.toHaveBeenCalled();
+		});
+
+		it("offers to create a base branch that only exists locally", async () => {
+			activeInstanceStore.set({ baseBranch: "main" });
+			await setGit({
+				branches: ["feature", "main"],
+				remoteBranches: ["origin/feature"],
+				remoteStatus: {
+					hasUpstream: true,
+					ahead: 1,
+					behind: 0,
+					remote: "origin",
+				},
+			});
+			mount();
+			await userEvent.click(pushBtn());
+			await userEvent.click(confirmBtn());
+			expect(publishBranch).toHaveBeenCalledWith("main");
+			expect(pushBranch).toHaveBeenCalled();
 		});
 	});
 

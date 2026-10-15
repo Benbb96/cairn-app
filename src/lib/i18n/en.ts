@@ -2044,6 +2044,15 @@ export const en = {
 			force: "Overwrites the remote branch unconditionally",
 		},
 		upToDate: "Up to date",
+		pushConfirm: {
+			title: "Push to the remote",
+			noRemoteBranch: (branch: string) =>
+				`The branch ${branch} does not exist on the remote yet. Pushing creates it and sets it as upstream.`,
+			noRemoteBase: (branch: string) =>
+				`The base branch ${branch} does not exist on the remote, so a merge request cannot target it.`,
+			publishBase: (branch: string) => `Also create ${branch} on the remote`,
+			confirm: "Push",
+		},
 		noUpstreamShort: "no upstream",
 		branchActions: "Branch actions",
 		rebaseOnto: "Rebase onto...",
