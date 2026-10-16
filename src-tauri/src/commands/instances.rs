@@ -726,6 +726,67 @@ pub fn update_instance_base_branch(id: String, project_id: String, base_branch: 
     Ok(updated.with_project(project_id))
 }
 
+/// What deleting an instance acts on, resolved once for the check and the deletion.
+struct DeletionTarget {
+    instances: Vec<StoredInstance>,
+    instance: StoredInstance,
+    remove: bool,
+    wt_path: PathBuf,
+    repo: Repository,
+}
+
+fn deletion_target(id: &str, project_id: &str, remove_worktree: Option<bool>) -> Result<DeletionTarget, String> {
+    let instances = read_instances(project_id)?;
+    let instance = instances.iter().find(|i| i.id == id)
+        .ok_or_else(|| format!("Instance '{}' not found", id))?
+        .clone();
+    let remove = should_remove_worktree(remove_worktree, instance.external);
+    let wt_path = PathBuf::from(shellexpand::tilde(&instance.worktree_path).into_owned());
+    let expanded_project = read_projects()?.iter()
+        .find(|p| p.id == project_id)
+        .map(|p| shellexpand::tilde(&p.path).into_owned())
+        .ok_or_else(|| "Project not found".to_string())?;
+    let repo = Repository::open(&expanded_project).map_err(|e| e.to_string())?;
+    Ok(DeletionTarget { instances, instance, remove, wt_path, repo })
+}
+
+/// Why removing the worktree at `wt_path` must be refused before anything is touched.
+fn deletion_refusal(registered: Option<&git2::Worktree>, wt_path: &Path) -> Option<String> {
+    if registered.is_some_and(is_locked) {
+        return Some(format!(
+            "The worktree at {} is locked. Unlock it with `git worktree unlock` or keep it on disk.",
+            wt_path.display()
+        ));
+    }
+    let dir = wt_path.exists().then(|| undeletable_dir(wt_path)).flatten()?;
+    Some(format!(
+        "{} cannot be deleted: permission denied. It was probably created by a Docker container running as root; remove it with `sudo rm -rf` or keep the worktree on disk.",
+        dir.display()
+    ))
+}
+
+/// The refusal `delete_instance` would answer with, without deleting anything:
+/// the frontend asks first, so a refused deletion leaves the instance's
+/// terminals, agent sessions and watcher running.
+/// Async: walking a worktree with its dependency folders takes a while.
+#[tauri::command]
+pub async fn check_instance_deletion(
+    id: String,
+    project_id: String,
+    remove_worktree: Option<bool>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = deletion_target(&id, &project_id, remove_worktree)?;
+        if !target.remove {
+            return Ok(());
+        }
+        let registered = worktree_at(&target.repo, &target.wt_path);
+        deletion_refusal(registered.as_ref(), &target.wt_path).map_or(Ok(()), Err)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Drops the instance and its editor state and, when `remove_worktree` asks
 /// for it (by default for a worktree Cairn made, not for an adopted one),
 /// removes the worktree directory, prunes its git entry and deletes the
@@ -742,40 +803,15 @@ pub async fn delete_instance(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = INSTANCES_WRITE_LOCK.lock().map_err(|e| e.to_string())?;
-        let mut instances = read_instances(&project_id)?;
-        let instance = instances.iter().find(|i| i.id == id)
-            .ok_or_else(|| format!("Instance '{}' not found", id))?
-            .clone();
-
-        let remove = should_remove_worktree(remove_worktree, instance.external);
-
-        let wt_path = PathBuf::from(shellexpand::tilde(&instance.worktree_path).into_owned());
-
-        let projects = read_projects()?;
-        let expanded_project = projects.iter()
-            .find(|p| p.id == project_id)
-            .map(|p| shellexpand::tilde(&p.path).into_owned())
-            .ok_or_else(|| "Project not found".to_string())?;
-
-        let repo = Repository::open(&expanded_project).map_err(|e| e.to_string())?;
+        let DeletionTarget { mut instances, instance, remove, wt_path, repo } =
+            deletion_target(&id, &project_id, remove_worktree)?;
 
         if remove {
             // Resolved before the directory goes: a path that no longer exists
             // cannot be matched against the worktrees git has registered.
             let registered = worktree_at(&repo, &wt_path);
-            if let Some(wt) = &registered
-                && is_locked(wt)
-            {
-                return Err(format!(
-                    "The worktree at {} is locked. Unlock it with `git worktree unlock` or keep it on disk.",
-                    wt_path.display()
-                ));
-            }
-            if let Some(dir) = wt_path.exists().then(|| undeletable_dir(&wt_path)).flatten() {
-                return Err(format!(
-                    "{} cannot be deleted: permission denied. It was probably created by a Docker container running as root; remove it with `sudo rm -rf` or keep the worktree on disk.",
-                    dir.display()
-                ));
+            if let Some(refusal) = deletion_refusal(registered.as_ref(), &wt_path) {
+                return Err(refusal);
             }
             if wt_path.exists() {
                 fs::remove_dir_all(&wt_path).map_err(|e| e.to_string())?;
@@ -1108,6 +1144,37 @@ mod tests {
 
         fs::remove_dir_all(&path).unwrap();
         assert_eq!(worktree_health(&path), WorktreeHealth::Missing);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_worktree_that_cannot_be_emptied_is_refused_with_nothing_deleted() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = Scratch::new("refusal");
+        let path = scratch.worktree("wt", "feat/refusal");
+        let repo = Repository::open(scratch.repo()).unwrap();
+        assert_eq!(deletion_refusal(worktree_at(&repo, &path).as_ref(), &path), None);
+
+        let sealed = path.join(".docker");
+        fs::create_dir_all(sealed.join(".ssh")).unwrap();
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o555)).unwrap();
+        let refusal = deletion_refusal(worktree_at(&repo, &path).as_ref(), &path);
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let refusal = refusal.expect("a directory that cannot be emptied should refuse the deletion");
+        assert!(refusal.contains(".docker"), "{refusal}");
+        assert!(path.join("a.txt").exists(), "the check deleted a file");
+        assert!(worktree_at(&repo, &path).is_some(), "the check dropped the registration");
+    }
+
+    #[test]
+    fn a_locked_worktree_refuses_the_deletion() {
+        let scratch = Scratch::new("refusal-locked");
+        let path = scratch.worktree("wt", "feat/refusal-locked");
+        scratch.git(&scratch.repo(), &["worktree", "lock", path.to_str().unwrap()]);
+        let repo = Repository::open(scratch.repo()).unwrap();
+        let refusal = deletion_refusal(worktree_at(&repo, &path).as_ref(), &path);
+        assert!(refusal.is_some_and(|r| r.contains("locked")));
     }
 
     #[cfg(unix)]

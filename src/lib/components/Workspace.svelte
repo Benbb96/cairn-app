@@ -275,6 +275,7 @@
 
   async function checkInstanceWorktree(instance: Instance | null) {
     const token = ++healthCheckToken;
+    worktreeHealth = 'ok';
     const health: WorktreeHealth = instance && !isBaseInstance(instance.id)
       ? await instanceWorktreeHealth(instance.worktreePath).catch(() => 'ok' as const)
       : 'ok';

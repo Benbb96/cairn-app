@@ -583,6 +583,24 @@ describe("FinalizeInstance", () => {
 			expect(removeInstance).toHaveBeenCalledWith("i1", "p1", true);
 			expect(onClose).toHaveBeenCalled();
 		});
+
+		it("keeps the question open with the reason when the deletion fails", async () => {
+			removeInstance.mockRejectedValueOnce("vendor cannot be deleted");
+			const { onClose } = mount({ status: "done" });
+			await settle();
+			await userEvent.click(
+				document.querySelector(".fin-cleanup .step-btn") as HTMLElement,
+			);
+			await settle();
+			await userEvent.click(
+				document.querySelector(".btn.danger") as HTMLElement,
+			);
+			await settle();
+			expect(onClose).not.toHaveBeenCalled();
+			expect(document.querySelector(".del-error")?.textContent).toContain(
+				"vendor cannot be deleted",
+			);
+		});
 	});
 
 	describe("closing", () => {

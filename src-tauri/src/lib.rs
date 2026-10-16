@@ -203,6 +203,7 @@ pub fn run() {
             adopt_worktree,
             list_unclaimed_worktrees,
             delete_instance,
+            check_instance_deletion,
             instance_worktree_health,
             update_instance_status,
             update_instance_ticket,

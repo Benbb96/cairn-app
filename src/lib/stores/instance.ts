@@ -11,6 +11,7 @@ import type {
 } from "$lib/services/instance-service";
 import {
 	adoptWorktree as adoptWorktreeService,
+	checkInstanceDeletion,
 	createInstance,
 	deleteInstance,
 	duplicateInstance as duplicateInstanceService,
@@ -268,6 +269,8 @@ export async function removeInstance(
 	const worktree = get(instancesByProject)[projectId]?.find(
 		(i) => i.id === id,
 	)?.worktreePath;
+	// Asked first: a refusal must leave the instance's terminals and agents running.
+	await checkInstanceDeletion(id, projectId, removeWorktree);
 	await removeInstanceTerminals(projectId, id);
 	removeInstanceConversations(projectId, id);
 	// Awaited, not fired and forgotten: `watch_dirs` re-creates a watcher whenever

@@ -145,6 +145,19 @@ export async function instanceWorktreeHealth(
 	return invoke<WorktreeHealth>("instance_worktree_health", { path });
 }
 
+/** Rejects with the reason `deleteInstance` would refuse, deleting nothing. */
+export async function checkInstanceDeletion(
+	id: string,
+	projectId: string,
+	removeWorktree?: boolean,
+): Promise<void> {
+	return invoke<void>("check_instance_deletion", {
+		id,
+		projectId,
+		removeWorktree,
+	});
+}
+
 /** Local branch names of the project checkout, not of a worktree. */
 export async function listBranches(projectPath: string): Promise<string[]> {
 	return invoke<string[]>("list_branches", { projectPath });

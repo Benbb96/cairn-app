@@ -24,6 +24,8 @@
   const dispatch = createEventDispatcher<{ close: void; confirm: { removeWorktree: boolean } }>();
 
   let removeWorktree = !instance.external;
+
+  const close = () => { if (!busy) dispatch('close'); };
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -32,8 +34,8 @@
   role="dialog"
   aria-modal="true"
   tabindex="-1"
-  on:click={() => dispatch('close')}
-  on:keydown={(e) => e.key === 'Escape' && dispatch('close')}
+  on:click={close}
+  on:keydown={(e) => e.key === 'Escape' && close()}
 >
   <div class="modal del-modal" on:click|stopPropagation role="presentation">
     <div class="modal-head">
@@ -41,7 +43,7 @@
         <div class="step-count">{t('deleteInstance.heading')}</div>
         <h3>{(t('deleteInstance.title') as (name: string) => string)(instance.ticket.title)}</h3>
       </div>
-      <button class="icon-btn close" on:click={() => dispatch('close')} aria-label={t('common.close') as string}>
+      <button class="icon-btn close" on:click={close} aria-label={t('common.close') as string}>
         <Icon name="x" size={16}/>
       </button>
     </div>
@@ -82,7 +84,7 @@
     </div>
     <div class="modal-foot">
       <div class="spacer"></div>
-      <button class="btn ghost" disabled={busy} on:click={() => dispatch('close')}>{t('common.cancel')}</button>
+      <button class="btn ghost" disabled={busy} on:click={close}>{t('common.cancel')}</button>
       <button class="btn danger" disabled={busy} aria-busy={busy} on:click={() => dispatch('confirm', { removeWorktree })}>
         {#if busy}
           <Spinner size={13}/>
