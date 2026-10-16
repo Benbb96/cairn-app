@@ -367,13 +367,12 @@
     resizeCommitBody();
   }
 
-  /** Classifies a staged file as added, deleted or modified from the kinds of lines it carries. */
+  /** Classifies a file from its hunk headers: only a diff against nothing is an addition, only one that leaves nothing is a deletion. */
   function diffStatus(hunks: GitDiffHunk[]): string {
-    const changed = hunks.flatMap(h => h.lines).filter(l => l.kind !== 'context');
-    const hasAdd = changed.some(l => l.kind === 'add');
-    const hasRemove = changed.some(l => l.kind === 'remove');
-    if (hasAdd && !hasRemove) return 'staged-added';
-    if (!hasAdd && hasRemove) return 'staged-deleted';
+    const ranges = hunks.map(h => /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(h.header));
+    if (ranges.length === 0 || ranges.some(r => !r)) return 'staged-modified';
+    if (ranges.every(r => r![1] === '0' && r![2] === '0')) return 'staged-added';
+    if (ranges.every(r => r![3] === '0' && r![4] === '0')) return 'staged-deleted';
     return 'staged-modified';
   }
 

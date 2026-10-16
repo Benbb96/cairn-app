@@ -10,6 +10,13 @@
 			{
 				"kind": "fixed",
 				"text": {
+					"en": "A file that only gained lines is no longer flagged as added in the Git view: it is added only when it is really new.",
+					"fr": "Un fichier qui a seulement gagné des lignes n'est plus marqué comme ajouté dans la vue Git : il ne l'est que s'il est réellement nouveau."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
 					"en": "F11 now toggles fullscreen from the home screen right after launch, without having to open a project first, and also works in detached editor windows.",
 					"fr": "F11 bascule maintenant en plein écran depuis l'accueil dès le lancement, sans avoir à ouvrir un projet d'abord, et fonctionne aussi dans les fenêtres d'éditeur détachées."
 				}
