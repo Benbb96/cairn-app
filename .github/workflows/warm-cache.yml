@@ -13,7 +13,7 @@ on:
       - "src-tauri/**"
       - ".github/workflows/warm-cache.yml"
   schedule:
-    - cron: "0 3 * * 1"
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -40,11 +40,10 @@ jobs:
 
       - name: Install Linux dependencies
         if: startsWith(matrix.runner, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
-            libxdo-dev libssl-dev build-essential curl wget file xdg-utils
+        uses: awalsh128/cache-apt-pkgs-action@7ca5f46d061ad9aa95863cd9b214dd48edef361d # v1.5.0
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev xdg-utils
+          version: 1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
