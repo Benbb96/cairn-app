@@ -8,7 +8,7 @@
    * Purely presentational - every interaction (tab drag, save, navigation) is handed
    * back to FilesView through the `on*` callback props.
    */
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import Icon from '$lib/components/Icon.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
@@ -138,6 +138,71 @@
 
   $: scrollActiveTabIntoView(activeTabIdx);
 
+  let hasHiddenTabsStart = false;
+  let hasHiddenTabsEnd = false;
+  let tabsThumbLeft = 0;
+  let tabsThumbWidth = 100;
+
+  function updateTabsOverflow() {
+    if (!tabsBarEl) return;
+    hasHiddenTabsStart = tabsBarEl.scrollLeft > 1;
+    hasHiddenTabsEnd = tabsBarEl.scrollLeft + tabsBarEl.clientWidth < tabsBarEl.scrollWidth - 1;
+    tabsThumbLeft = (tabsBarEl.scrollLeft / tabsBarEl.scrollWidth) * 100;
+    tabsThumbWidth = (tabsBarEl.clientWidth / tabsBarEl.scrollWidth) * 100;
+  }
+
+  $: if (tabsBarEl) {
+    const observer = new ResizeObserver(updateTabsOverflow);
+    observer.observe(tabsBarEl);
+    onDestroy(() => observer.disconnect());
+  }
+
+  $: if (tabs) void tick().then(updateTabsOverflow);
+
+  const tabsBarId = `tabs-bar-${Math.random().toString(36).slice(2, 8)}`;
+  let isDraggingTabsThumb = false;
+  let tabsThumbGrabOffset = 0;
+
+  function scrollTabsToThumbPosition(e: PointerEvent) {
+    const bar = tabsBarEl;
+    const track = e.currentTarget as HTMLElement;
+    if (!bar) return;
+    const rect = track.getBoundingClientRect();
+    bar.scrollLeft = ((e.clientX - rect.left - tabsThumbGrabOffset) / rect.width) * bar.scrollWidth;
+  }
+
+  function startTabsThumbDrag(e: PointerEvent) {
+    const track = e.currentTarget as HTMLElement;
+    const rect = track.getBoundingClientRect();
+    const thumbLeft = (tabsThumbLeft / 100) * rect.width;
+    const thumbWidth = (tabsThumbWidth / 100) * rect.width;
+    const x = e.clientX - rect.left;
+    const isOnThumb = x >= thumbLeft && x <= thumbLeft + thumbWidth;
+    tabsThumbGrabOffset = isOnThumb ? x - thumbLeft : thumbWidth / 2;
+    track.setPointerCapture(e.pointerId);
+    isDraggingTabsThumb = true;
+    document.body.classList.add('dragging');
+    e.preventDefault();
+    scrollTabsToThumbPosition(e);
+  }
+
+  function moveTabsThumbDrag(e: PointerEvent) {
+    if (isDraggingTabsThumb) scrollTabsToThumbPosition(e);
+  }
+
+  function endTabsThumbDrag() {
+    if (!isDraggingTabsThumb) return;
+    isDraggingTabsThumb = false;
+    document.body.classList.remove('dragging');
+  }
+
+  function scrollTabsWithWheel(e: WheelEvent) {
+    const bar = tabsBarEl;
+    if (!bar || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    bar.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+
   /**
    * Waits for the tab bar to re-render, then brings the active tab back into view.
    * Scrolls the bar itself rather than calling `scrollIntoView`: that one walks every
@@ -168,7 +233,8 @@
     <div class="pane-drop-overlay pane-drop-{dropHint}"></div>
   {/if}
   {#if tabs.length > 0}
-    <div class="tabs-bar" role="tablist" bind:this={tabsBarEl}>
+    <div class="tabs-wrap">
+    <div id={tabsBarId} class="tabs-bar" class:fade-start={hasHiddenTabsStart} class:fade-end={hasHiddenTabsEnd} role="tablist" bind:this={tabsBarEl} on:wheel={scrollTabsWithWheel} on:scroll={updateTabsOverflow}>
       {#each tabs as tab, i (tabKey(tab))}
         {#if dragActive && dragSrcIndex !== null && insertIndex === i && !(insertIndex === dragSrcIndex || insertIndex === dragSrcIndex + 1)}
           <div class="drop-indicator"></div>
@@ -213,6 +279,26 @@
       {#if dragActive && dragSrcIndex !== null && insertIndex === tabs.length && insertIndex !== dragSrcIndex + 1}
         <div class="drop-indicator"></div>
       {/if}
+    </div>
+    {#if hasHiddenTabsStart || hasHiddenTabsEnd}
+      <div
+        class="tabs-track"
+        class:is-dragging={isDraggingTabsThumb}
+        role="scrollbar"
+        tabindex="-1"
+        aria-orientation="horizontal"
+        aria-controls={tabsBarId}
+        aria-valuenow={Math.round(tabsThumbLeft)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        on:pointerdown={startTabsThumbDrag}
+        on:pointermove={moveTabsThumbDrag}
+        on:pointerup={endTabsThumbDrag}
+        on:pointercancel={endTabsThumbDrag}
+      >
+        <div class="tabs-thumb" style="left: {tabsThumbLeft}%; width: {tabsThumbWidth}%"></div>
+      </div>
+    {/if}
     </div>
   {/if}
 
@@ -433,6 +519,30 @@
   .pane-drop-pane { left: 0; right: 0; }
   .pane-drop-split { right: 0; width: 28%; max-width: 220px; }
 
+  .tabs-wrap {
+    position: relative;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+  .tabs-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 8px;
+    cursor: pointer;
+  }
+  .tabs-thumb {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--stroke-2);
+    pointer-events: none;
+    transition: height 0.12s ease, background 0.12s ease;
+  }
+  .tabs-track:hover .tabs-thumb,
+  .tabs-track.is-dragging .tabs-thumb { height: 4px; background: var(--fg-3); }
   .tabs-bar {
     display: flex;
     align-items: stretch;
@@ -440,12 +550,12 @@
     overflow-x: auto;
     border-bottom: 1px solid var(--stroke-0);
     background: var(--bg-1);
-    scrollbar-width: thin;
-    scrollbar-color: var(--stroke-1) transparent;
+    scrollbar-width: none;
   }
-  .tabs-bar::-webkit-scrollbar { height: 4px; }
-  .tabs-bar::-webkit-scrollbar-track { background: transparent; }
-  .tabs-bar::-webkit-scrollbar-thumb { background: var(--stroke-1); border-radius: 2px; }
+  .tabs-bar::-webkit-scrollbar { height: 0; display: none; }
+  .tabs-bar.fade-start { mask-image: linear-gradient(to right, transparent, #000 28px); }
+  .tabs-bar.fade-end { mask-image: linear-gradient(to left, transparent, #000 28px); }
+  .tabs-bar.fade-start.fade-end { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 
   .file-tab {
     display: flex;
