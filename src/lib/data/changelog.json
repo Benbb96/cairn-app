@@ -1,17 +1,143 @@
 [
 	{
 		"version": "1.1.1",
-		"date": "",
+		"date": "2026-10-18",
 		"summary": {
-			"en": "The Changes list no longer shuffles files that share a name.",
-			"fr": "La liste des changements ne mélange plus les fichiers de même nom."
+			"en": "The Git view expands the context around diffs and stays steadier, the title bar takes your colors and can be chosen on Linux and Windows, and .mmd files and Mermaid diagrams get a full-screen viewer. Linux gets a working \"Open in terminal\", language servers start reliably, and AI assists run on a much leaner session.",
+			"fr": "La vue Git déplie le contexte autour des diffs et gagne en stabilité, la barre de titre prend vos couleurs et se choisit sous Linux et Windows, et les fichiers .mmd comme les diagrammes Mermaid ont un visualiseur plein écran. Linux obtient un « Ouvrir dans le terminal » fonctionnel, les serveurs de langage démarrent de façon fiable, et les assistants IA tournent sur une session bien plus légère."
 		},
 		"changes": [
 			{
+				"kind": "added",
+				"text": {
+					"en": "The diffs of the Git view (changes, staged files, commits and stashes) show expanders between and around their hunks, as on GitHub: each click on a bar reveals 20 more lines above or below, a short gap opens in one click, and what you revealed is still there when you come back to the diff.",
+					"fr": "Les diffs de la vue Git (changements, fichiers indexés, commits et stashes) affichent des expanseurs entre et autour des hunks, comme sur GitHub : chaque clic sur une barre révèle 20 lignes de plus au-dessus ou en dessous, un petit écart s'ouvre d'un clic, et ce que vous avez révélé est conservé quand vous revenez au diff."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The Cairn title bar takes the theme's color, the accent, the color of the project you are working in, or one of your own; its text stays readable on any color, and it steps aside in fullscreen. On Linux and Windows, Settings > Appearance > Window chooses between the system's title bar and one drawn by Cairn with the window buttons.",
+					"fr": "La barre de titre Cairn prend la couleur du thème, celle de l'accent, celle du projet sur lequel vous travaillez, ou une couleur de votre choix ; son texte reste lisible quelle que soit la couleur, et elle s'efface en plein écran. Sous Linux et Windows, Réglages > Apparence > Fenêtre choisit entre la barre de titre du système et une barre dessinée par Cairn avec les boutons de fenêtre."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Mermaid viewer: a diagram can be opened full screen over the whole editor, from the button on a rendered diagram in a Markdown file. A .mmd file now opens directly in the same viewer, with zoom, fit to view, actual size, an overview of the whole graph to jump around, copy of the source and export to SVG. The editor minimap shows each diagram as a single block instead of its source lines.",
+					"fr": "Visualiseur Mermaid : un diagramme s'ouvre en plein écran sur toute la zone de l'éditeur, depuis le bouton d'un diagramme rendu dans un fichier Markdown. Un fichier .mmd s'ouvre désormais directement dans ce même visualiseur, avec zoom, ajustement à la vue, taille réelle, un aperçu de tout le graphe pour s'y déplacer, copie de la source et export en SVG. La minimap de l'éditeur montre chaque diagramme comme un seul bloc au lieu de ses lignes de source."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The \"+ Project\" dialog in the workspace tabs has an \"Open an existing project\" card: a searchable list of registered projects with their path and home folder, so one can be opened without going back home.",
+					"fr": "La fenêtre « + Projet » des onglets du workspace a une carte « Ouvrir un projet existant » : une liste filtrable des projets enregistrés avec leur chemin et leur dossier d'accueil, pour en ouvrir un sans repasser par l'accueil."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "The error shown when a language server install or update fails can be selected and copied, and long lines wrap instead of scrolling sideways.",
+					"fr": "L'erreur affichée quand l'installation ou la mise à jour d'un serveur de langage échoue peut être sélectionnée et copiée, et les longues lignes passent à la ligne au lieu de défiler sur le côté."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "Branch names, review guides, review comments and ticket plans now run on a lean AI session: the same answer in a fraction of the tokens and time, without waiting for your MCP servers to boot. The review guide keeps the project's CLAUDE.md. A CLI too old for the new flags falls back to a full session.",
+					"fr": "Les noms de branche, guides de revue, commentaires de revue et plans de ticket tournent désormais sur une session IA allégée : la même réponse en une fraction des jetons et du temps, sans attendre le démarrage de vos serveurs MCP. Le guide de revue conserve le CLAUDE.md du projet. Une CLI trop ancienne pour les nouvelles options retombe sur une session complète."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "Pushing a branch that does not exist on the remote, or whose base branch is missing there, now asks first and can create the base branch too.",
+					"fr": "Pousser une branche qui n'existe pas sur le remote, ou dont la branche de base y est absente, demande désormais confirmation et peut aussi créer la branche de base."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "In the Git view, a file's folded or unfolded state now follows its diff: when the diff of a file changes, its card goes back to its default, unfolded for changes and folded for staged files, instead of staying folded on content you have not seen.",
+					"fr": "Dans la vue Git, l'état plié ou déplié d'un fichier suit son diff : quand le diff d'un fichier change, sa carte revient à son état par défaut, dépliée pour les changements et pliée pour les fichiers indexés, au lieu de rester pliée sur un contenu que vous n'avez pas vu."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The + Project button in the tab bar now opens a dialog to create, open or clone a project, instead of landing on the last Home section. With many projects open, the mouse wheel scrolls the tab bar and the active project's tab is brought into view.",
+					"fr": "Le bouton + Projet de la barre d'onglets ouvre désormais une fenêtre pour créer, ouvrir ou cloner un projet, au lieu d'atterrir sur la dernière section de l'accueil. Avec beaucoup de projets ouverts, la molette fait défiler la barre d'onglets et l'onglet du projet actif est ramené dans la vue."
+				}
+			},
+			{
+				"kind": "changed",
+				"text": {
+					"en": "The home screen keeps only its greeting: the random subtitle line under it is gone.",
+					"fr": "L'accueil ne garde que son message de bienvenue : la ligne de sous-titre aléatoire en dessous a disparu."
+				}
+			},
+			{
 				"kind": "fixed",
 				"text": {
-					"en": "Deleting an instance whose worktree holds files you cannot remove (created by a Docker container running as root, for instance) no longer half-empties it in silence: nothing is touched, and the dialog says which folder is in the way.",
-					"fr": "Supprimer une instance dont le worktree contient des fichiers impossibles à effacer (créés par un conteneur Docker lancé en root, par exemple) ne le vide plus à moitié en silence : rien n'est touché, et la fenêtre indique quel dossier bloque."
+					"en": "Git Changes tab: two modified files with the same name in different folders no longer swap places at regular intervals, and a file that only gained lines is no longer flagged as added.",
+					"fr": "Onglet Changements de Git : deux fichiers modifiés de même nom dans des dossiers différents ne s'échangent plus à intervalles réguliers, et un fichier qui a seulement gagné des lignes n'est plus marqué comme ajouté."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Git view: Svelte, Vue, HTML and PHP diffs now get the same syntax colours as the editor, including the CSS and script blocks.",
+					"fr": "Vue Git : les diffs Svelte, Vue, HTML et PHP ont désormais la même coloration que l'éditeur, y compris dans les blocs CSS et script."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The git graph now refreshes after cherry-picks, stash changes and remote tag pushes or deletions.",
+					"fr": "Le graphe git se rafraîchit désormais après un cherry-pick, une modification de stash et la poussée ou la suppression d'un tag distant."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Continuing a merge, rebase or cherry-pick no longer does nothing silently when git refuses (pending changes, for instance): the error is shown.",
+					"fr": "Continuer un merge, un rebase ou un cherry-pick ne fait plus rien en silence quand git refuse (changements en attente, par exemple) : l'erreur est affichée."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Review: a base branch that does not exist in the repository now asks you to pick one instead of showing an empty or failing diff.",
+					"fr": "Revue : une branche de base qui n'existe pas dans le dépôt demande désormais d'en choisir une au lieu d'afficher un diff vide ou en échec."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Deleting an instance whose worktree holds files you cannot remove (created by a Docker container running as root, for instance) no longer half-empties it in silence: nothing is touched, and the dialog says which folder is in the way. An instance whose worktree is gone, or that git no longer recognises, now says so with a way to delete it or go back to the base folder.",
+					"fr": "Supprimer une instance dont le worktree contient des fichiers impossibles à effacer (créés par un conteneur Docker lancé en root, par exemple) ne le vide plus à moitié en silence : rien n'est touché, et la fenêtre indique quel dossier bloque. Une instance dont le worktree a disparu, ou que git ne reconnaît plus, le signale désormais et propose de la supprimer ou de revenir au dossier de base."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Opening the new instance dialog no longer flashes \"This project is not a git repository\" for a second or two before the cards appear.",
+					"fr": "L'ouverture de la fenêtre de nouvelle instance n'affiche plus pendant une ou deux secondes « Ce projet n'est pas un dépôt git » avant l'apparition des cartes."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The file tree keeps its scroll position when it refreshes after a file changes, instead of jumping to the open file. A folder whose content is entirely ignored by a .gitignore no longer shows as an empty folder.",
+					"fr": "L'arbre de fichiers conserve sa position de défilement quand il se rafraîchit après la modification d'un fichier, au lieu de sauter au fichier ouvert. Un dossier dont tout le contenu est ignoré par un .gitignore n'apparaît plus comme un dossier vide."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Renaming a file or folder to change only its capitalisation no longer fails with a \"destination already exists\" error.",
+					"fr": "Renommer un fichier ou un dossier pour ne changer que sa casse n'échoue plus avec l'erreur « la destination existe déjà »."
 				}
 			},
 			{
@@ -24,15 +150,50 @@
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "A file that only gained lines is no longer flagged as added in the Git view: it is added only when it is really new.",
-					"fr": "Un fichier qui a seulement gagné des lignes n'est plus marqué comme ajouté dans la vue Git : il ne l'est que s'il est réellement nouveau."
+					"en": "Rendered Markdown files: long lines now wrap instead of adding a horizontal scrollbar, scrolling over a table or a diagram no longer gets stuck, and tables and code blocks further down render as you scroll instead of staying raw until you click in the file.",
+					"fr": "Fichiers Markdown rendus : les longues lignes passent à la ligne au lieu d'ajouter une barre de défilement horizontale, le défilement au-dessus d'un tableau ou d'un diagramme ne reste plus bloqué, et les tableaux et blocs de code plus bas se rendent au défilement au lieu de rester bruts jusqu'à un clic dans le fichier."
 				}
 			},
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "An instance whose worktree is gone, or that git no longer recognises, now says so with a way to delete it or go back to the base folder.",
-					"fr": "Une instance dont le worktree a disparu, ou que git ne reconnaît plus, le signale désormais et propose de la supprimer ou de revenir au dossier de base."
+					"en": "In a Markdown file, the git gutter no longer drops its marker on tables and code blocks: the colored bar now runs unbroken across them.",
+					"fr": "Dans un fichier Markdown, la gouttière git ne perd plus son marqueur sur les tableaux et blocs de code : la barre colorée les traverse désormais sans coupure."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Terminals and agent CLIs now load your shell profile (.zprofile, .zshrc...), so the environment variables and PATH entries you set there are available.",
+					"fr": "Les terminaux et les CLI d'agent chargent désormais votre profil shell (.zprofile, .zshrc...), si bien que les variables d'environnement et entrées de PATH que vous y définissez sont disponibles."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Installing or updating a language server now runs through the package manager that already owns it (for example the npm of your nvm node) instead of the system one, which failed with permission or engine errors. Servers written in JavaScript or Python also find their runtime when Cairn is launched from the Dock or Finder.",
+					"fr": "Installer ou mettre à jour un serveur de langage passe désormais par le gestionnaire de paquets qui le possède déjà (par exemple le npm de votre node nvm) plutôt que celui du système, qui échouait avec des erreurs de permission ou de moteur. Les serveurs écrits en JavaScript ou en Python retrouvent aussi leur runtime quand Cairn est lancé depuis le Dock ou le Finder."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "rust-analyzer is no longer shown as installed when rustup only provides an empty stand-in for it: the Install button now appears and adds the component.",
+					"fr": "rust-analyzer n'est plus affiché comme installé quand rustup n'en fournit qu'un substitut vide : le bouton Installer apparaît désormais et ajoute le composant."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "TypeScript now starts again: it is installed with TypeScript 6, and a project without its own TypeScript falls back to the global copy.",
+					"fr": "TypeScript démarre de nouveau : il est installé avec TypeScript 6, et un projet sans TypeScript propre retombe sur la copie globale."
+				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Switching the Tickets scope between assigned to me and all now shows a loading skeleton, and the plan Generate button uses the AI button style and disappears when AI is disabled.",
+					"fr": "Passer le périmètre des tickets de « assignés à moi » à « tous » affiche désormais un squelette de chargement, et le bouton Générer du plan reprend le style des boutons IA et disparaît quand l'IA est désactivée."
 				}
 			},
 			{
@@ -47,27 +208,6 @@
 				"text": {
 					"en": "On a short window or a high interface scale, the bottom of the home screen and of the settings is no longer cut off out of reach: the sidebar scrolls on its own.",
 					"fr": "Sur une fenêtre peu haute ou avec une échelle d'interface élevée, le bas de l'accueil et des réglages n'est plus coupé hors d'atteinte : la barre latérale défile d'elle-même."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The Cairn title bar takes the theme's color, the accent, the color of the project you are working in, or one of your own; its text stays readable on any color, and it steps aside in fullscreen.",
-					"fr": "La barre de titre Cairn prend la couleur du thème, celle de l'accent, celle du projet sur lequel vous travaillez, ou une couleur de votre choix ; son texte reste lisible quelle que soit la couleur, et elle s'efface en plein écran."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "On Linux and Windows, Settings > Appearance > Window chooses the title bar: the system's own, or one drawn by Cairn with the window buttons.",
-					"fr": "Sous Linux et Windows, Réglages > Apparence > Fenêtre choisit la barre de titre : celle du système, ou une barre dessinée par Cairn avec les boutons de fenêtre."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "The file tree keeps its scroll position when it refreshes after a file changes, instead of jumping to the open file.",
-					"fr": "L'arbre de fichiers conserve sa position de défilement quand il se rafraîchit après la modification d'un fichier, au lieu de sauter au fichier ouvert."
 				}
 			},
 			{
@@ -87,211 +227,8 @@
 			{
 				"kind": "fixed",
 				"text": {
-					"en": "Renaming a file or folder to change only its capitalisation no longer fails with a \"destination already exists\" error.",
-					"fr": "Renommer un fichier ou un dossier pour ne changer que sa casse n'échoue plus avec l'erreur « la destination existe déjà »."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Git view: Svelte, Vue, HTML and PHP diffs now get the same syntax colours as the editor, including the CSS and script blocks.",
-					"fr": "Vue Git : les diffs Svelte, Vue, HTML et PHP ont désormais la même coloration que l'éditeur, y compris dans les blocs CSS et script."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "Mermaid viewer: a diagram can be opened full screen over the whole editor, from the button on a rendered diagram in a Markdown file. A .mmd file now opens directly in the same viewer, with zoom, fit to view, actual size, an overview of the whole graph to jump around, copy of the source and export to SVG.",
-					"fr": "Visualiseur Mermaid : un diagramme s'ouvre en plein écran sur toute la zone de l'éditeur, depuis le bouton d'un diagramme rendu dans un fichier Markdown. Un fichier .mmd s'ouvre désormais directement dans ce même visualiseur, avec zoom, ajustement à la vue, taille réelle, un aperçu de tout le graphe pour s'y déplacer, la copie de la source et l'export en SVG."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "The editor minimap no longer draws the source lines of a rendered Mermaid diagram: each diagram shows as a single block, so the minimap matches what the editor displays.",
-					"fr": "La minimap de l'éditeur ne dessine plus les lignes de source d'un diagramme Mermaid rendu : chaque diagramme apparaît comme un seul bloc, et la minimap correspond à ce que l'éditeur affiche."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "Branch names, review guides, review comments and ticket plans now run on a lean AI session: the same answer in a fraction of the tokens and time, without waiting for your MCP servers to boot. The review guide keeps the project's CLAUDE.md. A CLI too old for the new flags falls back to a full session.",
-					"fr": "Les noms de branche, guides de review, commentaires de review et plans de tickets tournent désormais sur une session IA allégée : la même réponse avec bien moins de tokens et de temps, sans attendre le démarrage de vos serveurs MCP. Le guide de review conserve le CLAUDE.md du projet. Une CLI trop ancienne pour les nouveaux drapeaux retombe sur une session complète."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Long lines of a rendered Markdown file now wrap instead of adding a horizontal scrollbar that only appears after scrolling down.",
-					"fr": "Les longues lignes d'un fichier Markdown rendu passent à la ligne au lieu d'ajouter une barre de défilement horizontale qui n'apparaît qu'après avoir défilé vers le bas."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Scrolling over a table or a diagram in a rendered Markdown file no longer gets stuck.",
-					"fr": "Le défilement au-dessus d'un tableau ou d'un diagramme dans un fichier Markdown rendu ne reste plus bloqué."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Terminals and agent CLIs now load your shell profile (.zprofile, .zshrc...), so the environment variables and PATH entries you set there are available.",
-					"fr": "Les terminaux et les CLI d'agent chargent maintenant le profil de votre shell (.zprofile, .zshrc...) : les variables d'environnement et les entrées du PATH qui y sont définies sont disponibles."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "A folder whose content is entirely ignored by a .gitignore no longer shows in the file tree as an empty folder.",
-					"fr": "Un dossier dont tout le contenu est ignoré par un .gitignore n'apparaît plus dans l'arborescence comme un dossier vide."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Switching the Tickets scope between assigned to me and all now shows a loading skeleton, and the plan Generate button uses the AI button style and disappears when AI is disabled.",
-					"fr": "Changer la portée des tickets entre assignés à moi et tous affiche maintenant un squelette de chargement, et le bouton Générer du plan reprend le style des boutons IA et disparaît quand l'IA est désactivée."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "The home screen keeps only its greeting: the random subtitle line under it is gone.",
-					"fr": "L'accueil ne garde que sa salutation : la ligne de sous-titre aléatoire en dessous a disparu."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The \"+ Project\" dialog in the workspace tabs has an \"Open an existing project\" card: a searchable list of registered projects with their path and home folder, so one can be opened without going back home.",
-					"fr": "La fenêtre \"+ Projet\" des onglets du workspace a une carte \"Ouvrir un projet existant\" : une liste filtrable des projets enregistrés avec leur chemin et leur dossier d'accueil, pour en ouvrir un sans repasser par l'accueil."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "A long Markdown file no longer shows raw tables and code blocks further down until you click in it: they render as you scroll.",
-					"fr": "Un long fichier Markdown n'affiche plus de tableaux et de blocs de code bruts plus bas tant qu'on n'a pas cliqué dedans : ils s'affichent au défilement."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "In a Markdown file, the git gutter no longer drops its marker on tables and code blocks: the colored bar now runs unbroken across them.",
-					"fr": "Dans un fichier Markdown, la gouttière git ne perd plus son marqueur sur les tableaux et les blocs de code : la barre colorée les traverse sans coupure."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Installing or updating a language server now runs through the package manager that already owns it (for example the npm of your nvm node) instead of the system one, which failed with permission or engine errors.",
-					"fr": "Installer ou mettre à jour un serveur de langage passe maintenant par le gestionnaire de paquets qui le possède déjà (par exemple le npm de votre node nvm) plutôt que par celui du système, qui échouait avec des erreurs de permission ou de version de moteur."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "rust-analyzer is no longer shown as installed when rustup only provides an empty stand-in for it: the Install button now appears and adds the component.",
-					"fr": "rust-analyzer n'apparaît plus comme installé quand rustup n'en fournit qu'une coquille vide : le bouton Installer s'affiche et ajoute le composant."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "TypeScript now starts again: it is installed with TypeScript 6, and a project without its own TypeScript falls back to the global copy.",
-					"fr": "TypeScript redémarre : il s'installe avec TypeScript 6, et un projet sans TypeScript propre utilise la copie globale."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Language servers written in JavaScript or Python now find their runtime when Cairn is launched from the Dock or Finder.",
-					"fr": "Les serveurs de langage écrits en JavaScript ou en Python retrouvent leur environnement d'exécution quand Cairn est lancé depuis le Dock ou le Finder."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The error shown when a language server install or update fails can be selected and copied, and long lines wrap instead of scrolling sideways.",
-					"fr": "L'erreur affichée quand l'installation ou la mise à jour d'un serveur de langage échoue peut être sélectionnée et copiée, et les longues lignes passent à la ligne au lieu de défiler horizontalement."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
 					"en": "On Linux, stopping an agent, a test run or a one-shot AI call no longer risks sending the stop signal to Cairn itself.",
 					"fr": "Sous Linux, arrêter un agent, une exécution de tests ou un appel IA ponctuel ne risque plus d'envoyer le signal d'arrêt à Cairn lui-même."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Opening the new instance dialog no longer flashes \"This project is not a git repository\" for a second or two before the cards appear.",
-					"fr": "L'ouverture de la fenêtre de création d'instance n'affiche plus brièvement « Ce projet n'est pas un dépôt git » avant l'apparition des cartes."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "With many projects open, the mouse wheel now scrolls the project tab bar, and the active project's tab is brought into view.",
-					"fr": "Avec beaucoup de projets ouverts, la molette de la souris fait maintenant défiler la barre d'onglets des projets, et l'onglet du projet actif est ramené dans la vue."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "The + Project button in the tab bar now opens a dialog to create, open or clone a project, instead of landing on the last Home section.",
-					"fr": "Le bouton + Projet de la barre d'onglets ouvre maintenant une fenêtre pour créer, ouvrir ou cloner un projet, au lieu d'atterrir sur la dernière section de l'accueil."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "In the Git Changes tab, two modified files with the same name in different folders no longer swap places at regular intervals.",
-					"fr": "Dans l'onglet Changes de Git, deux fichiers modifiés de même nom dans des dossiers différents n'échangent plus leur position à intervalles réguliers."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Review: a base branch that does not exist in the repository now asks you to pick one instead of showing an empty or failing diff.",
-					"fr": "Review : une branche de base qui n'existe pas dans le dépôt demande d'en choisir une au lieu d'afficher un diff vide ou en erreur."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "Continuing a merge, rebase or cherry-pick no longer does nothing silently when git refuses (pending changes, for instance): the error is shown.",
-					"fr": "Continuer un merge, un rebase ou un cherry-pick ne reste plus muet quand git refuse (changements en attente, par exemple) : l'erreur est affichée."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "Pushing a branch that does not exist on the remote, or whose base branch is missing there, now asks first and can create the base branch too.",
-					"fr": "Pousser une branche absente du remote, ou dont la branche de base y manque, demande d'abord confirmation et peut créer aussi la branche de base."
-				}
-			},
-			{
-				"kind": "fixed",
-				"text": {
-					"en": "The git graph now refreshes after cherry-picks, stash changes and remote tag pushes or deletions.",
-					"fr": "Le graphe git se rafraîchit désormais après un cherry-pick, une modification de stash et le push ou la suppression d'un tag distant."
-				}
-			},
-			{
-				"kind": "added",
-				"text": {
-					"en": "The diffs of the Git view (changes, staged files, commits and stashes) show expanders between and around their hunks, as on GitHub: each click on a bar reveals 20 more lines above or below, a short gap opens in one click, and what you revealed is still there when you come back to the diff.",
-					"fr": "Les diffs de la vue Git (modifications, fichiers indexés, commits et stashs) affichent des boutons de dépliage entre et autour de leurs blocs, comme sur GitHub : chaque clic sur une barre dévoile 20 lignes de plus au-dessus ou en dessous, un petit écart s'ouvre en un seul clic, et ce que vous avez dévoilé est toujours là quand vous revenez sur le diff."
-				}
-			},
-			{
-				"kind": "changed",
-				"text": {
-					"en": "In the Git view, a file's folded or unfolded state now follows its diff: when the diff of a file changes, its card goes back to its default, unfolded for changes and folded for staged files, instead of staying folded on content you have not seen.",
-					"fr": "Dans la vue Git, l'état replié ou déplié d'un fichier suit désormais son diff : quand le diff d'un fichier change, sa carte revient à son état par défaut, dépliée pour les modifications et repliée pour les fichiers indexés, au lieu de rester repliée sur un contenu que vous n'avez pas vu."
 				}
 			}
 		]
