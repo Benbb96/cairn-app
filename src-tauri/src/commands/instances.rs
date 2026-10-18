@@ -200,6 +200,73 @@ fn is_locked(wt: &git2::Worktree) -> bool {
     matches!(wt.is_locked(), Ok(git2::WorktreeLockStatus::Locked(_)))
 }
 
+/// The first directory under `root` whose entries this user cannot unlink -
+/// typically one a Docker container created as root - or `root`'s parent when
+/// it cannot lose `root`. `remove_dir_all` would stop there with half the tree
+/// already gone.
+#[cfg(unix)]
+fn undeletable_dir(root: &Path) -> Option<PathBuf> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let cannot_write = |dir: &Path| {
+        CString::new(dir.as_os_str().as_bytes())
+            .map_or(true, |c_dir| unsafe { libc::access(c_dir.as_ptr(), libc::W_OK | libc::X_OK) } != 0)
+    };
+    if let Some(parent) = root.parent().filter(|p| p.exists() && cannot_write(p)) {
+        return Some(parent.to_path_buf());
+    }
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let Ok(c_dir) = CString::new(dir.as_os_str().as_bytes()) else { return Some(dir) };
+        let Ok(entries) = fs::read_dir(&dir) else { return Some(dir) };
+        let entries: Vec<_> = entries.flatten().collect();
+        if !entries.is_empty()
+            && unsafe { libc::access(c_dir.as_ptr(), libc::W_OK | libc::X_OK) } != 0
+        {
+            return Some(dir);
+        }
+        pending.extend(
+            entries
+                .iter()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.path()),
+        );
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn undeletable_dir(_root: &Path) -> Option<PathBuf> {
+    None
+}
+
+/// Whether an instance's worktree can still be worked in.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorktreeHealth {
+    Ok,
+    /// The directory is gone.
+    Missing,
+    /// The directory is there but git no longer knows it, usually because its
+    /// registration under `.git/worktrees` was removed.
+    Detached,
+}
+
+fn worktree_health(path: &Path) -> WorktreeHealth {
+    if !path.is_dir() {
+        WorktreeHealth::Missing
+    } else if Repository::open(path).is_err() {
+        WorktreeHealth::Detached
+    } else {
+        WorktreeHealth::Ok
+    }
+}
+
+#[tauri::command]
+pub async fn instance_worktree_health(path: String) -> WorktreeHealth {
+    worktree_health(Path::new(&shellexpand::tilde(&path).into_owned()))
+}
+
 /// Whether deleting an instance takes its worktree with it.
 ///
 /// Cairn created the worktree of an ordinary instance, so clearing it away is
@@ -670,10 +737,72 @@ pub fn update_instance_base_branch(id: String, project_id: String, base_branch: 
     Ok(updated.with_project(project_id))
 }
 
+/// What deleting an instance acts on, resolved once for the check and the deletion.
+struct DeletionTarget {
+    instances: Vec<StoredInstance>,
+    instance: StoredInstance,
+    remove: bool,
+    wt_path: PathBuf,
+    repo: Repository,
+}
+
+fn deletion_target(id: &str, project_id: &str, remove_worktree: Option<bool>) -> Result<DeletionTarget, String> {
+    let instances = read_instances(project_id)?;
+    let instance = instances.iter().find(|i| i.id == id)
+        .ok_or_else(|| format!("Instance '{}' not found", id))?
+        .clone();
+    let remove = should_remove_worktree(remove_worktree, instance.external);
+    let wt_path = PathBuf::from(shellexpand::tilde(&instance.worktree_path).into_owned());
+    let expanded_project = read_projects()?.iter()
+        .find(|p| p.id == project_id)
+        .map(|p| shellexpand::tilde(&p.path).into_owned())
+        .ok_or_else(|| "Project not found".to_string())?;
+    let repo = Repository::open(&expanded_project).map_err(|e| e.to_string())?;
+    Ok(DeletionTarget { instances, instance, remove, wt_path, repo })
+}
+
+/// Why removing the worktree at `wt_path` must be refused before anything is touched.
+fn deletion_refusal(registered: Option<&git2::Worktree>, wt_path: &Path) -> Option<String> {
+    if registered.is_some_and(is_locked) {
+        return Some(format!(
+            "The worktree at {} is locked. Unlock it with `git worktree unlock` or keep it on disk.",
+            wt_path.display()
+        ));
+    }
+    let dir = wt_path.exists().then(|| undeletable_dir(wt_path)).flatten()?;
+    Some(format!(
+        "{} cannot be deleted: permission denied. It was probably created by a Docker container running as root; remove it with `sudo rm -rf` or keep the worktree on disk.",
+        dir.display()
+    ))
+}
+
+/// The refusal `delete_instance` would answer with, without deleting anything:
+/// the frontend asks first, so a refused deletion leaves the instance's
+/// terminals, agent sessions and watcher running.
+/// Async: walking a worktree with its dependency folders takes a while.
+#[tauri::command]
+pub async fn check_instance_deletion(
+    id: String,
+    project_id: String,
+    remove_worktree: Option<bool>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = deletion_target(&id, &project_id, remove_worktree)?;
+        if !target.remove {
+            return Ok(());
+        }
+        let registered = worktree_at(&target.repo, &target.wt_path);
+        deletion_refusal(registered.as_ref(), &target.wt_path).map_or(Ok(()), Err)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Drops the instance and its editor state and, when `remove_worktree` asks
 /// for it (by default for a worktree Cairn made, not for an adopted one),
 /// removes the worktree directory, prunes its git entry and deletes the
-/// branch. A locked worktree is refused before anything is touched; the rest of
+/// branch. A locked worktree, or one holding a directory this user cannot
+/// empty, is refused before anything is touched; the rest of
 /// the git cleanup is best effort, since a missing worktree or branch must not
 /// block the deletion.
 /// Async: removing the worktree directory blocks long enough to freeze the UI thread.
@@ -685,34 +814,15 @@ pub async fn delete_instance(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = INSTANCES_WRITE_LOCK.lock().map_err(|e| e.to_string())?;
-        let mut instances = read_instances(&project_id)?;
-        let instance = instances.iter().find(|i| i.id == id)
-            .ok_or_else(|| format!("Instance '{}' not found", id))?
-            .clone();
-
-        let remove = should_remove_worktree(remove_worktree, instance.external);
-
-        let wt_path = PathBuf::from(shellexpand::tilde(&instance.worktree_path).into_owned());
-
-        let projects = read_projects()?;
-        let expanded_project = projects.iter()
-            .find(|p| p.id == project_id)
-            .map(|p| shellexpand::tilde(&p.path).into_owned())
-            .ok_or_else(|| "Project not found".to_string())?;
-
-        let repo = Repository::open(&expanded_project).map_err(|e| e.to_string())?;
+        let DeletionTarget { mut instances, instance, remove, wt_path, repo } =
+            deletion_target(&id, &project_id, remove_worktree)?;
 
         if remove {
             // Resolved before the directory goes: a path that no longer exists
             // cannot be matched against the worktrees git has registered.
             let registered = worktree_at(&repo, &wt_path);
-            if let Some(wt) = &registered
-                && is_locked(wt)
-            {
-                return Err(format!(
-                    "The worktree at {} is locked. Unlock it with `git worktree unlock` or keep it on disk.",
-                    wt_path.display()
-                ));
+            if let Some(refusal) = deletion_refusal(registered.as_ref(), &wt_path) {
+                return Err(refusal);
             }
             if wt_path.exists() {
                 fs::remove_dir_all(&wt_path).map_err(|e| e.to_string())?;
@@ -1032,6 +1142,94 @@ mod tests {
         fs::remove_dir_all(&path).unwrap();
         let repo = Repository::open(scratch.repo()).unwrap();
         assert!(worktree_conflict(&repo, "feat/gone", "feat-gone").is_none());
+    }
+
+    #[test]
+    fn a_worktree_git_no_longer_knows_is_detached() {
+        let scratch = Scratch::new("health");
+        let path = scratch.worktree("wt", "feat/health");
+        assert_eq!(worktree_health(&path), WorktreeHealth::Ok);
+
+        fs::remove_dir_all(scratch.repo().join(".git/worktrees/wt")).unwrap();
+        assert_eq!(worktree_health(&path), WorktreeHealth::Detached);
+
+        fs::remove_dir_all(&path).unwrap();
+        assert_eq!(worktree_health(&path), WorktreeHealth::Missing);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_worktree_that_cannot_be_emptied_is_refused_with_nothing_deleted() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = Scratch::new("refusal");
+        let path = scratch.worktree("wt", "feat/refusal");
+        let repo = Repository::open(scratch.repo()).unwrap();
+        assert_eq!(deletion_refusal(worktree_at(&repo, &path).as_ref(), &path), None);
+
+        let sealed = path.join(".docker");
+        fs::create_dir_all(sealed.join(".ssh")).unwrap();
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o555)).unwrap();
+        let refusal = deletion_refusal(worktree_at(&repo, &path).as_ref(), &path);
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let refusal = refusal.expect("a directory that cannot be emptied should refuse the deletion");
+        assert!(refusal.contains(".docker"), "{refusal}");
+        assert!(path.join("a.txt").exists(), "the check deleted a file");
+        assert!(worktree_at(&repo, &path).is_some(), "the check dropped the registration");
+    }
+
+    #[test]
+    fn a_locked_worktree_refuses_the_deletion() {
+        let scratch = Scratch::new("refusal-locked");
+        let path = scratch.worktree("wt", "feat/refusal-locked");
+        scratch.git(&scratch.repo(), &["worktree", "lock", path.to_str().unwrap()]);
+        let repo = Repository::open(scratch.repo()).unwrap();
+        let refusal = deletion_refusal(worktree_at(&repo, &path).as_ref(), &path);
+        assert!(refusal.is_some_and(|r| r.contains("locked")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_that_cannot_be_emptied_is_found_before_anything_is_deleted() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = Scratch::new("undeletable");
+        let path = scratch.worktree("wt", "feat/undeletable");
+        assert_eq!(undeletable_dir(&path), None);
+
+        let sealed = path.join("vendor/pkg");
+        fs::create_dir_all(&sealed).unwrap();
+        fs::write(sealed.join("f"), b"x").unwrap();
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o555)).unwrap();
+        let found = undeletable_dir(&path);
+        fs::set_permissions(&sealed, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(found, Some(sealed));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_parent_that_cannot_lose_the_worktree_is_found_before_anything_is_deleted() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = Scratch::new("sealed-parent");
+        let path = scratch.worktree("wt", "feat/sealed-parent");
+        let parent = path.parent().unwrap().to_path_buf();
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+        let found = undeletable_dir(&path);
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(found, Some(parent));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_empty_read_only_directory_does_not_block_a_deletion() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = Scratch::new("empty-read-only");
+        let path = scratch.worktree("wt", "feat/empty-read-only");
+        let mount_point = path.join("storage/logs");
+        fs::create_dir_all(&mount_point).unwrap();
+        fs::set_permissions(&mount_point, fs::Permissions::from_mode(0o555)).unwrap();
+        let found = undeletable_dir(&path);
+        fs::set_permissions(&mount_point, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(found, None);
     }
 
     #[test]

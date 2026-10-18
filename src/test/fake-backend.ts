@@ -324,6 +324,8 @@ export function createFakeBackend(seed: Partial<FakeWorld> = {}): FakeBackend {
 			world.branches[instance.worktreePath] = branch;
 			return instance;
 		},
+		check_instance_deletion: () => undefined,
+		instance_worktree_health: () => "ok",
 		delete_instance: (a) => {
 			world.instances = world.instances.filter((i) => i.id !== a.instanceId);
 		},

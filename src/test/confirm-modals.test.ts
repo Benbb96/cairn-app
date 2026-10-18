@@ -449,4 +449,21 @@ describe("DeleteInstanceModal: what becomes of the worktree", () => {
 		mount({ external: true, worktreePath: "/home/someone/elsewhere" });
 		expect(body().textContent).toContain("/home/someone/elsewhere");
 	});
+
+	/** Closing mid-deletion would drop the failure it is about to report. */
+	it("cannot be closed while the deletion runs", async () => {
+		const onClose = vi.fn();
+		render(DeleteInstanceModal, {
+			props: { instance: instance("my-instance", "p1"), busy: true },
+			events: { close: () => onClose() },
+		});
+		await userEvent.keyboard("{Escape}");
+		await userEvent.click(
+			document.querySelector(".icon-btn.close") as HTMLElement,
+		);
+		await userEvent.click(
+			document.querySelector(".modal-backdrop") as HTMLElement,
+		);
+		expect(onClose).not.toHaveBeenCalled();
+	});
 });

@@ -26,6 +26,9 @@ import { removeInstanceTerminals } from "./terminal";
 
 const listInstances = vi.hoisted(() => vi.fn());
 const deleteInstance = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const checkInstanceDeletion = vi.hoisted(() =>
+	vi.fn().mockResolvedValue(undefined),
+);
 const adoptWorktree = vi.hoisted(() => vi.fn());
 const duplicateInstanceService = vi.hoisted(() => vi.fn());
 const updateInstanceStatus = vi.hoisted(() => vi.fn());
@@ -36,6 +39,7 @@ vi.mock("$lib/services/instance-service", () => ({
 	listInstances,
 	createInstance: vi.fn(),
 	deleteInstance,
+	checkInstanceDeletion,
 	adoptWorktree,
 	duplicateInstance: duplicateInstanceService,
 	updateInstanceStatus,
@@ -341,6 +345,21 @@ describe("removeInstance cleanup", () => {
 		await removeInstance("a1", "a");
 
 		expect(get(instances).map((i) => i.id)).toEqual(["a2"]);
+	});
+
+	/** A refused deletion used to leave the instance listed with its shells and agents dead. */
+	it("leaves a refused instance running and listed", async () => {
+		checkInstanceDeletion.mockRejectedValueOnce("vendor cannot be deleted");
+		deleteInstance.mockClear();
+
+		await expect(removeInstance("a1", "a", true)).rejects.toBe(
+			"vendor cannot be deleted",
+		);
+
+		expect(removeInstanceTerminals).not.toHaveBeenCalled();
+		expect(removeInstanceConversations).not.toHaveBeenCalled();
+		expect(deleteInstance).not.toHaveBeenCalled();
+		expect(get(instances).map((i) => i.id)).toEqual(["a1", "a2"]);
 	});
 });
 
