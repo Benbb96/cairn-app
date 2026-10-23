@@ -319,6 +319,9 @@ an application (any process with a window) as soon as its sender leaves the bus.
 holds the connection with notify-rust until the notification is clicked or closed; a click focuses
 the window and emits `agent-notification-opened`, which lands on that conversation. The plugin is
 still used for the permission checks, and for sending on macOS and Windows.
+While the window is focused, a conversation that is not the one on screen gets a toast instead (`agentToasts` setting): `stores/toasts.ts` holds the generic toasts, keyed by id,
+and `layout/Toaster.svelte`, mounted once in `+page.svelte`, shows three and folds the rest into a
+line that opens Activity. A waiting toast stays; a done one goes after `DONE_TOAST_MS`.
 The status is in memory only - a restart relaunches no CLI. It feeds the home Activity section, the
 project card badge and the dots of the conversation list. A CLI without hooks only shows "running"
 and "exited".
