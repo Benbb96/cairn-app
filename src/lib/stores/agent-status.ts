@@ -29,6 +29,7 @@ import {
 } from "$lib/stores/instance";
 import { projects } from "$lib/stores/project";
 import { settings } from "$lib/stores/settings";
+import { dismissToast, pushToast } from "$lib/stores/toasts";
 import {
 	activeScreen,
 	activeStep,
@@ -136,7 +137,9 @@ export function applyAgentEvent(id: string, event: AgentEvent): void {
 	}
 	if (next === prev) return;
 	setStatus(id, next);
-	if (needsAttention(next) && !get(windowFocused)) announce(id, next);
+	if (!needsAttention(next)) dismissToast(toastId(id));
+	else if (!get(windowFocused)) announce(id, next);
+	else noticeInApp(id, next);
 }
 
 /** One running conversation, with what the activity list needs to name it. */
@@ -225,11 +228,15 @@ export const attentionCount = derived(
 	(list) => list.filter((c) => needsAttention(c.status)).length,
 );
 
+function titleOf(live: LiveConversation): string {
+	return live.title || (t("agent.history.untitled") as string);
+}
+
 function announce(id: string, status: AgentStatus): void {
 	if (!get(settings).agentNotifications) return;
 	const live = get(liveConversations).find((c) => c.id === id);
 	if (!live) return;
-	const title = live.title || (t("agent.history.untitled") as string);
+	const title = titleOf(live);
 	const what = t(
 		status === "waiting"
 			? "agent.status.notifyWaiting"
@@ -249,7 +256,35 @@ export const openRequest = writable<{
 	conversationId: string;
 } | null>(null);
 
+/** A finished turn stays in Activity; only a blocked agent keeps its toast. */
+export const DONE_TOAST_MS = 8_000;
+
+function toastId(conversationId: string): string {
+	return `agent:${conversationId}`;
+}
+
+function noticeInApp(id: string, status: "waiting" | "done"): void {
+	if (!get(settings).agentToasts) return;
+	const live = get(liveConversations).find((c) => c.id === id);
+	if (!live) return;
+	const request = {
+		projectId: live.projectId,
+		instanceId: live.instanceId,
+		conversationId: id,
+	};
+	pushToast({
+		id: toastId(id),
+		kicker: t(`agent.status.${status}`) as string,
+		title: titleOf(live),
+		body: `${live.projectName} · ${live.instanceLabel}`,
+		tone: status === "waiting" ? "warning" : "success",
+		timeoutMs: status === "done" ? DONE_TOAST_MS : undefined,
+		onOpen: () => openRequest.set(request),
+	});
+}
+
 function forget(id: string): void {
+	dismissToast(toastId(id));
 	disarmQuiet(id);
 	lastOutput.delete(id);
 	setStatus(id, undefined);
