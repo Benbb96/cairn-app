@@ -90,6 +90,13 @@
 					"en": "Git operations, in Cairn and in the agents running in its terminals, no longer fail so often on \"index.lock: File exists\": the Git view no longer locks the index while it refreshes, and a write waits briefly for a lock another process is about to release.",
 					"fr": "Les opérations Git, dans Cairn comme dans les agents lancés dans ses terminaux, n'échouent plus aussi souvent sur « index.lock: File exists » : la vue Git ne verrouille plus l'index en se rafraîchissant, et une écriture patiente un instant quand un autre processus s'apprête à libérer le verrou."
 				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Cairn keeps a log of its own in the logs folder of its data directory (cairn.log, rotated at 1 MB with two older files kept): each start and exit, crashes of the app with their trace, and the signal that ended it along with the process that sent it, so a window that vanishes leaves its reason behind.",
+					"fr": "Cairn tient son propre journal dans le dossier logs de son répertoire de données (cairn.log, renouvelé à 1 Mo en gardant les deux précédents) : chaque démarrage et chaque fermeture, les plantages de l'application avec leur trace, et le signal qui l'a arrêtée avec le processus qui l'a envoyé, pour qu'une fenêtre qui disparaît laisse sa raison derrière elle."
+				}
 			}
 		]
 	},
