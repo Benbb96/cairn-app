@@ -90,6 +90,13 @@
 					"en": "Git operations, in Cairn and in the agents running in its terminals, no longer fail so often on \"index.lock: File exists\": the Git view no longer locks the index while it refreshes, and a write waits briefly for a lock another process is about to release.",
 					"fr": "Les opérations Git, dans Cairn comme dans les agents lancés dans ses terminaux, n'échouent plus aussi souvent sur « index.lock: File exists » : la vue Git ne verrouille plus l'index en se rafraîchissant, et une écriture patiente un instant quand un autre processus s'apprête à libérer le verrou."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Ctrl+clicking a link in a Claude Code session opened the page twice in the browser.",
+					"fr": "Un Ctrl+clic sur un lien dans une session Claude Code ouvrait la page deux fois dans le navigateur."
+				}
 			}
 		]
 	},
