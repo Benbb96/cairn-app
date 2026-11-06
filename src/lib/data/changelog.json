@@ -125,6 +125,13 @@
 					"en": "A middle click on a project tab closes it.",
 					"fr": "Un clic molette sur un onglet de projet le ferme."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "Ctrl+clicking a link in a Claude Code session opened the page twice in the browser.",
+					"fr": "Un Ctrl+clic sur un lien dans une session Claude Code ouvrait la page deux fois dans le navigateur."
+				}
 			}
 		]
 	},
