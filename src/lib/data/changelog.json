@@ -64,6 +64,13 @@
 				}
 			},
 			{
+				"kind": "added",
+				"text": {
+					"en": "The manual jobs of the open pipeline are listed as buttons above its stages, and running one, from there or from its stage, asks for confirmation first.",
+					"fr": "Les jobs manuels du pipeline ouvert sont listés sous forme de boutons au-dessus de ses étapes, et en lancer un, depuis là ou depuis son étape, demande d'abord une confirmation."
+				}
+			},
+			{
 				"kind": "changed",
 				"text": {
 					"en": "Mermaid diagrams, in Markdown files and in .mmd files, are rendered with Mermaid 12: its default layout engine changes, so some diagrams are laid out differently than before.",
