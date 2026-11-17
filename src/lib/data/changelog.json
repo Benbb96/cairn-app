@@ -300,6 +300,27 @@
 					"en": "Adopting a worktree prefills the base branch it was created from, as its reflog records it, and no longer suggests a branch that already merged it, a branch stacked on it, or its own copy on another remote.",
 					"fr": "Adopter un worktree préremplit la branche de base à partir de laquelle il a été créé, telle que son reflog l'enregistre, et ne propose plus une branche qui l'a déjà fusionné, une branche empilée dessus, ni sa propre copie sur un autre remote."
 				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A container's logs, followed live, and a shell inside a running container open in a drawer along the bottom of the Containers section, one tab each, resized by dragging its top edge. The shell is bash when the image has it, sh otherwise. Leaving the section closes them.",
+					"fr": "Les logs d'un container, suivis en direct, et un shell dans un container en cours s'ouvrent dans un tiroir en bas de la section Containers, un onglet chacun, redimensionnable en tirant son bord supérieur. Le shell est bash quand l'image l'a, sh sinon. Quitter la section les ferme."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Containers can be started, stopped, restarted and removed from the Containers section, and a whole Compose project started, stopped, restarted or taken down, even when its compose file is gone. Removing and taking down ask first, and a refusal from Docker is shown as Docker wrote it.",
+					"fr": "Les containers se démarrent, s'arrêtent, se redémarrent et se suppriment depuis la section Containers, et un projet Compose entier se démarre, s'arrête, se redémarre ou se démonte (down), même quand son fichier compose a disparu. La suppression et le down demandent confirmation, et un refus de Docker s'affiche tel que Docker l'a écrit."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "A Containers section on the home screen lists the machine's Docker containers, grouped by Compose project with the folder each was started from: state, health, exit code, published ports that open in the browser, and since when. The list filters on names, images and folders, sorts by name or by uptime in either direction, and shows stopped containers on demand. A missing, stopped or forbidden Docker is explained.",
+					"fr": "Une section Containers sur l'écran d'accueil liste les containers Docker de la machine, regroupés par projet Compose avec le dossier d'où chacun a été lancé : état, santé, code de sortie, ports publiés qui s'ouvrent dans le navigateur, et depuis quand. La liste se filtre par nom, image ou dossier, se trie par nom ou par ancienneté dans un sens ou dans l'autre, et montre les containers arrêtés à la demande. Un Docker absent, arrêté ou inaccessible est expliqué."
+				}
 			}
 		]
 	},
