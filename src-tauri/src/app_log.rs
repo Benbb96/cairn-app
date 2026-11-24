@@ -3,11 +3,13 @@
 
 //! The app's own log, `logs/cairn.log` in the data directory, rotated by size.
 //!
-//! It records each start, each clean exit, panics and the signals that end the
-//! process, with the pid that sent them. A window that vanished then leaves its
-//! cause behind: a signal line names the killer, a panic line the bug, and a
-//! start with neither an exit nor a signal before it points at SIGKILL or the
-//! kernel OOM killer, which nothing in-process can observe.
+//! It records each start, each clean exit, panics, the signals that end the
+//! process with the pid that sent them, and the native crashes (SIGSEGV, SIGBUS,
+//! SIGILL, SIGFPE) with the faulting address. A window that vanished then leaves
+//! its cause behind: a signal line names the killer or the crash, a panic line
+//! the bug, and a start with neither an exit nor a signal before it points at
+//! SIGKILL or the kernel OOM killer, which nothing in-process can observe; the
+//! `usage` lines of `usage_log` before it show whether memory was running out.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -134,13 +136,19 @@ mod signals {
     use std::sync::OnceLock;
     use std::sync::atomic::{AtomicI32, Ordering};
 
-    const WATCHED: [(libc::c_int, &[u8]); 5] = [
+    const WATCHED: [(libc::c_int, &[u8]); 9] = [
         (libc::SIGTERM, b"SIGTERM"),
         (libc::SIGINT, b"SIGINT"),
         (libc::SIGHUP, b"SIGHUP"),
         (libc::SIGQUIT, b"SIGQUIT"),
         (libc::SIGABRT, b"SIGABRT"),
+        (libc::SIGSEGV, b"SIGSEGV"),
+        (libc::SIGBUS, b"SIGBUS"),
+        (libc::SIGILL, b"SIGILL"),
+        (libc::SIGFPE, b"SIGFPE"),
     ];
+
+    const FAULTS: [libc::c_int; 4] = [libc::SIGSEGV, libc::SIGBUS, libc::SIGILL, libc::SIGFPE];
 
     static FD: AtomicI32 = AtomicI32::new(-1);
     static PREVIOUS: OnceLock<[libc::sigaction; WATCHED.len()]> = OnceLock::new();
@@ -163,6 +171,10 @@ mod signals {
                 let mut action: libc::sigaction = std::mem::zeroed();
                 action.sa_sigaction = handle as *const () as usize;
                 action.sa_flags = libc::SA_SIGINFO;
+                if FAULTS.contains(&signal) {
+                    // A stack overflow can only be handled on the alternate stack Rust sets up.
+                    action.sa_flags |= libc::SA_ONSTACK;
+                }
                 libc::sigemptyset(&mut action.sa_mask);
                 libc::sigaction(signal, &action, slot);
             }
@@ -179,12 +191,22 @@ mod signals {
             None => line.push_number(signal as u64),
         }
         // SAFETY: the kernel hands an SA_SIGINFO handler a valid siginfo.
-        let sender = if info.is_null() { 0 } else { unsafe { (*info).si_pid() } };
-        if sender > 0 {
-            line.push(b" from pid ");
-            line.push_number(sender as u64);
-            #[cfg(target_os = "linux")]
-            push_command(&mut line, sender);
+        let code = if info.is_null() { 0 } else { unsafe { (*info).si_code } };
+        // A positive code is a fault raised by the kernel, whose siginfo holds an address, not a sender.
+        let fault = code > 0 && FAULTS.contains(&signal);
+        if fault {
+            line.push(b" at address 0x");
+            // SAFETY: a kernel-raised fault fills si_addr.
+            line.push_hex(unsafe { (*info).si_addr() } as usize as u64);
+        } else {
+            // SAFETY: as above, the siginfo is valid.
+            let sender = if info.is_null() { 0 } else { unsafe { (*info).si_pid() } };
+            if sender > 0 {
+                line.push(b" from pid ");
+                line.push_number(sender as u64);
+                #[cfg(target_os = "linux")]
+                push_command(&mut line, sender);
+            }
         }
         line.push(b" at unix time ");
         line.push_number(now());
@@ -205,8 +227,12 @@ mod signals {
                     libc::signal(signal, libc::SIG_DFL);
                 }
             }
-            // Blocked until this handler returns, then delivered to the previous one.
-            libc::raise(signal);
+            // A fault re-executes its instruction on return and reaches the previous
+            // handler with the real siginfo, which Rust's stack overflow report needs.
+            if !fault {
+                // Blocked until this handler returns, then delivered to the previous one.
+                libc::raise(signal);
+            }
         }
     }
 
@@ -277,6 +303,20 @@ mod signals {
             }
             self.push(&digits[start..]);
         }
+
+        pub(super) fn push_hex(&mut self, mut value: u64) {
+            let mut digits = [0u8; 16];
+            let mut start = digits.len();
+            loop {
+                start -= 1;
+                digits[start] = b"0123456789abcdef"[(value & 0xf) as usize];
+                value >>= 4;
+                if value == 0 {
+                    break;
+                }
+            }
+            self.push(&digits[start..]);
+        }
     }
 }
 
@@ -338,6 +378,11 @@ mod tests {
         line.push(b" ");
         line.push_number(1_793_027_125);
         assert_eq!(&line.bytes[..line.len], b"pid 0 1793027125");
+        line.push(b" 0x");
+        line.push_hex(0);
+        line.push(b" 0x");
+        line.push_hex(0x7f3a_00c0_ffee);
+        assert_eq!(&line.bytes[..line.len], b"pid 0 1793027125 0x0 0x7f3a00c0ffee");
         line.push(&[b'y'; 400]);
         assert_eq!(line.len, line.bytes.len());
     }

@@ -10,6 +10,8 @@
 pub mod app_log;
 pub mod child_env;
 pub mod storage;
+#[cfg(target_os = "linux")]
+pub mod usage_log;
 pub mod commands;
 
 use commands::{LspState, OneshotState, TerminalState, TestState};
@@ -135,6 +137,8 @@ pub fn run() {
             // hands to the running app has already exited here, so it never
             // writes a start line with no exit after it.
             app_log::init();
+            #[cfg(target_os = "linux")]
+            usage_log::start();
             commands::lsp::spawn_idle_reaper(app.handle().clone());
             if let Err(e) = commands::agent_signals::start(app.handle()) {
                 eprintln!("agent signals unavailable: {e}");

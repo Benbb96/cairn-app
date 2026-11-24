@@ -1,5 +1,22 @@
 [
 	{
+		"version": "1.2.1",
+		"date": "",
+		"summary": {
+			"en": "Cairn's log also records native crashes and, on Linux, the memory and CPU it uses.",
+			"fr": "Le journal de Cairn consigne aussi les plantages natifs et, sous Linux, la mémoire et le CPU qu'il utilise."
+		},
+		"changes": [
+			{
+				"kind": "added",
+				"text": {
+					"en": "Cairn's own log (cairn.log, in the logs folder of its data directory) also records native crashes (SIGSEGV, SIGBUS, SIGILL, SIGFPE) with the faulting address and, on Linux, every five minutes the memory and CPU used by Cairn and the processes it started, the heaviest by name, along with the memory the system has left, so a window that vanishes under memory pressure leaves its trend behind.",
+					"fr": "Le journal de Cairn (cairn.log, dans le dossier logs de son répertoire de données) consigne aussi les plantages natifs (SIGSEGV, SIGBUS, SIGILL, SIGFPE) avec l'adresse fautive et, sous Linux, toutes les cinq minutes, la mémoire et le CPU utilisés par Cairn et les processus qu'il a lancés, les plus lourds par leur nom, ainsi que la mémoire qu'il reste au système, pour qu'une fenêtre qui disparaît faute de mémoire laisse sa courbe derrière elle."
+				}
+			}
+		]
+	},
+	{
 		"version": "1.2.0",
 		"date": "2026-11-23",
 		"summary": {
