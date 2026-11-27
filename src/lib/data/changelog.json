@@ -13,6 +13,13 @@
 					"en": "A Ctrl+clicked link in Claude Code opens in the browser again, instead of a confirmation dialog that led nowhere.",
 					"fr": "Un lien cliqué avec Ctrl dans Claude Code s'ouvre de nouveau dans le navigateur, au lieu d'une demande de confirmation qui ne menait nulle part."
 				}
+			},
+			{
+				"kind": "fixed",
+				"text": {
+					"en": "The branch suggested for a ticket gets a prefix that says what the work is. A Jira sub-task takes the type of the story or bug it hangs under instead of being prefixed `sub-task/`, issue types named in French are read like their English counterparts, and the assisted naming now chooses the prefix as well as the slug, from the ticket itself rather than from its type.",
+					"fr": "La branche suggérée pour un ticket reçoit un préfixe qui dit la nature du travail. Une sous-tâche Jira prend le type du récit ou du bogue auquel elle est rattachée au lieu d'être préfixée `sous-tache/`, les types d'issue nommés en français sont lus comme leurs équivalents anglais, et le nommage assisté choisit désormais le préfixe en plus du slug, d'après le ticket lui-même plutôt que d'après son type."
+				}
 			}
 		]
 	},
