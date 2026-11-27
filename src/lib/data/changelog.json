@@ -3,8 +3,8 @@
 		"version": "1.2.1",
 		"date": "",
 		"summary": {
-			"en": "A Ctrl+clicked link in Claude Code opens in the browser again.",
-			"fr": "Un lien cliqué avec Ctrl dans Claude Code s'ouvre de nouveau dans le navigateur."
+			"en": "A Containers section lists the machine's Docker containers with what they use in CPU and memory, and manages them. Manual CI/CD jobs, such as deployments, run from buttons after a confirmation and can be run again.",
+			"fr": "Une section Containers liste les containers Docker de la machine avec leur consommation CPU et mémoire, et permet de les gérer. Les jobs CI/CD manuels, comme les déploiements, se lancent depuis des boutons après confirmation et peuvent être relancés."
 		},
 		"changes": [
 			{
@@ -54,6 +54,13 @@
 				"text": {
 					"en": "The manual jobs of the open pipeline are listed as buttons above its stages, and running one, from there or from its stage, asks for confirmation first. On GitLab a manual job that has already run stays in that list and can be run again, for instance to redeploy after changing a CI/CD variable.",
 					"fr": "Les jobs manuels du pipeline ouvert sont listés sous forme de boutons au-dessus de ses étapes, et en lancer un, depuis là ou depuis son étape, demande d'abord une confirmation. Sur GitLab, un job manuel déjà exécuté reste dans cette liste et peut être relancé, par exemple pour redéployer après avoir changé une variable CI/CD."
+				}
+			},
+			{
+				"kind": "added",
+				"text": {
+					"en": "Cairn's own log (cairn.log, in the logs folder of its data directory) also records native crashes (SIGSEGV, SIGBUS, SIGILL, SIGFPE) with the faulting address and, on Linux, every five minutes the memory and CPU used by Cairn and the processes it started, the heaviest by name, along with the memory the system has left, so a window that vanishes under memory pressure leaves its trend behind.",
+					"fr": "Le journal de Cairn (cairn.log, dans le dossier logs de son répertoire de données) consigne aussi les plantages natifs (SIGSEGV, SIGBUS, SIGILL, SIGFPE) avec l'adresse fautive et, sous Linux, toutes les cinq minutes, la mémoire et le CPU utilisés par Cairn et les processus qu'il a lancés, les plus lourds par leur nom, ainsi que la mémoire qu'il reste au système, pour qu'une fenêtre qui disparaît faute de mémoire laisse sa courbe derrière elle."
 				}
 			}
 		]
